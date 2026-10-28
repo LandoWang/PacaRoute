@@ -12,7 +12,7 @@ import BridgeCore
     init(store: AppStore, showWindow: @escaping () -> Void) {
         self.store = store; self.showWindow = showWindow
         super.init()
-        item.button?.image = NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted", accessibilityDescription: "AgentLink")
+        item.button?.image = AgentLinkMark.image(size: 18)
         item.button?.toolTip = "AgentLink · 左键或右键打开快捷菜单"
         item.button?.target = self; item.button?.action = #selector(openMenu)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])

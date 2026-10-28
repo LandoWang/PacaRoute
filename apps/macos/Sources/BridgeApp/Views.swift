@@ -10,8 +10,8 @@ struct RootView: View {
         NavigationSplitView {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
-                        .font(.system(size: 27, weight: .medium)).foregroundStyle(accent)
+                    Image(nsImage: AgentLinkMark.image(size: 34)).renderingMode(.template)
+                        .foregroundStyle(accent).accessibilityLabel("AgentLink")
                     VStack(alignment: .leading, spacing: 2) {
                         Text("AgentLink").font(.headline)
                         Text("一个入口，连接你的工具").font(.caption2).foregroundStyle(.secondary)
@@ -142,7 +142,7 @@ struct OverviewView: View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("AGENTLINK", systemImage: "point.3.connected.trianglepath.dotted")
+                    Label { Text("AGENTLINK") } icon: { Image(nsImage: AgentLinkMark.image(size: 16)).renderingMode(.template) }
                         .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(2).opacity(0.75)
                     Text(store.running ? "你的工具，已连接。" : "从一个简单的连接开始。")
                         .font(.system(size: 27, weight: .semibold))
@@ -163,7 +163,7 @@ struct OverviewView: View {
                     }.padding(.top, 6)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "arrow.triangle.branch").font(.system(size: 70, weight: .ultraLight)).opacity(0.35)
+                Image(nsImage: AgentLinkMark.image(size: 86)).renderingMode(.template).opacity(0.45).accessibilityHidden(true)
             }.padding(28).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
                 .background(LinearGradient(colors: [Color(red: 0.08, green: 0.28, blue: 0.27), Color(red: 0.13, green: 0.43, blue: 0.38)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20))
             let totals = UsageTotals(store.activity.filter { Calendar.current.isDateInToday($0.timestamp) })

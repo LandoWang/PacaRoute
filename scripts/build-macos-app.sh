@@ -13,8 +13,8 @@ app_dir="$output_dir/AgentLink.app"
 engine_dir="$repo_dir/artifacts/macos-engine"
 mkdir -p "$engine_dir" "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources/bridge"
 cd "$repo_dir"
-"$dotnet_bin" publish src/CopilotBridge.Cli -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.6
-"$dotnet_bin" publish src/CopilotBridge.Updater -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.6
+"$dotnet_bin" publish src/CopilotBridge.Cli -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.7
+"$dotnet_bin" publish src/CopilotBridge.Updater -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.7
 swift build --package-path apps/macos -c release
 swift_bin_dir="$(swift build --package-path apps/macos -c release --show-bin-path)"
 cp "$swift_bin_dir/CopilotBridgeMac" "$app_dir/Contents/MacOS/CopilotBridgeMac"
@@ -30,14 +30,15 @@ settings['Logging']['LogLevel']['CopilotBridge.Cli'] = 'Information'
 info = {
     'CFBundleName': 'AgentLink', 'CFBundleDisplayName': 'AgentLink',
     'CFBundleIdentifier': 'com.landowang.CopilotBridge', 'CFBundleExecutable': 'CopilotBridgeMac',
-    'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.5.28', 'CFBundleVersion': '6',
+    'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.5.28', 'CFBundleVersion': '7',
     'LSMinimumSystemVersion': '14.0', 'LSApplicationCategoryType': 'public.app-category.developer-tools',
     'NSHighResolutionCapable': True, 'NSPrincipalClass': 'NSApplication',
     'CFBundleIconFile': 'AppIcon',
 }
 with (app / 'Contents/Info.plist').open('wb') as f: plistlib.dump(info, f)
 PY
-swift "$repo_dir/scripts/macos-icon.swift" "$output_dir"
+swiftc "$repo_dir/apps/macos/Sources/BridgeApp/AgentLinkMark.swift" "$repo_dir/scripts/macos-icon.swift" -o "$output_dir/icon-builder"
+"$output_dir/icon-builder" "$output_dir"
 iconutil -c icns "$output_dir/AppIcon.iconset" -o "$app_dir/Contents/Resources/AppIcon.icns"
 codesign --force --sign - "$app_dir/Contents/Resources/bridge/copilot-bridge"
 codesign --force --sign - "$app_dir/Contents/Resources/bridge/copilot-updater"
