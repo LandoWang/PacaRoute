@@ -1,7 +1,7 @@
 # AgentLink for macOS
 
 A native SwiftUI desktop app around the existing Native AOT bridge. Supports
-Apple Silicon and macOS 14 or later; no .NET runtime is required by the built app.
+Apple Silicon and Intel Macs running macOS 14 or later; no .NET runtime is required.
 
 ## Features
 
@@ -35,13 +35,23 @@ the repository's `global.json`. A full Xcode installation is not needed.
 
 ```bash
 scripts/build-macos-app.sh
-open 'artifacts/macos/AgentLink.app'
+open 'artifacts/macos/arm64/AgentLink.app' # Use x64 instead on Intel.
 ```
 
 Set `BRIDGE_DOTNET` to the SDK executable if it is not on PATH. The script also
-checks `~/.dotnet/dotnet`. It publishes both bridge executables, builds the Swift
-UI, generates an icon, verifies ad-hoc code signatures, and produces
-`artifacts/macos/AgentLink-macOS-arm64.zip` and a drag-to-Applications DMG.
+checks `~/.dotnet/dotnet`. By default it produces separate Apple Silicon and
+Intel apps, each containing the matching Swift UI, Native AOT bridge and updater.
+It generates an icon, verifies every architecture and ad-hoc code signature,
+and produces ZIP and drag-to-Applications DMG packages:
+
+- `artifacts/macos/arm64/AgentLink-macOS-arm64.{zip,dmg}` for Apple Silicon.
+- `artifacts/macos/x64/AgentLink-macOS-x64.{zip,dmg}` for Intel.
+
+Pass `arm64` or `x64` as the second argument (after the output directory) to build
+only that architecture. `split` is the default; optional `universal` combines both
+architectures into one app with `lipo` and names its packages `AgentLink-macOS-universal`.
+Cross-compilation requires a macOS SDK and the .NET Native AOT toolchain. Intel
+execution can be checked on an Intel Mac or under Rosetta on Apple Silicon.
 
 The resulting app is a local development build, **not Developer ID signed or
 Apple notarized**. Distribution beyond local testing needs the owner's Apple
@@ -177,7 +187,8 @@ Distribute one `.dmg` or `.zip`, not a separate bridge deployment. The `.app`
 contains the native SwiftUI executable, the Native AOT bridge, and its updater.
 Recipients do not install .NET or Docker. API-key Azure sources have no Azure CLI
 dependency; only the Azure CLI authentication option requires `az` and a login.
-The supported distribution is currently Apple Silicon, macOS 14+.
+Separate Apple Silicon and Intel distributions support macOS 14+; choose the
+package matching the recipient's Mac. An optional universal build supports both.
 
 For broader distribution, sign the nested executables and app with an Apple
 Developer ID Application identity and hardened runtime, notarize with

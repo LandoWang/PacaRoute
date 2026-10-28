@@ -61,9 +61,9 @@ enum AgentLinkMark {
     static func drawAppIcon(in rect: NSRect) {
         let tile = rect.insetBy(dx: rect.width * 0.06, dy: rect.height * 0.06)
         let background = NSBezierPath(roundedRect: tile, xRadius: rect.width * 0.21, yRadius: rect.height * 0.21)
-        NSGradient(starting: NSColor(red: 0.10, green: 0.31, blue: 0.29, alpha: 1),
-                   ending: NSColor(red: 0.18, green: 0.61, blue: 0.50, alpha: 1))!.draw(in: background, angle: -45)
-        draw(in: rect.insetBy(dx: rect.width * 0.07, dy: rect.height * 0.07), color: .white)
+        NSGradient(starting: NSColor(red: 0.19, green: 0.08, blue: 0.34, alpha: 1),
+                   ending: NSColor(red: 0.57, green: 0.27, blue: 0.87, alpha: 1))!.draw(in: background, angle: -45)
+        draw(in: rect.insetBy(dx: rect.width * 0.07, dy: rect.height * 0.07), color: NSColor(red: 0.96, green: 0.92, blue: 1, alpha: 1))
     }
 
     static func png(pixels: Int, appIcon: Bool) -> Data {
@@ -74,7 +74,7 @@ enum AgentLinkMark {
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
         let rect = NSRect(x: 0, y: 0, width: pixels, height: pixels)
         if appIcon { drawAppIcon(in: rect) }
-        else { draw(in: rect, color: NSColor(red: 0.12, green: 0.53, blue: 0.47, alpha: 1)) }
+        else { draw(in: rect, color: NSColor(red: 0.59, green: 0.36, blue: 0.91, alpha: 1)) }
         NSGraphicsContext.restoreGraphicsState()
         return bitmap.representation(using: .png, properties: [:])!
     }
