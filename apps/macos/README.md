@@ -66,21 +66,6 @@ regions. A timestamped `.bridge-*.bak` sibling contains the previous bytes. To
 restore manually, stop any client editing that file and copy the desired backup
 over its original path. No configuration is applied merely by launching the app.
 
-Use **Agent → Restore configuration** on either client card to choose a dated
-backup. The picker prefers a valid snapshot from before Bridge was selected and
-labels snapshots that still connect to Bridge. Preview, then confirm **Back up
-current configuration and restore**. This restores the entire file, including
-settings edited after that snapshot; the current bytes are backed up first so
-the restore can itself be undone. New configurations also record that the file
-was previously absent, allowing restore to remove only that configuration file.
-Older installations with no recorded original state cannot reconstruct it.
-
-Backup contents and credentials are never displayed. Recovery requires no login
-or running proxy and rejects a changed current file or changed backup after
-preview. Start a new client session after restoring; existing sessions retain
-the configuration they already loaded.
-
-
 See the [official Codex provider configuration reference](https://learn.chatgpt.com/docs/config-file/config-advanced#custom-model-providers)
 for provider / command-auth semantics and global configuration precedence.
 
