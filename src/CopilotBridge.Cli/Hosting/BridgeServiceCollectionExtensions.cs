@@ -561,7 +561,29 @@ internal sealed class KestrelOptionsConfigurator : IConfigureOptions<KestrelServ
                 + "Set Server:MaxRequestBodySizeBytes in appsettings.json.");
         }
 
-        options.ListenLocalhost(port);
+        // Bind interface. Default "localhost" keeps the historical loopback-only
+        // behavior (the bridge has no inbound auth); an operator opts into a wider
+        // bind (e.g. "0.0.0.0" in a container) via Server:Host / Server__Host.
+        var host = _server.Value.Host;
+        if (string.IsNullOrWhiteSpace(host) ||
+            string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            options.ListenLocalhost(port);
+        }
+        else if (host is "0.0.0.0" or "*" or "[::]" or "::")
+        {
+            options.ListenAnyIP(port);
+        }
+        else if (System.Net.IPAddress.TryParse(host, out var ip))
+        {
+            options.Listen(ip, port);
+        }
+        else
+        {
+            throw new BridgeStartupException(
+                $"Invalid Server:Host '{host}'. Use 'localhost', '0.0.0.0', or a literal IP address.");
+        }
+
         options.Limits.MaxRequestBodySize = maxRequestBodySize;
         options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(15);
         options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(2);

@@ -221,4 +221,52 @@ public class BridgeServerOptionsBindingTests
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
+
+    // --- Host binding ------------------------------------------------------
+    // Contract: with nothing configured the bridge MUST bind localhost — it has
+    // no inbound auth, so a loopback-only default is the safety property that
+    // keeps a plain local run off the network. A wider bind must be an explicit
+    // opt-in. These guard that default and the two override channels a container
+    // uses.
+
+    [Fact]
+    public void Host_Default_IsLocalhost()
+    {
+        var opts = ResolveOptions(ConfigFrom(new()));
+        Assert.Equal("localhost", opts.Host);
+    }
+
+    [Fact]
+    public void Host_Appsettings_OverridesDefault()
+    {
+        var opts = ResolveOptions(ConfigFrom(new() { ["Server:Host"] = "0.0.0.0" }));
+        Assert.Equal("0.0.0.0", opts.Host);
+    }
+
+    [Fact]
+    public void Host_EnvironmentVariable_OverridesDefault()
+    {
+        // The container sets Server__Host=0.0.0.0; the "__" maps to the ":"
+        // config separator through the environment-variable provider. This is
+        // the exact channel the Docker image relies on, so pin it here rather
+        // than only in-memory.
+        var prior = Environment.GetEnvironmentVariable("Server__Host");
+        try
+        {
+            Environment.SetEnvironmentVariable("Server__Host", "0.0.0.0");
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Server:Host"] = "localhost",
+                })
+                .AddEnvironmentVariables()
+                .Build();
+            var opts = ResolveOptions(config);
+            Assert.Equal("0.0.0.0", opts.Host);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("Server__Host", prior);
+        }
+    }
 }

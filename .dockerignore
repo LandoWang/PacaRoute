@@ -1,0 +1,29 @@
+# Build context excludes. The Dockerfile restores + publishes from source in
+# the SDK image, so none of the local build output should be uploaded to ACR.
+**/bin/
+**/obj/
+publish/
+publish-aot/
+artifacts/
+
+# VCS / IDE / local scratch
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+*.user
+
+# The read-only reference clone (has its own .git) and the docs/tests aren't
+# needed to build the CLI project.
+references/
+tests/
+docs/
+openspec/
+
+# Local-only config and secrets — must never enter an image layer.
+**/github_token.dat
+**/appsettings.local.json
+.mcp.json
+*.tar.gz
+*.zip

@@ -16,4 +16,13 @@ internal sealed class BridgeServerOptions
     /// Maximum inbound HTTP request-body size in bytes. Applies bridge-wide.
     /// </summary>
     public long MaxRequestBodySizeBytes { get; set; } = 100L * 1024 * 1024;
+
+    /// <summary>
+    /// Interface Kestrel binds to. Defaults to <c>localhost</c> — the bridge has no
+    /// inbound auth and relies on OS-level isolation, so it must NOT be reachable off
+    /// the host unless an operator explicitly opts in. Set to <c>0.0.0.0</c> (e.g. via
+    /// the <c>Server__Host</c> environment variable) only when running inside a
+    /// container or behind a network boundary that supplies its own access control.
+    /// </summary>
+    public string Host { get; set; } = "localhost";
 }

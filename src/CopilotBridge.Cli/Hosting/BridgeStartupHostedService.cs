@@ -95,8 +95,9 @@ internal sealed class BridgeStartupHostedService : IHostedService
         // 4. Operator-facing summary. ILogger so the formatting matches every
         //    other line in the rolling log.
         var port = _server.Value.Port;
+        var host = _server.Value.Host;
         var textLogDir = Path.Combine(AppContext.BaseDirectory, "log");
-        _log.LogInformation("copilot-bridge listening on http://localhost:{Port}", port);
+        _log.LogInformation("copilot-bridge listening on http://{Host}:{Port}", host, port);
         if (authenticationReady)
         {
             _log.LogInformation("Upstream: {UpstreamUrl}", _auth.CopilotApiBaseUrl);

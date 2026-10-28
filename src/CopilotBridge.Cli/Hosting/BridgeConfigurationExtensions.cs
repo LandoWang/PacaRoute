@@ -101,7 +101,13 @@ internal static class BridgeConfigurationExtensions
     {
         configuration
             .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile(ConfigFileName, optional: false, reloadOnChange: false);
+            .AddJsonFile(ConfigFileName, optional: false, reloadOnChange: false)
+            // Environment variables layer on top of the JSON file so a container /
+            // cloud host can override a setting without editing the baked-in file —
+            // e.g. Server__Host=0.0.0.0 or Server__Port=8765 (standard .NET "__"
+            // maps to the ":" config separator). No effect when none are set, so the
+            // local exe's behavior is unchanged.
+            .AddEnvironmentVariables();
         return configuration;
     }
 }
