@@ -111,7 +111,8 @@ internal static class ResponsesRequestBuilder
         bool filterRecursiveAgentTool,
         out bool removedAgentTool,
         out bool downgradedImageOnUnknownModel,
-        out ResponsesRequestMutation mutations)
+        out ResponsesRequestMutation mutations,
+        bool applyCopilotPolicy = true)
     {
         removedAgentTool = false;
         downgradedImageOnUnknownModel = false;
@@ -123,8 +124,8 @@ internal static class ResponsesRequestBuilder
         // a below-floor id yields null → the existing unclamped passthrough.
         // A minimal+web_search rejection is a silent-downgrade rule, so it uses
         // only the exact profile and is never borrowed from a nearby model.
-        var exactProfile = profiles.Get(ir.Model);
-        var profile = exactProfile ?? profiles.GetNearest(ir.Model, out _, out _);
+        var exactProfile = applyCopilotPolicy ? profiles.Get(ir.Model) : null;
+        var profile = applyCopilotPolicy ? exactProfile ?? profiles.GetNearest(ir.Model, out _, out _) : null;
         // Pull the openai bag (un-modeled knobs T1 stashed). Absent → empty.
         JsonElement? bag = null;
         if (ir.ProviderExtensions?.ByProvider.TryGetValue(
@@ -140,7 +141,7 @@ internal static class ResponsesRequestBuilder
         // "never heard of this model", and only the second needs an operator signal:
         // it is what a Copilot-side rename looks like from in here. Exact matching is
         // unchanged — a positive wire capability is never borrowed from a neighbour.
-        var multimodalCapability = exactProfile is null
+        var multimodalCapability = !applyCopilotPolicy ? MultimodalOutputCapability.Supported : exactProfile is null
             ? MultimodalOutputCapability.Unknown
             : exactProfile.SupportsMultimodalFunctionOutput
                 ? MultimodalOutputCapability.Supported
@@ -280,7 +281,7 @@ internal static class ResponsesRequestBuilder
             {
                 bagHasTools = bagObj.TryGetProperty("tools", out _);
                 bagHasToolChoice = bagObj.TryGetProperty("tool_choice", out _);
-                WriteBagFields(w, bagObj, profile, ref vision, ref mutations);
+                WriteBagFields(w, bagObj, profile, ref vision, ref mutations, applyCopilotPolicy);
             }
 
             // Claude Code path: the request carries typed Anthropic tools /
@@ -1388,7 +1389,8 @@ internal static class ResponsesRequestBuilder
         JsonElement bag,
         CodexModelProfile? profile,
         ref bool vision,
-        ref ResponsesRequestMutation mutations)
+        ref ResponsesRequestMutation mutations,
+        bool applyCopilotPolicy)
     {
         foreach (var prop in bag.EnumerateObject())
         {
@@ -1396,7 +1398,7 @@ internal static class ResponsesRequestBuilder
             {
                 case "service_tier":
                     // STRIP — uniform coercion (research §2.3).
-                    if (CodexModelProfileCatalog.StripsServiceTier)
+                    if (applyCopilotPolicy && CodexModelProfileCatalog.StripsServiceTier)
                     {
                         mutations |= ResponsesRequestMutation.ServiceTierStripped;
                         continue;
@@ -1405,7 +1407,7 @@ internal static class ResponsesRequestBuilder
                     break;
                 case "store":
                     // Strip only when true (Q3). Codex sends false → keep.
-                    if (CodexModelProfileCatalog.StripsStoreTrue &&
+                    if (applyCopilotPolicy && CodexModelProfileCatalog.StripsStoreTrue &&
                         prop.Value.ValueKind == JsonValueKind.True)
                     {
                         mutations |= ResponsesRequestMutation.StoreTrueStripped;
@@ -1414,7 +1416,8 @@ internal static class ResponsesRequestBuilder
                     prop.WriteTo(w);
                     break;
                 case "tools":
-                    WriteToolsWithDrops(w, prop.Value, profile, ref mutations);
+                    if (applyCopilotPolicy) WriteToolsWithDrops(w, prop.Value, profile, ref mutations);
+                    else prop.WriteTo(w);
                     break;
                 case "reasoning_present":
                 case "reasoning_summary":

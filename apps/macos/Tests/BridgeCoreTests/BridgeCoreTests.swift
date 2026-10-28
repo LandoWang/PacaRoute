@@ -2,6 +2,22 @@ import Foundation
 import BridgeCore
 
 final class BridgeCoreTests {
+    func testSourceCatalogHasNoCredentialsAndRejectsCredentialURLs() throws {
+        let source = ModelSource(id: "azure-dev", name: "Dev", endpoint: "https://example.openai.azure.com/",
+                                 deployments: ["company-deployment"])
+        let roundtrip = try ModelSource.decode(ModelSource.encode([source]))
+        expectEqual(roundtrip[0].endpoint, "https://example.openai.azure.com/openai/v1")
+        expectEqual(roundtrip[0].deployments, ["company-deployment"])
+        let text = String(decoding: try ModelSource.encode([source]), as: UTF8.self)
+        expectFalse(text.contains("api_key"))
+        for endpoint in ["http://example.openai.azure.com", "https://key@example.openai.azure.com", "https://example.openai.azure.com/?api-key=secret"] {
+            var invalid = source; invalid.endpoint = endpoint
+            do { _ = try invalid.validated(); fatalError("Credential/HTTP URL accepted") } catch SourceFailure.invalid { }
+        }
+        do { _ = try ModelSource.decode(ModelSource.encode([source, source])); fatalError("Duplicate source IDs accepted") }
+        catch SourceFailure.invalid { }
+    }
+
     func testSplitUTF8AndPartialJSONAreNotLost() throws {
         var buffer = JSONLineBuffer()
         let bytes = Data("{\"ok\":true,\"event\":\"result\",\"error\":\"测试\"}\n".utf8)
@@ -66,6 +82,7 @@ func expectNil<T>(_ value: T?, file: StaticString = #file, line: UInt = #line) {
         try tests.testQuotaMissingIsUnknownNotZero()
         tests.testEstimatesAndErrorsDoNotInflateUsageOrDoubleCountCache()
         tests.testProxyValidationRefusesCredentialsAndInvalidDestinations()
-        print("Passed 4 Swift contract checks")
+        try tests.testSourceCatalogHasNoCredentialsAndRejectsCredentialURLs()
+        print("Passed 5 Swift contract checks")
     }
 }

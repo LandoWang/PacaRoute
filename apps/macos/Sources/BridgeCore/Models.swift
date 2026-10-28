@@ -26,6 +26,7 @@ public struct Reply: Decodable {
 }
 
 public struct ClientState: Decodable, Identifiable {
+    public let source: String?
     public let id: String
     public let path: String
     public let connected: Bool
@@ -41,6 +42,9 @@ public struct BridgeModel: Decodable, Identifiable {
     public let vendor: String?
     public let claude: Bool
     public let codex: Bool
+    public init(id: String, name: String, vendor: String?, claude: Bool, codex: Bool) {
+        self.id = id; self.name = name; self.vendor = vendor; self.claude = claude; self.codex = codex
+    }
 }
 
 public struct AccountQuota: Decodable {
@@ -60,6 +64,7 @@ public struct Quota: Decodable {
 }
 
 public struct Activity: Decodable, Identifiable {
+    public let source: String?
     public let id: String
     public let timestamp: Date
     public let kind: String

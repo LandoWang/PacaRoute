@@ -36,6 +36,8 @@ internal sealed class BridgeContext<TBody> where TBody : class
     /// </summary>
     public RouteTarget? Target { get; set; }
 
+    public Sources.ModelSource? Source { get; set; }
+
     /// <summary>
     /// Side-channel for response stages that drop or rewrite SSE events but
     /// still want them surfaced in the inbound-resp audit (so a reader can

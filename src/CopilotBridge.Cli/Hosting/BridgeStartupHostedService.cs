@@ -198,6 +198,13 @@ internal sealed class BridgeStartupHostedService : IHostedService
             return false;
         }
 
+        if (Environment.GetEnvironmentVariable("COPILOT_BRIDGE_DESKTOP") == "1"
+            && Sources.SourceRegistry.Load().Sources.Count > 0)
+        {
+            log.LogInformation("Desktop sources configured; Copilot authentication is deferred to Copilot requests");
+            return false;
+        }
+
         if (!auth.IsAuthenticated)
         {
             log.LogInformation(

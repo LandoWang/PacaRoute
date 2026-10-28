@@ -4,10 +4,11 @@ import BridgeCore
 import Darwin
 
 enum Page: String, CaseIterable, Identifiable {
-    case overview = "概览", account = "账号", clients = "客户端与模型", usage = "用量", errors = "错误", network = "网络"
+    case sources = "来源", overview = "概览", account = "账号", clients = "Harness", usage = "用量", errors = "错误", network = "网络"
     var id: String { rawValue }
     var icon: String {
         switch self {
+        case .sources: return "server.rack"
         case .overview: return "square.grid.2x2"
         case .account: return "person.crop.circle"
         case .clients: return "slider.horizontal.3"
@@ -21,6 +22,7 @@ enum Page: String, CaseIterable, Identifiable {
 struct ConfigPreview: Identifiable {
     let id = UUID()
     let client: String
+    let source: String
     let model: String
     let port: Int
     let reply: Reply
@@ -37,6 +39,10 @@ struct LocalIssue: Identifiable {
     @Published var loggedIn = false
     @Published var login: String?
     @Published var clients: [ClientState] = []
+    @Published var sources: [ModelSource] = []
+    @Published var codexSource = "copilot"
+    @Published var claudeSource = "copilot"
+    @Published var usageSource = "all"
     @Published var models: [BridgeModel] = []
     @Published var quota: AccountQuota?
     @Published var quotaError: String?
@@ -77,21 +83,27 @@ struct LocalIssue: Identifiable {
         proxyAddress = address; appliedProxy = address
         appliedPort = (1024...65535).contains(port) ? port : 8765
         portText = String(appliedPort)
-        do { runtime = try Runtime() }
+        do {
+            runtime = try Runtime()
+            if let file = runtime?.root.appendingPathComponent("sources.json"), FileManager.default.fileExists(atPath: file.path) {
+                sources = try ModelSource.decode(Data(contentsOf: file))
+            }
+        }
         catch { runtimeError = error.localizedDescription }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refreshActivity() }
         }
     }
 
-    var ready: Bool { runtime != nil }
+    var ready: Bool { runtime != nil && runtimeError == nil }
+    var canStart: Bool { loggedIn || !sources.isEmpty }
     var running: Bool { serviceState == "running" }
     var serviceLabel: String {
         switch serviceState { case "starting": return "正在启动"; case "running": return "运行中"; case "stopping": return "正在停止"; default: return "已停止" }
     }
     var filteredActivity: [Activity] {
         let start = Calendar.current.date(byAdding: .day, value: -(usageDays - 1), to: Calendar.current.startOfDay(for: Date()))!
-        return activity.filter { $0.timestamp >= start }
+        return activity.filter { $0.timestamp >= start && (usageSource == "all" || ($0.source ?? "copilot") == usageSource) }
     }
     var totals: UsageTotals { UsageTotals(filteredActivity) }
     var errors: [Activity] { activity.filter(\.failed) }
@@ -118,8 +130,8 @@ struct LocalIssue: Identifiable {
         loggedIn = reply.loggedIn ?? false
         clients = reply.clients ?? []
         for client in clients {
-            if client.id == "codex" { selectedCodex = client.model ?? "" }
-            else { selectedClaude = client.model ?? "" }
+            if client.id == "codex" { selectedCodex = client.model ?? ""; codexSource = client.source ?? "copilot" }
+            else { selectedClaude = client.model ?? ""; claudeSource = client.source ?? "copilot" }
         }
     }
 
@@ -181,13 +193,17 @@ struct LocalIssue: Identifiable {
     func prepareConfig(_ client: String) async {
         guard busy == nil, !signingIn else { return }
         let model = client == "codex" ? selectedCodex : selectedClaude
+        let source = client == "codex" ? codexSource : claudeSource
+        if source != (clients.first { $0.id == client }?.source ?? "copilot") && model.isEmpty {
+            showError(AppFailure(message: "切换来源时请选择该来源的默认模型；Copilot 模型可先刷新列表。")); return
+        }
         busy = "正在预览配置"
         defer { busy = nil }
         do {
-            var args = ["desktop", "configure", "--client", client, "--port", String(appliedPort)]
+            var args = ["desktop", "configure", "--client", client, "--source", source, "--port", String(appliedPort)]
             if !model.isEmpty { args += ["--model", model] }
             let reply = try await execute(args)
-            preview = ConfigPreview(client: client, model: model, port: appliedPort, reply: reply)
+            preview = ConfigPreview(client: client, source: source, model: model, port: appliedPort, reply: reply)
         } catch { showError(error) }
     }
 
@@ -196,7 +212,7 @@ struct LocalIssue: Identifiable {
         busy = "正在保存配置"
         defer { busy = nil }
         do {
-            var args = ["desktop", "configure", "--client", plan.client, "--port", String(plan.port),
+            var args = ["desktop", "configure", "--client", plan.client, "--source", plan.source, "--port", String(plan.port),
                         "--apply", "--fingerprint", fingerprint]
             if !plan.model.isEmpty { args += ["--model", plan.model] }
             let result = try await execute(args)
@@ -208,15 +224,20 @@ struct LocalIssue: Identifiable {
     }
 
     func startService() {
-        guard let runtime, loggedIn, !signingIn, serviceState == "stopped" else { return }
+        guard let runtime, ready, canStart, !signingIn, serviceState == "stopped" else { return }
         guard Self.portAvailable(appliedPort) else {
             showError(AppFailure(message: "端口 \(appliedPort) 已被占用。请在网络页选择其他端口，再更新客户端配置。")); return
         }
         let child = BridgeProcess()
         service = child; serviceState = "starting"
         do {
+            var keys: [String: String] = [:]
+            for source in sources where source.authMode == "api-key" { keys[source.id] = try SourceKeychain.read(source.id) }
+            var envelope = try JSONEncoder().encode(keys); envelope.append(10)
+            var environment = runtime.environment(mode: appliedMode, proxy: appliedProxy)
+            environment["COPILOT_BRIDGE_SECRETS_STDIN"] = "1"
             try child.start(runtime: runtime, arguments: ["serve", "--port", String(appliedPort)],
-                            environment: runtime.environment(mode: appliedMode, proxy: appliedProxy), timeout: nil,
+                            environment: environment, timeout: nil, inputData: envelope,
                             onReply: { [weak self] reply in
                 if reply.event == "ready" { Task { @MainActor in self?.serviceState = "running" } }
             }, completion: { [weak self] result in
@@ -303,6 +324,36 @@ struct LocalIssue: Identifiable {
                     })
             } catch { continuation.resume(throwing: error) }
         }
+    }
+
+    func sourceName(_ id: String) -> String {
+        id == "copilot" ? "GitHub Copilot" : sources.first { $0.id == id }?.name ?? id
+    }
+
+    func saveSource(_ candidate: ModelSource, key: String) throws {
+        guard let runtime, serviceState == "stopped" else { throw AppFailure(message: "请先停止 Bridge，再修改来源。") }
+        let source = try candidate.validated()
+        if source.authMode == "api-key" {
+            if !key.isEmpty {
+                guard !key.contains(where: { $0.isNewline || $0.isWhitespace }) else { throw AppFailure(message: "API Key 不能含空白字符。") }
+                try SourceKeychain.save(key, for: source.id)
+            } else { _ = try SourceKeychain.read(source.id) }
+        }
+        var next = sources.filter { $0.id != source.id }; next.append(source)
+        try ModelSource.encode(next).write(to: runtime.root.appendingPathComponent("sources.json"), options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: runtime.root.appendingPathComponent("sources.json").path)
+        sources = next
+    }
+
+    func removeSource(_ source: ModelSource) throws {
+        guard let runtime, serviceState == "stopped" else { throw AppFailure(message: "请先停止 Bridge。") }
+        guard !clients.contains(where: { $0.connected && $0.source == source.id }) else {
+            throw AppFailure(message: "此来源仍被 Harness 使用，请先为它选择其他来源并应用配置。")
+        }
+        let next = sources.filter { $0.id != source.id }
+        try ModelSource.encode(next).write(to: runtime.root.appendingPathComponent("sources.json"), options: .atomic)
+        sources = next
+        try SourceKeychain.delete(source.id)
     }
 
     func shutdown() { refreshTimer?.invalidate(); stopService(); jobs.values.forEach { $0.stop() } }

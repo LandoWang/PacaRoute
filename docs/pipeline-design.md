@@ -2536,3 +2536,39 @@ Desktop-only telemetry records completed request metadata and sanitized errors
 (no prompts, request/response bodies, or credentials) in daily JSONL files next to
 the runtime. Usage is observed bridge traffic, not billing. Copilot quota is fetched
 separately from GitHub and unavailable quota fields remain unknown.
+
+
+## Source × harness routing (native desktop)
+
+A source owns authentication, endpoint and a deployment catalog. A harness owns
+its client configuration and protocol. A model/deployment belongs to a source;
+model names never determine source identity. The desktop supports saved Azure
+OpenAI sources alongside the built-in Copilot source. Each harness independently
+selects a source and deployment. Multiple combinations share one bridge process.
+
+Explicit URLs `/sources/{source-id}/codex` and `/sources/{source-id}/cc` bind a
+client to a source; existing `/codex` and `/cc` retain their Copilot behavior.
+Source middleware resolves the ID before endpoint routing. Unknown sources fail
+closed. Azure deployment IDs remain verbatim and bypass Copilot normalization,
+Locations and probe-derived model profiles. Native Codex → Azure uses Responses
+wire passthrough. Claude Code → Azure uses the existing Anthropic hub translators,
+with Copilot profile/coercion and collaboration policies disabled. The Anthropic
+count-tokens endpoint returns an explicitly labeled local estimate for Azure;
+it never calls Copilot or represents an estimate as Azure billable usage.
+
+Azure OpenAI uses the v1 `/openai/v1/responses` endpoint with the deployment name
+in `model`. Azure authentication lives behind its own credential/auth facade:
+API keys come from macOS Keychain over the owned child's stdin pipe, or the Azure
+CLI obtains short-lived Entra tokens for the configured subscription. Credentials
+are not stored in source JSON, client configs, argv, telemetry or UI readbacks.
+CLI token acquisition is transient and cached until shortly before expiry.
+Azure HTTP transport never forwards client/Copilot auth or identity headers and
+never follows redirects with credentials. Azure-only startup does not require
+GitHub login. Source changes are applied on the next service start.
+
+Local usage and errors retain source identity as well as harness and deployment.
+Copilot quota remains specific to Copilot; Azure local token totals are not Azure
+billing/quota. A registered source/harness combination is not a compatibility
+claim: real client tool execution must be verified separately for each pair.
+Official Azure wire reference:
+https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/responses

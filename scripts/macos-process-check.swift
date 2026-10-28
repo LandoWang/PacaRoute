@@ -18,6 +18,17 @@ import BridgeCore
         guard complete.wait(timeout: .now() + 5) == .success else { throw AppFailure(message: "Process did not complete") }
         guard case .success(let reply) = result, reply?.event == "result" else { throw AppFailure(message: "Final reply was lost") }
 
+        let pipeFinished = DispatchSemaphore(value: 0)
+        let pipeChild = BridgeProcess()
+        var pipeOK = false
+        try pipeChild.start(executable: URL(fileURLWithPath: "/bin/cat"), directory: URL(fileURLWithPath: "/tmp"),
+            arguments: [], environment: ProcessInfo.processInfo.environment, timeout: 5,
+            inputData: Data("{\"ok\":true,\"event\":\"result\"}\n".utf8),
+            completion: { result in if case .success(let reply) = result { pipeOK = reply?.ok == true }; pipeFinished.signal() })
+        guard pipeFinished.wait(timeout: .now() + 6) == .success && pipeOK else {
+            throw AppFailure(message: "Owned stdin pipe did not deliver and close")
+        }
+
         let cancelled = DispatchSemaphore(value: 0)
         let timeoutChild = BridgeProcess()
         var failed = false
@@ -27,6 +38,6 @@ import BridgeCore
         guard cancelled.wait(timeout: .now() + 5) == .success, failed, !timeoutChild.running else {
             throw AppFailure(message: "Timed-out process was not reaped")
         }
-        print("PASS: device codes stream before process exit; final JSON survives pipe draining; timeout terminates only the owned child")
+        print("PASS: device codes stream before process exit; final JSON survives pipe draining; stdin delivers and closes; timeout terminates only the owned child")
     }
 }

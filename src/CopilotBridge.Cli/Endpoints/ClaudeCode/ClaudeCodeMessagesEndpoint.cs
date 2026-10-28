@@ -105,7 +105,7 @@ internal static class ClaudeCodeMessagesEndpoint
 
         // Per-request summary, populated as the pipeline progresses. Always
         // emitted in finally regardless of error path.
-        var summary = new RequestSummary { Kind = "messages" };
+        var summary = new RequestSummary { Kind = "messages", Source = bridgeCtx.Source?.Id ?? "copilot" };
         var usageSnapshot = summary.Usage;
         var inboundBetaSet = ClaudeCodeInboundAdapter.ParseInboundBetas(inboundHeaders);
         summary.InboundBetas = inboundBetaSet.ToArray();
@@ -172,7 +172,7 @@ internal static class ClaudeCodeMessagesEndpoint
                 httpCtx.Response.StatusCode = responseStatus;
                 httpCtx.Response.ContentType = "application/json";
                 var msg =
-                    $"The '{badType}' server tool is not supported on the GitHub Copilot backend. Configure a custom search MCP server in your Claude Code MCP config (e.g. via --mcp-config) and disable the built-in WebSearch tool.";
+                    $"The '{badType}' server tool is not supported on this bridge route. Configure a custom search MCP server in your Claude Code MCP config (e.g. via --mcp-config) and disable the built-in WebSearch tool.";
                 var bytes = Encoding.UTF8.GetBytes(
                     $"{{\"type\":\"error\",\"error\":{{\"type\":\"not_supported\",\"message\":\"{System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(msg)}\"}}}}");
                 responseBody = bytes;
@@ -498,7 +498,7 @@ internal static class ClaudeCodeMessagesEndpoint
                 // Anthropic retry signal (or intentionally truncate). Native
                 // Anthropic passthrough retains its historical truncation behavior.
                 responseStatus = httpCtx.Response.StatusCode;
-                if (bridgeCtx.Target?.Vendor == BackendVendor.CopilotResponses
+                if (bridgeCtx.Target?.Vendor is (BackendVendor.CopilotResponses or BackendVendor.AzureResponses)
                     && upstreamTimeout.Value.StreamIdleAction == UpstreamTimeoutAction.Retry)
                 {
                     var errorJson = ResponseDetectionError.JsonWithMessage(
@@ -537,7 +537,7 @@ internal static class ClaudeCodeMessagesEndpoint
                 // success. Preserve the Error log for diagnosis, but fail closed
                 // at the client protocol boundary with the same bounded signal.
                 responseStatus = httpCtx.Response.StatusCode;
-                if (bridgeCtx.Target?.Vendor == BackendVendor.CopilotResponses
+                if (bridgeCtx.Target?.Vendor is (BackendVendor.CopilotResponses or BackendVendor.AzureResponses)
                     && upstreamTimeout.Value.StreamIdleAction == UpstreamTimeoutAction.Retry)
                 {
                     var errorJson = ResponseDetectionError.JsonWithMessage(

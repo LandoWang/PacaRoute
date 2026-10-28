@@ -32,7 +32,7 @@ import SwiftUI
                 CommandMenu("Bridge") {
                     Button("显示主窗口") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
                     Button(store.running ? "停止服务" : "启动服务") { if store.running { store.stopService() } else { store.startService() } }
-                        .disabled(!store.loggedIn)
+                        .disabled(!store.canStart)
                 }
             }
         MenuBarExtra("Copilot Bridge", systemImage: store.running ? "point.3.connected.trianglepath.dotted" : "point.3.filled.connected.trianglepath.dotted") {
@@ -40,7 +40,7 @@ import SwiftUI
             Button("打开 Copilot Bridge") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
             Divider()
             Button(store.running ? "停止服务" : "启动服务") { if store.running { store.stopService() } else { store.startService() } }
-                .disabled(!store.loggedIn || store.signingIn || store.serviceState == "starting" || store.serviceState == "stopping")
+                .disabled(!store.canStart || store.signingIn || store.serviceState == "starting" || store.serviceState == "stopping")
             Divider()
             Button("退出") { NSApp.terminate(nil) }.keyboardShortcut("q")
         }

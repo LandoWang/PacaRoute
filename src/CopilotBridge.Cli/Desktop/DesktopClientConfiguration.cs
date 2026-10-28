@@ -16,10 +16,10 @@ internal static partial class DesktopClientConfiguration
         _ => throw new ArgumentException("Choose codex or claude-code."),
     };
 
-    internal static ConfigPlan Plan(string client, int port, string? model)
+    internal static ConfigPlan Plan(string client, int port, string? model, string source = "copilot")
     {
         if (port is < 1024 or > 65535) throw new ArgumentException("Port must be between 1024 and 65535.");
-        var plan = Client(client).Plan(new BridgeConnection(port), ConfigScope.Global);
+        var plan = Client(client).Plan(new BridgeConnection(port, source), ConfigScope.Global);
         if (string.IsNullOrEmpty(model)) return plan;
         return plan with
         {

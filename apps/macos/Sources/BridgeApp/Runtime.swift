@@ -56,9 +56,16 @@ final class Runtime {
     func environment(mode: ProxyMode, proxy: String) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["COPILOT_BRIDGE_DESKTOP"] = "1"
+        let sourceFile = root.appendingPathComponent("sources.json")
+        if FileManager.default.fileExists(atPath: sourceFile.path) { env["COPILOT_BRIDGE_SOURCES_FILE"] = sourceFile.path }
+        else { env.removeValue(forKey: "COPILOT_BRIDGE_SOURCES_FILE") }
         env["COPILOT_BRIDGE_PROXY_MODE"] = mode.rawValue
         if mode == .custom { env["COPILOT_BRIDGE_PROXY_URL"] = proxy }
         else { env.removeValue(forKey: "COPILOT_BRIDGE_PROXY_URL") }
+        // Azure CLI inherits the same explicit proxy choice as the HTTP transport.
+        let proxyKeys = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]
+        if mode == .direct { for key in proxyKeys { env.removeValue(forKey: key) } }
+        if mode == .custom { for key in proxyKeys { env[key] = proxy } }
         // Local client traffic must never leave the loopback interface.
         env["NO_PROXY"] = "localhost,127.0.0.1,::1"
         env["no_proxy"] = "localhost,127.0.0.1,::1"
@@ -71,6 +78,7 @@ final class BridgeProcess: @unchecked Sendable {
     private let process = Process()
     private let output = Pipe()
     private let errors = Pipe()
+    private var input: Pipe?
     private let queue = DispatchQueue(label: "bridge.process.output")
     private let readers = DispatchGroup()
     private var buffer = JSONLineBuffer()
@@ -83,15 +91,15 @@ final class BridgeProcess: @unchecked Sendable {
     private var timedOut = false
     var running: Bool { process.isRunning }
 
-    func start(runtime: Runtime, arguments: [String], environment: [String: String], timeout: TimeInterval?,
+    func start(runtime: Runtime, arguments: [String], environment: [String: String], timeout: TimeInterval?, inputData: Data? = nil,
                onReply: @escaping (Reply) -> Void = { _ in }, onText: @escaping (String) -> Void = { _ in },
                completion: @escaping (Result<Reply?, Error>) -> Void) throws {
         try start(executable: runtime.executable, directory: runtime.directory,
-                  arguments: arguments, environment: environment, timeout: timeout,
+                  arguments: arguments, environment: environment, timeout: timeout, inputData: inputData,
                   onReply: onReply, onText: onText, completion: completion)
     }
 
-    func start(executable: URL, directory: URL, arguments: [String], environment: [String: String], timeout: TimeInterval?,
+    func start(executable: URL, directory: URL, arguments: [String], environment: [String: String], timeout: TimeInterval?, inputData: Data? = nil,
                onReply: @escaping (Reply) -> Void = { _ in }, onText: @escaping (String) -> Void = { _ in },
                completion: @escaping (Result<Reply?, Error>) -> Void) throws {
         self.onReply = onReply; self.onText = onText; self.completion = completion
@@ -100,7 +108,8 @@ final class BridgeProcess: @unchecked Sendable {
         process.currentDirectoryURL = directory
         process.environment = environment
         process.standardOutput = output; process.standardError = errors
-        process.standardInput = FileHandle.nullDevice
+        if inputData != nil { input = Pipe(); process.standardInput = input }
+        else { process.standardInput = FileHandle.nullDevice }
         process.terminationHandler = { [weak self] process in
             guard let self else { return }
             self.readers.notify(queue: self.queue) {
@@ -118,6 +127,12 @@ final class BridgeProcess: @unchecked Sendable {
         readers.enter(); readers.enter()
         do { try process.run() }
         catch { readers.leave(); readers.leave(); self.completion = nil; throw error }
+        if let inputData, let input {
+            DispatchQueue.global(qos: .utility).async {
+                try? input.fileHandleForWriting.write(contentsOf: inputData)
+                try? input.fileHandleForWriting.close()
+            }
+        }
         for (handle, isOutput) in [(output.fileHandleForReading, true), (errors.fileHandleForReading, false)] {
             DispatchQueue.global(qos: .utility).async { [self] in
                 defer { readers.leave() }

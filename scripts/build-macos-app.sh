@@ -13,8 +13,8 @@ app_dir="$output_dir/Copilot Bridge.app"
 engine_dir="$repo_dir/artifacts/macos-engine"
 mkdir -p "$engine_dir" "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources/bridge"
 cd "$repo_dir"
-"$dotnet_bin" publish src/CopilotBridge.Cli -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.1
-"$dotnet_bin" publish src/CopilotBridge.Updater -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.1
+"$dotnet_bin" publish src/CopilotBridge.Cli -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.2
+"$dotnet_bin" publish src/CopilotBridge.Updater -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.2
 swift build --package-path apps/macos -c release
 swift_bin_dir="$(swift build --package-path apps/macos -c release --show-bin-path)"
 cp "$swift_bin_dir/CopilotBridgeMac" "$app_dir/Contents/MacOS/CopilotBridgeMac"
@@ -30,7 +30,7 @@ settings['Logging']['LogLevel']['CopilotBridge.Cli'] = 'Information'
 info = {
     'CFBundleName': 'Copilot Bridge', 'CFBundleDisplayName': 'Copilot Bridge',
     'CFBundleIdentifier': 'com.landowang.CopilotBridge', 'CFBundleExecutable': 'CopilotBridgeMac',
-    'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.5.28', 'CFBundleVersion': '1',
+    'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.5.28', 'CFBundleVersion': '2',
     'LSMinimumSystemVersion': '14.0', 'LSApplicationCategoryType': 'public.app-category.developer-tools',
     'NSHighResolutionCapable': True, 'NSPrincipalClass': 'NSApplication',
     'CFBundleIconFile': 'AppIcon',
@@ -44,4 +44,5 @@ codesign --force --sign - "$app_dir/Contents/Resources/bridge/copilot-updater"
 codesign --force --sign - "$app_dir"
 codesign --verify --deep --strict "$app_dir"
 ditto -c -k --sequesterRsrc --keepParent "$app_dir" "$output_dir/Copilot-Bridge-macOS-arm64.zip"
+bash "$repo_dir/scripts/package-macos-dmg.sh" "$app_dir" "$output_dir/Copilot-Bridge-macOS-arm64.dmg"
 printf 'Built: %s\n' "$app_dir"

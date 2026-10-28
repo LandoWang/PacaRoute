@@ -47,6 +47,13 @@ internal sealed class ModelRoutePlanner
         var requested = ctx.Request.Body.Model;
         ctx.OriginalRequestedModel = requested;
 
+        if (ctx.Source is { } source)
+        {
+            if (!source.Deployments.Contains(requested, StringComparer.Ordinal))
+                throw new ArgumentException("Deployment is not configured for the selected source.");
+            return ctx.Target = new RouteTarget(BackendVendor.AzureResponses, "/responses", requested);
+        }
+
         var canonical = CopilotModelRegistry.Normalize(requested);
         if (!string.Equals(requested, canonical, StringComparison.Ordinal))
             ctx.Request.Body = ctx.Request.Body with { Model = canonical };

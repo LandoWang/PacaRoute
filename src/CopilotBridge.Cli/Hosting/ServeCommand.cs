@@ -78,7 +78,13 @@ internal static class ServeCommand
         builder.Logging.AddBridgeLogging();
         builder.Services.AddBridgeServer(builder.Configuration, cliPort, PrintDeviceCode);
 
+        var sources = Sources.SourceRegistry.Load();
+        builder.Services.AddSingleton(sources);
+        builder.Services.AddSingleton(await AzureAuthService.FromDesktopAsync(ct));
+        builder.Services.AddSingleton<Sources.AzureResponsesClient>();
         var app = builder.Build();
+        Sources.SourceRouting.Use(app);
+        app.UseRouting();
 
         if (Environment.GetEnvironmentVariable("COPILOT_BRIDGE_DESKTOP") == "1")
             app.Lifetime.ApplicationStarted.Register(() =>

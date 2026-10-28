@@ -17,6 +17,7 @@ internal static class DesktopCommand
     {
         var action = new Argument<string>("action") { Description = "status, account, models, login, logout, configure" };
         var client = new Option<string?>("--client");
+        var source = new Option<string>("--source") { DefaultValueFactory = _ => "copilot" };
         var model = new Option<string?>("--model");
         var port = new Option<int>("--port") { DefaultValueFactory = _ => 8765 };
         var apply = new Option<bool>("--apply");
@@ -24,6 +25,7 @@ internal static class DesktopCommand
         var command = new Command("desktop", "JSON-lines control interface for the native macOS app");
         command.Arguments.Add(action);
         command.Options.Add(client);
+        command.Options.Add(source);
         command.Options.Add(model);
         command.Options.Add(port);
         command.Options.Add(apply);
@@ -34,7 +36,7 @@ internal static class DesktopCommand
             {
                 var reply = await RunAsync(args.GetValue(action)!, args.GetValue(client),
                     args.GetValue(model), args.GetValue(port), args.GetValue(apply),
-                    args.GetValue(fingerprint), ct);
+                    args.GetValue(fingerprint), args.GetValue(source)!, ct);
                 Write(reply);
                 return reply.Ok ? 0 : 1;
             }
@@ -48,12 +50,19 @@ internal static class DesktopCommand
     }
 
     private static async Task<DesktopReply> RunAsync(string action, string? client, string? model,
-        int port, bool apply, string? fingerprint, CancellationToken ct)
+        int port, bool apply, string? fingerprint, string sourceId, CancellationToken ct)
     {
         if (port is < 1024 or > 65535) throw new ArgumentException("Port must be between 1024 and 65535.");
+        var sources = Sources.SourceRegistry.Load();
+        var source = sourceId == "copilot" ? null : sources.Find(sourceId)
+            ?? throw new ArgumentException("Unknown source.");
+        if (source is not null && action == "models")
+            return new DesktopReply { Models = source.Deployments.Select(d => new DesktopModel(d, d, "Azure OpenAI", true, true)).ToList() };
         if (action == "configure")
         {
-            var plan = DesktopClientConfiguration.Plan(client ?? "", port, model);
+            if (source is not null && (string.IsNullOrEmpty(model) || !source.Deployments.Contains(model)))
+                throw new ArgumentException("Select a deployment from the chosen source.");
+            var plan = DesktopClientConfiguration.Plan(client ?? "", port, model, sourceId);
             var backup = apply ? DesktopClientConfiguration.Apply(plan,
                 fingerprint ?? throw new ArgumentException("Preview the configuration before applying it.")) : null;
             return new DesktopReply
@@ -90,8 +99,17 @@ internal static class DesktopCommand
                 try
                 {
                     var state = DesktopClientConfiguration.Client(id).Read(new BridgeConnection(port), ConfigScope.Global);
-                    clients.Add(new DesktopClient(id, state.TargetPath, state.ConfiguredForBridge, state.Drifted,
-                        DesktopClientConfiguration.ReadModel(id, state.TargetPath), null));
+                    var currentSource = "copilot";
+                    if (state.CurrentBaseUrl is { } url && Uri.TryCreate(url, UriKind.Absolute, out var current))
+                    {
+                        var segments = current.AbsolutePath.Split('/');
+                        if (segments.Length >= 4 && segments[1] == "sources") currentSource = segments[2];
+                    }
+                    if (currentSource != "copilot")
+                        state = DesktopClientConfiguration.Client(id).Read(new BridgeConnection(port, currentSource), ConfigScope.Global);
+                    clients.Add(new DesktopClient(id, state.TargetPath, state.ConfiguredForBridge,
+                        state.Drifted || (currentSource != "copilot" && sources.Find(currentSource) is null),
+                        DesktopClientConfiguration.ReadModel(id, state.TargetPath), null, currentSource));
                 }
                 catch (Exception ex) { clients.Add(new DesktopClient(id, "", false, false, null, DesktopTelemetry.Sanitize(ex.Message))); }
             }
@@ -116,7 +134,8 @@ internal static class DesktopCommand
             {
                 Models = response.Data.Where(m => m.Policy?.State != "disabled")
                     .Select(m => new DesktopModel(m.Id, m.Name ?? m.Id, m.Vendor,
-                        m.SupportedEndpoints?.Contains("/v1/messages") == true && claude.Get(m.Id) is not null,
+                        (m.SupportedEndpoints?.Contains("/v1/messages") == true && claude.Get(m.Id) is not null)
+                            || (m.SupportedEndpoints?.Contains("/responses") == true && codex.KnownIds.Contains(m.Id)),
                         m.SupportedEndpoints?.Contains("/responses") == true && codex.KnownIds.Contains(m.Id)))
                     .Where(m => m.Claude || m.Codex).OrderBy(m => m.Id).ToList(),
             };

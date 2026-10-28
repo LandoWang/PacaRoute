@@ -63,6 +63,8 @@ with tempfile.TemporaryDirectory(prefix="bridge-desktop-contract-") as temp:
     settings["AutoUpdate"]["EnableAutoUpdate"] = False
     settings["Tracing"]["Enabled"] = False
     (runtime / "appsettings.json").write_text(json.dumps(settings))
+    codex_home = root / "codex-home"
+    codex_home.mkdir()
     client_config = root / "claude-settings.json"
     client_config.write_text('{"env":{"KEEP":"yes"},"permissions":{"allow":["Read"]}}')
     server = ThreadingHTTPServer(("127.0.0.1", 0), Upstream)
@@ -74,7 +76,7 @@ with tempfile.TemporaryDirectory(prefix="bridge-desktop-contract-") as temp:
                COPILOT_BRIDGE_DESKTOP="1", COPILOT_BRIDGE_PROXY_MODE="direct",
                COPILOT_BRIDGE_TEST_UPSTREAM_BASE_URL=f"http://127.0.0.1:{server.server_port}",
                COPILOT_BRIDGE_TEST_CLAUDE_SETTINGS_PATH=str(client_config),
-               COPILOT_BRIDGE_TEST_CODEX_CONFIG_PATH=str(root / "absent-codex.toml"))
+               CODEX_HOME=str(codex_home))
     base = [DOTNET, str(runtime / "copilot-bridge.dll")]
 
     def command(*args):

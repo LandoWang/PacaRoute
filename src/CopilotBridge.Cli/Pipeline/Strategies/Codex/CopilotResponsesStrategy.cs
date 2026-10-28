@@ -25,6 +25,7 @@ namespace CopilotBridge.Cli.Pipeline.Strategies.Codex;
 internal sealed class CopilotResponsesStrategy : IUpstreamStrategy<MessagesRequest>
 {
     private readonly ICopilotClient _copilot;
+    private readonly Sources.AzureResponsesClient? _azure;
     private readonly CodexModelProfileCatalog _profiles;
     private readonly BridgeContext<MessagesRequest> _ctx;
     private readonly RequestAudit _audit;
@@ -41,9 +42,11 @@ internal sealed class CopilotResponsesStrategy : IUpstreamStrategy<MessagesReque
         IOptions<UpstreamTimeoutOptions> timeout,
         ILogger<CopilotResponsesStrategy> log,
         IOptions<CcToResponsesOptions>? ccOptions = null,
-        IOptions<CodexPlaintextCollaborationOptions>? collaborationOptions = null)
+        IOptions<CodexPlaintextCollaborationOptions>? collaborationOptions = null,
+        Sources.AzureResponsesClient? azure = null)
     {
         _copilot = copilot;
+        _azure = azure;
         _profiles = profiles;
         _ctx = ctx;
         _audit = audit;
@@ -56,7 +59,7 @@ internal sealed class CopilotResponsesStrategy : IUpstreamStrategy<MessagesReque
     public string Name => "CopilotResponses(T2/T3)";
 
     public bool Matches(RouteTarget target) =>
-        target.Vendor == BackendVendor.CopilotResponses
+        target.Vendor is (BackendVendor.CopilotResponses or BackendVendor.AzureResponses)
         && target.Endpoint == "/responses";
 
     public async Task ForwardAsync()
@@ -67,9 +70,9 @@ internal sealed class CopilotResponsesStrategy : IUpstreamStrategy<MessagesReque
             _ccOptions.PreventRecursiveAgentDelegation && ctx.IsClaudeCodeSubagent;
         var (body, vision, coercedEffort) = ResponsesRequestBuilder.Build(
             ctx.Request.Body, _profiles, filterRecursiveAgentTool, out var removedAgentTool,
-            out var downgradedImageOnUnknownModel, out var requestMutations);
+            out var downgradedImageOnUnknownModel, out var requestMutations, applyCopilotPolicy: ctx.Source is null);
         CodexPlaintextCollaboration? collaboration = null;
-        if (_collaborationOptions.Enabled && ctx.Request.Path.StartsWith("/codex/", StringComparison.OrdinalIgnoreCase))
+        if (ctx.Source is null && _collaborationOptions.Enabled && ctx.Request.Path.StartsWith("/codex/", StringComparison.OrdinalIgnoreCase))
         {
             collaboration = new CodexPlaintextCollaboration();
             body = collaboration.PrepareRequest(body);
@@ -138,7 +141,7 @@ internal sealed class CopilotResponsesStrategy : IUpstreamStrategy<MessagesReque
         // below still owns the official header set; this mirrors the Anthropic
         // strategy's ctx.Request.Headers contract and lets traces prove a nested
         // function-output image actually activated Copilot-Vision-Request.
-        if (vision)
+        if (vision && ctx.Source is null)
             ctx.Request.Headers["copilot-vision-request"] = "true";
         else
             ctx.Request.Headers.Remove("copilot-vision-request");
@@ -146,7 +149,9 @@ internal sealed class CopilotResponsesStrategy : IUpstreamStrategy<MessagesReque
         _log.LogDebug("strategy {Name}: T2 built Responses body bytes={Bytes} vision={Vision} model={Model}",
             Name, body.Length, vision, ctx.Request.Body.Model);
 
-        var resp = await _copilot.PostResponsesAsync(body, vision, ctx.Ct);
+        var resp = ctx.Source is { } source
+            ? await (_azure ?? throw new InvalidOperationException("Azure transport is unavailable.")).PostAsync(source, body, ctx.Ct)
+            : await _copilot.PostResponsesAsync(body, vision, ctx.Ct);
 
         ctx.Response.Status = (int)resp.StatusCode;
         foreach (var h in resp.Headers)
@@ -207,7 +212,7 @@ internal sealed class CopilotResponsesStrategy : IUpstreamStrategy<MessagesReque
                 // Claude client edge; native /codex remains Responses-native.
                 ResponsesContextWindowErrorRewriter.TryRewrite(
                     ctx.Request.Path,
-                    BackendVendor.CopilotResponses,
+                    ctx.Target?.Vendor ?? BackendVendor.CopilotResponses,
                     ctx.Response.Status,
                     ctx.Response.BufferedBody,
                     ctx.Response.Headers,

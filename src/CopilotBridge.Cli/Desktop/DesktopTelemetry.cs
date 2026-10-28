@@ -18,7 +18,7 @@ internal sealed partial class DesktopTelemetry : ILogEventSink
         Write(new DesktopActivity
         {
             Kind = s.Kind == "count_tokens" ? "estimate" : "request",
-            Model = s.ResolvedModel ?? s.RequestedModel,
+            Model = s.ResolvedModel ?? s.RequestedModel, Source = s.Source,
             Client = s.Kind == "responses" ? "Codex" : "Claude Code",
             InputTokens = s.Usage.InputTokens, OutputTokens = s.Usage.OutputTokens,
             CacheReadTokens = s.Usage.CacheReadInputTokens,
@@ -35,7 +35,8 @@ internal sealed partial class DesktopTelemetry : ILogEventSink
             || logEvent.MessageTemplate.Text.StartsWith("summary ", StringComparison.Ordinal)) return;
         // Record the template, never rendered properties or exception bodies: upstream
         // errors may embed request content, bearer tokens, or arbitrary response bytes.
-        Write(new DesktopActivity { Kind = "error", Error = Sanitize(logEvent.MessageTemplate.Text) });
+        var source = logEvent.Properties.TryGetValue("ModelSource", out var value) && value is ScalarValue { Value: string id } ? id : null;
+        Write(new DesktopActivity { Kind = "error", Source = source, Error = Sanitize(logEvent.MessageTemplate.Text) });
     }
 
     internal static string Sanitize(string value)
@@ -44,7 +45,7 @@ internal sealed partial class DesktopTelemetry : ILogEventSink
         return safe.Length <= 1000 ? safe : safe[..1000];
     }
 
-    private static void Write(DesktopActivity activity)
+    internal static void Write(DesktopActivity activity)
     {
         try
         {

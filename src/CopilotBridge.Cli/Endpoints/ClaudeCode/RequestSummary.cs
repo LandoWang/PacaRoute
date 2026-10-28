@@ -19,6 +19,7 @@ namespace CopilotBridge.Cli.Endpoints.ClaudeCode;
 internal sealed class RequestSummary
 {
     public required string Kind { get; init; }                  // "messages" or "count_tokens"
+    public string Source { get; set; } = "copilot";
     public string? RequestedModel { get; set; }
     public string? ResolvedModel { get; set; }
     public string? CanonicalProfileId { get; set; }

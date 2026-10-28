@@ -22,4 +22,6 @@ internal enum BackendVendor
 
     /// <summary>POST <c>/responses</c> — OpenAI Responses API shape (o-series, gpt-5).</summary>
     CopilotResponses,
+
+    AzureResponses,
 }

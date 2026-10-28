@@ -20,7 +20,7 @@ internal sealed record DesktopReply
     public string? BackupPath { get; init; }
 }
 
-internal sealed record DesktopClient(string Id, string Path, bool Connected, bool Drifted, string? Model, string? Error);
+internal sealed record DesktopClient(string Id, string Path, bool Connected, bool Drifted, string? Model, string? Error, string Source = "copilot");
 internal sealed record DesktopModel(string Id, string Name, string? Vendor, bool Claude, bool Codex);
 
 internal sealed record CopilotAccountUsage
@@ -47,6 +47,7 @@ internal sealed record DesktopActivity
     public required string Kind { get; init; }
     public string? Model { get; init; }
     public string? Client { get; init; }
+    public string? Source { get; init; }
     public int? InputTokens { get; init; }
     public int? OutputTokens { get; init; }
     public int? CacheReadTokens { get; init; }

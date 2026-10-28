@@ -29,6 +29,8 @@ namespace CopilotBridge.Cli.Models;
 [JsonSerializable(typeof(GitHubCredentialRecord))]
 [JsonSerializable(typeof(CredentialFileRecord))]
 [JsonSerializable(typeof(GitHubUser))]
+[JsonSerializable(typeof(CopilotBridge.Cli.Sources.ModelSource[]))]
+[JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(DesktopReply))]
 [JsonSerializable(typeof(DesktopActivity))]
 [JsonSerializable(typeof(CopilotAccountUsage))]
