@@ -6,6 +6,7 @@ internal static class DesktopNetwork
 {
     public static void ApplyEnvironment()
     {
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("COPILOT_BRIDGE_PROXIES_FILE"))) return;
         var mode = Environment.GetEnvironmentVariable("COPILOT_BRIDGE_PROXY_MODE");
         if (string.IsNullOrEmpty(mode) || mode == "system") return;
         HttpClient.DefaultProxy = CreateProxy(mode,

@@ -2590,3 +2590,36 @@ explicitly uses the user's existing CLI identity without changing it. Multiple A
 resources can reference one account, with independent deployment lists and Keychain
 keys. Discovery reads subscriptions/resources/deployments only; it does not grant
 permissions or fetch resource keys. Source and account edits require a stopped bridge.
+
+
+### AgentLink source transport profiles
+
+AgentLink is the desktop display name. Bundle identity, Application Support paths,
+Keychain services and engine filenames stay stable across this rename.
+
+`proxies.json` owns reusable named profiles and a source-ID to profile-ID binding
+map. Built-in `system` and `direct` profiles require no saved record. Missing
+bindings mean system networking; dangling references fail closed before startup.
+The built-in Copilot source is bound by the `copilot` ID. Account-only operations
+(device login, discovery and quota) have an explicit account proxy choice; source
+model discovery, authentication refresh and inference use that source's profile.
+No request mutates a process-wide proxy. Each Copilot source owns immutable auth,
+client and catalog services with separate named HTTP pools; credential rotation
+still uses CredentialService's account store locks. Azure transports disable
+redirects and isolate pools per source; token acquisition applies the same source
+profile to the Azure CLI subprocess and includes it in the token cache identity.
+
+Profiles support system, direct and explicit HTTP/HTTPS/SOCKS5 endpoints without
+credentials. Explicit profiles do not inherit ambient bypass lists; direct mode
+also overrides OS proxy detection in Azure CLI with NO_PROXY=*. The desktop
+atomically migrates its former global setting into a reusable profile bound to
+existing sources and account operations. New sources default to system. Edits
+require a stopped service; deleting a referenced profile is rejected. CLI use
+without a proxy file retains its existing environment behavior.
+
+Usage timelines aggregate completed requests into local-calendar hour/day
+buckets over a half-open date interval, including empty buckets. Overall and
+source filters use identical boundaries; token omissions remain explicit, and
+count_tokens estimates/errors do not become additional request counts. The
+menu-bar status item handles both mouse buttons, survives window closure, and
+controls only the service process owned by this app.

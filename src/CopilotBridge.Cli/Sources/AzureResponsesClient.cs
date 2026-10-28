@@ -3,10 +3,9 @@ using CopilotBridge.Cli.Auth;
 
 namespace CopilotBridge.Cli.Sources;
 
-internal sealed class AzureResponsesClient(AzureAuthService auth) : IDisposable
+internal sealed class AzureResponsesClient(AzureAuthService auth, ProxyRegistry proxies) : IDisposable
 {
-    private readonly HttpClient _http = new(new HttpClientHandler { AllowAutoRedirect = false })
-        { Timeout = Timeout.InfiniteTimeSpan };
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<HttpClient>> _clients = new();
 
     public async Task<HttpResponseMessage> PostAsync(ModelSource source, byte[] body, CancellationToken ct)
     {
@@ -24,8 +23,10 @@ internal sealed class AzureResponsesClient(AzureAuthService auth) : IDisposable
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(120));
-        return await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        var http = _clients.GetOrAdd(source.Id, _ => new Lazy<HttpClient>(() =>
+            new HttpClient(proxies.CreateHandler(proxies.ForSource(source.Id))) { Timeout = Timeout.InfiniteTimeSpan })).Value;
+        return await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
     }
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose() { foreach (var c in _clients.Values) if (c.IsValueCreated) c.Value.Dispose(); }
 }

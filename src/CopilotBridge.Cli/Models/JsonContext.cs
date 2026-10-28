@@ -29,6 +29,8 @@ namespace CopilotBridge.Cli.Models;
 [JsonSerializable(typeof(GitHubCredentialRecord))]
 [JsonSerializable(typeof(CredentialFileRecord))]
 [JsonSerializable(typeof(GitHubUser))]
+[JsonSerializable(typeof(CopilotBridge.Cli.Sources.ProxyConfiguration))]
+[JsonSerializable(typeof(CopilotBridge.Cli.Sources.ProxyProfile[]))]
 [JsonSerializable(typeof(CopilotBridge.Cli.Sources.ModelSource[]))]
 [JsonSerializable(typeof(CopilotBridge.Cli.Auth.AccountProfile[]))]
 [JsonSerializable(typeof(Dictionary<string, string>))]

@@ -2,6 +2,11 @@ import SwiftUI
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var store: AppStore?
+    var statusMenu: StatusMenuController?
+    func installMenu(store: AppStore, show: @escaping () -> Void) {
+        self.store = store
+        if statusMenu == nil { statusMenu = StatusMenuController(store: store, showWindow: show) }
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let store, store.hasRunningChildren else { return .terminateNow }
@@ -24,8 +29,10 @@ import SwiftUI
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        Window("Copilot Bridge", id: "main") {
-            RootView().environmentObject(store).onAppear { delegate.store = store }
+        Window("AgentLink", id: "main") {
+            RootView().environmentObject(store).onAppear {
+                delegate.installMenu(store: store) { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
+            }
         }.defaultSize(width: 1060, height: 760)
             .commands {
                 CommandGroup(replacing: .newItem) {}
@@ -35,14 +42,5 @@ import SwiftUI
                         .disabled(!store.canStart)
                 }
             }
-        MenuBarExtra("Copilot Bridge", systemImage: store.running ? "point.3.connected.trianglepath.dotted" : "point.3.filled.connected.trianglepath.dotted") {
-            Text("Bridge · \(store.serviceLabel)")
-            Button("打开 Copilot Bridge") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
-            Divider()
-            Button(store.running ? "停止服务" : "启动服务") { if store.running { store.stopService() } else { store.startService() } }
-                .disabled(!store.canStart || store.signingIn || store.serviceState == "starting" || store.serviceState == "stopping")
-            Divider()
-            Button("退出") { NSApp.terminate(nil) }.keyboardShortcut("q")
-        }
     }
 }

@@ -11,6 +11,7 @@ internal sealed record AzureAuthLease(string Header, string Value);
 internal sealed class AzureAuthService : IDisposable
 {
     private readonly Dictionary<string, string> _keys;
+    private readonly ProxyRegistry _proxies = ProxyRegistry.Load();
     private readonly Dictionary<string, (AzureAuthLease Lease, DateTimeOffset Expires)> _cache = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -38,12 +39,13 @@ internal sealed class AzureAuthService : IDisposable
         try
         {
             var subscription = source.SubscriptionId ?? "";
-            var cacheKey = (source.AccountId ?? "azure-local") + ":" + subscription;
+            var cacheKey = (source.AccountId ?? "azure-local") + ":" + subscription + ":" + _proxies.ForSource(source.Id);
             if (_cache.TryGetValue(cacheKey, out var cached) && cached.Expires > DateTimeOffset.UtcNow.AddMinutes(5))
                 return cached.Lease;
             var arguments = new List<string> { "account", "get-access-token", "--resource", "https://cognitiveservices.azure.com", "-o", "json" };
             if (subscription.Length > 0) { arguments.Add("--subscription"); arguments.Add(subscription); }
             var start = AzureAccountService.StartInfo(AccountRegistry.Load(), source.AccountId ?? "azure-local", arguments);
+            _proxies.Apply(start, _proxies.ForSource(source.Id));
             using var process = Process.Start(start) ?? throw new InvalidOperationException("Azure CLI could not start.");
             process.StandardInput.Close();
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);

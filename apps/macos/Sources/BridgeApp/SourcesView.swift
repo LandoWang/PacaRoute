@@ -14,6 +14,7 @@ struct SourcesView: View {
                 Button("管理登录") { store.page = .account }
             }
             Text("模型与 Copilot 额度由 GitHub 账号提供。").font(.caption).foregroundStyle(.secondary)
+            SourceProxyPicker(sourceID: "copilot")
             SourceUsageSummary(sourceID: "copilot")
         }
         ForEach(store.sources) { source in
@@ -33,6 +34,7 @@ struct SourcesView: View {
                 Text(source.deployments.joined(separator: " · ")).font(.callout)
                 Text(source.kind == "copilot" ? "使用所属 GitHub 账号的登录与模型。" : source.authMode == "azure-cli" ? "使用所属 Azure 账号，令牌自动刷新。" : "API Key 保存在本机 Keychain。")
                     .font(.caption).foregroundStyle(.secondary)
+                SourceProxyPicker(sourceID: source.id)
                 SourceUsageSummary(sourceID: source.id)
             }
         }

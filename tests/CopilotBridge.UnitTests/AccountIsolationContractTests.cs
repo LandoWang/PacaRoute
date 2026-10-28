@@ -50,9 +50,10 @@ public sealed class AccountIsolationContractTests : IDisposable
         collection.AddSingleton(Options.Create(new UpstreamTimeoutOptions()));
         collection.AddSingleton(Options.Create(new CodexModelCatalogOptions()));
         using var provider = collection.BuildServiceProvider();
+        var sources = new SourceRegistry([Copilot("source-one", "github-one"), Copilot("source-two", "github-two")]);
         using var fallback = registry.CreateGitHub("github-one", new Factory());
-        using var services = new AccountServices(registry, fallback, provider);
-        var one = services.For("github-one"); var two = services.For("github-two");
+        using var services = new AccountServices(registry, sources, new ProxyRegistry(new(), legacy: true), fallback, provider);
+        var one = services.For("source-one"); var two = services.For("source-two");
         var results = await Task.WhenAll(one.Overlay.GetAsync().AsTask(), two.Overlay.GetAsync().AsTask());
         Assert.Equal("one", Assert.Single(results[0].Models).Name);
         Assert.Equal("two", Assert.Single(results[1].Models).Name);

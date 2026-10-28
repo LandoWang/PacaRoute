@@ -26,6 +26,8 @@ internal static partial class AzureAccountService
         if (directory is not null) start.Environment["AZURE_CONFIG_DIR"] = directory;
         start.Environment["AZURE_CORE_LOGIN_EXPERIENCE_V2"] = "off";
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        var proxies = Sources.ProxyRegistry.Load();
+        proxies.Apply(start, proxies.ForAccount);
         return start;
     }
 

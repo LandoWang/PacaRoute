@@ -13,7 +13,7 @@ struct RootView: View {
                     Image(systemName: "point.3.connected.trianglepath.dotted")
                         .font(.system(size: 27, weight: .medium)).foregroundStyle(accent)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Copilot Bridge").font(.headline)
+                        Text("AgentLink").font(.headline)
                         Text("一个入口，连接你的工具").font(.caption2).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -46,6 +46,7 @@ struct RootView: View {
                     if let error = store.runtimeError { EmptyCard(icon: "exclamationmark.triangle", title: "应用尚未就绪", text: error) }
                     switch store.page {
                     case .sources: SourcesView()
+                    case .proxies: ProxyView()
                     case .overview: OverviewView()
                     case .account: AccountView()
                     case .clients: ClientsView()
@@ -68,7 +69,7 @@ struct RootView: View {
             }
             ToolbarItem(placement: .automatic) {
                 Button { store.page = .network } label: { Label("服务配置", systemImage: "slider.horizontal.3").labelStyle(.titleAndIcon) }
-                    .help("Bridge 服务配置：端口、代理与服务启停")
+                    .help("Bridge 服务配置：端口与服务启停")
             }
             ToolbarItem(placement: .automatic) {
                 Button { Task { await store.refresh() } } label: { Image(systemName: "arrow.clockwise") }
@@ -76,7 +77,7 @@ struct RootView: View {
             }
         }
         .sheet(item: $store.preview) { preview in ConfigurationSheet(plan: preview).environmentObject(store) }
-        .alert("Copilot Bridge", isPresented: Binding(get: { store.notice != nil }, set: { if !$0 { store.notice = nil } })) {
+        .alert("AgentLink", isPresented: Binding(get: { store.notice != nil }, set: { if !$0 { store.notice = nil } })) {
             Button("好", role: .cancel) { store.notice = nil }
         } message: { Text(store.notice ?? "") }
         .task { await store.refresh() }
@@ -84,6 +85,7 @@ struct RootView: View {
 
     private var subtitle: String {
         switch store.page {
+        case .proxies: return "管理可复用代理，在来源中独立组合。"
         case .sources: return "管理 Copilot、Azure OpenAI 的连接与可用模型。"
         case .overview: return "将模型来源连接到你的开发工具。"
         case .account: return "通过 device login 连接 GitHub、Azure，并管理账号下的资源。"
@@ -140,7 +142,7 @@ struct OverviewView: View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("COPILOT BRIDGE", systemImage: "point.3.connected.trianglepath.dotted")
+                    Label("AGENTLINK", systemImage: "point.3.connected.trianglepath.dotted")
                         .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(2).opacity(0.75)
                     Text(store.running ? "你的工具，已连接。" : "从一个简单的连接开始。")
                         .font(.system(size: 27, weight: .semibold))
@@ -376,7 +378,7 @@ struct UsageView: View {
                 Text("全部来源").tag("all"); Text("GitHub Copilot").tag("copilot")
                 ForEach(store.sources) { source in Text(store.sourceName(source.id)).tag(source.id) }
             }.frame(width: 210)
-            Picker("时间范围", selection: $store.usageDays) { Text("今天").tag(1); Text("7 天").tag(7); Text("30 天").tag(30) }
+            Picker("时间范围", selection: $store.usageDays) { Text("今天").tag(1); Text("7 天").tag(7); Text("30 天").tag(30); Text("自定义").tag(0) }
                 .pickerStyle(.segmented).frame(width: 210)
         }
         HStack(spacing: 14) {
@@ -384,6 +386,13 @@ struct UsageView: View {
             StatCard(title: "输入 token", value: store.totals.input.formatted(), icon: "arrow.down.left")
             StatCard(title: "输出 token", value: store.totals.output.formatted(), icon: "arrow.up.right")
         }
+        if store.usageDays == 0 {
+            HStack {
+                DatePicker("开始", selection: $store.usageStart, in: ...Date(), displayedComponents: .date)
+                DatePicker("结束", selection: $store.usageEnd, in: store.usageStart...max(store.usageStart, Date()), displayedComponents: .date)
+            }.onChange(of: store.usageStart) { _, value in if store.usageEnd < value { store.usageEnd = value } }
+        }
+        UsageTimelineView()
         if !counts.isEmpty {
             Card {
                 Text("按来源与模型统计请求").font(.headline)
@@ -461,16 +470,9 @@ struct NetworkView: View {
             Text("已保存端口：\(String(store.appliedPort))\(store.running ? " · 服务运行中" : " · 服务未启动")")
                 .font(.caption).foregroundStyle(.secondary)
             Divider()
-            Label("出站代理", systemImage: "network").font(.headline)
-            Picker("代理方式", selection: $store.proxyMode) {
-                ForEach(ProxyMode.allCases) { mode in Text(mode.label).tag(mode) }
-            }.pickerStyle(.radioGroup).labelsHidden()
-            if store.proxyMode == .custom {
-                TextField("http://127.0.0.1:7890", text: $store.proxyAddress).textFieldStyle(.roundedBorder)
-                Text("支持 HTTP、HTTPS 和 SOCKS5；地址不包含用户名、密码或路径。").font(.caption).foregroundStyle(.secondary)
-            }
-            Text("代理用于登录、模型、额度查询和模型请求。不会修改 macOS 系统代理或其他应用的网络设置。").font(.caption).foregroundStyle(.secondary)
-            if !store.networkValid { Text("请填写 1024–65535 之间的端口及有效的代理地址。").font(.caption).foregroundStyle(.orange) }
+            Button("管理来源 Proxy", systemImage: "network") { store.page = .proxies }
+            Text("出站代理在 Proxy 页管理，由每个来源独立选择。").font(.caption).foregroundStyle(.secondary)
+            if !store.networkValid { Text("请填写 1024–65535 之间的端口。").font(.caption).foregroundStyle(.orange) }
             HStack {
                 if store.networkChanged { Text("有未应用的修改").font(.caption).foregroundStyle(.secondary) }
                 Spacer()

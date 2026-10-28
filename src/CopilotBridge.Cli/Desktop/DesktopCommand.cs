@@ -82,7 +82,9 @@ internal static class DesktopCommand
         accountId ??= source?.AccountId ?? "copilot";
         if (accounts.Find(accountId).Kind == "azure")
             return await AzureAccountService.ExecuteAsync(accounts, accountId, action, subscription, resource, Write, ct);
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var proxies = Sources.ProxyRegistry.Load();
+        var proxyId = source is not null || action == "models" ? proxies.ForSource(sourceId) : proxies.ForAccount;
+        using var http = new HttpClient(proxies.CreateHandler(proxyId)) { Timeout = TimeSpan.FromSeconds(30) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("copilot-bridge/0.1");
         var factory = new SingleClientHttpClientFactory(http);
         using var auth = accounts.CreateGitHub(accountId, factory, challenge => Write(new DesktopReply

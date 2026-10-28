@@ -93,6 +93,7 @@ func expectNil<T>(_ value: T?, file: StaticString = #file, line: UInt = #line) {
 }
 @main struct ContractChecks {
     static func main() throws {
+        try checkAgentLinkContracts()
         let tests = BridgeCoreTests()
         try tests.testSplitUTF8AndPartialJSONAreNotLost()
         try tests.testQuotaMissingIsUnknownNotZero()

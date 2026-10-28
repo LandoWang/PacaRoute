@@ -29,7 +29,7 @@ final class Runtime {
         try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         lockFD = Darwin.open(root.appendingPathComponent("app.lock").path, O_CREAT | O_RDWR, 0o600)
         guard lockFD >= 0, flock(lockFD, LOCK_EX | LOCK_NB) == 0 else {
-            throw AppFailure(message: "Copilot Bridge 已在运行。请从 Dock 或菜单栏打开已有窗口。")
+            throw AppFailure(message: "AgentLink 已在运行。请从 Dock 或菜单栏打开已有窗口。")
         }
         guard let resources = explicitResources ?? Bundle.main.resourceURL else { throw AppFailure(message: "应用资源不可用。") }
         let source = resources.appendingPathComponent("bridge")
@@ -62,6 +62,14 @@ final class Runtime {
         let sourceFile = root.appendingPathComponent("sources.json")
         if FileManager.default.fileExists(atPath: sourceFile.path) { env["COPILOT_BRIDGE_SOURCES_FILE"] = sourceFile.path }
         else { env.removeValue(forKey: "COPILOT_BRIDGE_SOURCES_FILE") }
+        let proxiesFile = root.appendingPathComponent("proxies.json")
+        if FileManager.default.fileExists(atPath: proxiesFile.path) {
+            env["COPILOT_BRIDGE_PROXIES_FILE"] = proxiesFile.path
+            env.removeValue(forKey: "COPILOT_BRIDGE_PROXY_MODE")
+            env.removeValue(forKey: "COPILOT_BRIDGE_PROXY_URL")
+            return env
+        }
+        env.removeValue(forKey: "COPILOT_BRIDGE_PROXIES_FILE")
         env["COPILOT_BRIDGE_PROXY_MODE"] = mode.rawValue
         if mode == .custom { env["COPILOT_BRIDGE_PROXY_URL"] = proxy }
         else { env.removeValue(forKey: "COPILOT_BRIDGE_PROXY_URL") }

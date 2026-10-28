@@ -4,11 +4,12 @@ import BridgeCore
 import Darwin
 
 enum Page: String, CaseIterable, Identifiable {
-    case overview = "导览", account = "账号", sources = "来源", clients = "Agent", usage = "用量", errors = "错误", network = "Bridge 服务配置"
+    case overview = "导览", account = "账号", sources = "来源", proxies = "Proxy", clients = "Agent", usage = "用量", errors = "错误", network = "Bridge 服务配置"
     var id: String { rawValue }
     var icon: String {
         switch self {
         case .sources: return "server.rack"
+        case .proxies: return "network"
         case .overview: return "square.grid.2x2"
         case .account: return "person.crop.circle"
         case .clients: return "slider.horizontal.3"
@@ -44,6 +45,7 @@ struct LocalIssue: Identifiable {
     @Published var sourceModels: [String: [BridgeModel]] = [:]
     @Published var signingInAccount: String?
     @Published var sources: [ModelSource] = []
+    @Published var proxies = ProxyConfiguration()
     @Published var codexSource = "copilot"
     @Published var claudeSource = "copilot"
     @Published var usageSource = "all"
@@ -61,21 +63,19 @@ struct LocalIssue: Identifiable {
     @Published var deviceURL: URL?
     @Published var deviceExpires: Date?
     @Published var serviceState = "stopped"
-    @Published var proxyMode: ProxyMode
-    @Published var proxyAddress: String
     @Published var portText: String
     @Published var selectedCodex = ""
     @Published var selectedClaude = ""
     @Published var runtimeError: String?
     @Published var usageDays = 1
+    @Published var usageStart = Calendar.current.startOfDay(for: Date())
+    @Published var usageEnd = Date()
     private(set) var runtime: Runtime?
     private var service: BridgeProcess?
     private var loginProcess: BridgeProcess?
     private var jobs: [UUID: BridgeProcess] = [:]
     private var activityCache: [String: (Int, Date, [Activity])] = [:]
     private var refreshTimer: Timer?
-    private var appliedMode: ProxyMode
-    private var appliedProxy: String
     private(set) var appliedPort: Int
     private let defaults: UserDefaults
 
@@ -84,8 +84,6 @@ struct LocalIssue: Identifiable {
         let mode = ProxyMode(rawValue: defaults.string(forKey: "proxyMode") ?? "system") ?? .system
         let address = defaults.string(forKey: "proxyAddress") ?? "http://127.0.0.1:7890"
         let port = defaults.integer(forKey: "port")
-        proxyMode = mode; appliedMode = mode
-        proxyAddress = address; appliedProxy = address
         appliedPort = (1024...65535).contains(port) ? port : 8765
         portText = String(appliedPort)
         do {
@@ -97,6 +95,15 @@ struct LocalIssue: Identifiable {
             }
             if let file = runtime?.root.appendingPathComponent("sources.json"), FileManager.default.fileExists(atPath: file.path) {
                 sources = try ModelSource.decode(Data(contentsOf: file))
+            }
+            if let runtime {
+                let file = runtime.root.appendingPathComponent("proxies.json")
+                if FileManager.default.fileExists(atPath: file.path) { proxies = try ProxyConfiguration.decode(Data(contentsOf: file)) }
+                else {
+                    proxies = ProxyConfiguration.migrated(mode: mode, address: address, sourceIDs: sources.map(\.id))
+                    try proxies.encoded().write(to: file, options: .atomic)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+                }
             }
         }
         catch { runtimeError = error.localizedDescription }
@@ -120,13 +127,24 @@ struct LocalIssue: Identifiable {
         switch serviceState { case "starting": return "正在启动"; case "running": return "运行中"; case "stopping": return "正在停止"; default: return "已停止" }
     }
     var filteredActivity: [Activity] {
-        let start = Calendar.current.date(byAdding: .day, value: -(usageDays - 1), to: Calendar.current.startOfDay(for: Date()))!
-        return activity.filter { $0.timestamp >= start && (usageSource == "all" || ($0.source ?? "copilot") == usageSource) }
+        let range = usageInterval
+        return activity.filter { $0.timestamp >= range.start && $0.timestamp < range.end
+            && (usageSource == "all" || ($0.source ?? "copilot") == usageSource) }
     }
+    var usageInterval: DateInterval {
+        let cal = Calendar.current
+        let start = usageDays == 0 ? cal.startOfDay(for: usageStart)
+            : cal.date(byAdding: .day, value: -(usageDays - 1), to: cal.startOfDay(for: Date()))!
+        let last = usageDays == 0 ? max(start, cal.startOfDay(for: usageEnd)) : cal.startOfDay(for: Date())
+        return DateInterval(start: start, end: cal.date(byAdding: .day, value: 1, to: last)!)
+    }
+    var usageHourly: Bool { Calendar.current.isDate(usageInterval.start, inSameDayAs: usageInterval.end.addingTimeInterval(-1)) }
+    var timeline: [UsageBucket] { UsageTimeline.buckets(activity, start: usageInterval.start, end: usageInterval.end,
+        hourly: usageHourly, source: usageSource) }
     var totals: UsageTotals { UsageTotals(filteredActivity) }
     var errors: [Activity] { activity.filter(\.failed) }
-    var networkChanged: Bool { proxyMode != appliedMode || proxyAddress != appliedProxy || portText != String(appliedPort) }
-    var networkValid: Bool { proxyMode.validate(proxyAddress) && Int(portText).map { (1024...65535).contains($0) } == true }
+    var networkChanged: Bool { portText != String(appliedPort) }
+    var networkValid: Bool { Int(portText).map { (1024...65535).contains($0) } == true }
 
     func showError(_ error: Error) {
         let message = BridgeProcess.clean(error.localizedDescription)
@@ -217,7 +235,7 @@ struct LocalIssue: Identifiable {
 
     func startService() {
         guard ready, canStart, !signingIn, busy == nil, serviceState == "stopped" else { return }
-        guard networkValid else { showError(AppFailure(message: "请填写有效的端口与代理地址后再启动。")); return }
+        guard networkValid else { showError(AppFailure(message: "请填写有效的端口后再启动。")); return }
         if networkChanged {
             Task { await saveNetwork(startIfStopped: true) }
         } else {
@@ -236,7 +254,7 @@ struct LocalIssue: Identifiable {
             var keys: [String: String] = [:]
             for source in sources where source.kind == "azure-openai" && source.authMode == "api-key" { keys[source.id] = try SourceKeychain.read(source.id) }
             var envelope = try JSONEncoder().encode(keys); envelope.append(10)
-            var environment = runtime.environment(mode: appliedMode, proxy: appliedProxy)
+            var environment = runtime.environment(mode: .system, proxy: "")
             environment["COPILOT_BRIDGE_SECRETS_STDIN"] = "1"
             try child.start(runtime: runtime, arguments: ["serve", "--port", String(appliedPort)],
                             environment: environment, timeout: nil, inputData: envelope,
@@ -265,7 +283,7 @@ struct LocalIssue: Identifiable {
 
     func saveNetwork(startIfStopped: Bool = false) async {
         guard networkValid, busy == nil, !signingIn, serviceState != "stopping" else { return }
-        let nextPort = Int(portText)!, nextMode = proxyMode, nextProxy = proxyAddress
+        let nextPort = Int(portText)!
         let restart = serviceState == "running" || serviceState == "starting"
         let shouldStart = restart || startIfStopped
         if shouldStart && (!restart || nextPort != appliedPort) && !Self.portAvailable(nextPort) {
@@ -278,9 +296,7 @@ struct LocalIssue: Identifiable {
             for _ in 0..<100 where serviceState != "stopped" { try? await Task.sleep(nanoseconds: 100_000_000) }
             guard serviceState == "stopped" else { showError(AppFailure(message: "Bridge 尚未停止，请稍后重试。")); return }
         }
-        appliedMode = nextMode; appliedProxy = nextProxy; appliedPort = nextPort
-        defaults.set(appliedMode.rawValue, forKey: "proxyMode")
-        defaults.set(appliedProxy, forKey: "proxyAddress")
+        appliedPort = nextPort
         defaults.set(appliedPort, forKey: "port")
         do { try await refreshStatus() } catch { showError(error) }
         if shouldStart {
@@ -302,7 +318,7 @@ struct LocalIssue: Identifiable {
             let files = (try? fm.contentsOfDirectory(at: directory,
                 includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey])) ?? []
             var next: [String: (Int, Date, [Activity])] = [:]
-            for file in files.filter({ $0.pathExtension == "jsonl" }).sorted(by: { $0.path > $1.path }).prefix(31) {
+            for file in files.filter({ $0.pathExtension == "jsonl" }).sorted(by: { $0.path > $1.path }).prefix(366) {
                 guard let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
                       let size = values.fileSize, let date = values.contentModificationDate else { continue }
                 if let cached = prior[file.path], cached.0 == size, cached.1 == date { next[file.path] = cached; continue }
@@ -324,7 +340,7 @@ struct LocalIssue: Identifiable {
         return try await withCheckedThrowingContinuation { continuation in
             do {
                 try child.start(runtime: runtime, arguments: arguments,
-                    environment: runtime.environment(mode: appliedMode, proxy: appliedProxy), timeout: timeout,
+                    environment: runtime.environment(mode: .system, proxy: ""), timeout: timeout,
                     onReply: { reply in Task { @MainActor in onReply(reply) } },
                     completion: { result in
                         switch result {
@@ -369,6 +385,7 @@ struct LocalIssue: Identifiable {
         let next = sources.filter { $0.id != source.id }
         try ModelSource.encode(next).write(to: runtime.root.appendingPathComponent("sources.json"), options: .atomic)
         sources = next
+        var bindings = proxies; bindings.bindings.removeValue(forKey: source.id); try saveProxies(bindings)
         try SourceKeychain.delete(source.id)
     }
 

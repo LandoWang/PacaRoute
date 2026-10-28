@@ -1,11 +1,11 @@
-# Copilot Bridge for macOS
+# AgentLink for macOS
 
 A native SwiftUI desktop app around the existing Native AOT bridge. Supports
 Apple Silicon and macOS 14 or later; no .NET runtime is required by the built app.
 
 ## Features
 
-- Source × harness selection: saved Azure OpenAI sources plus built-in Copilot;
+- Source × Agent selection: saved Azure OpenAI sources plus built-in Copilot;
   Codex and Claude Code independently bind to a source and model/deployment.
 - GitHub device-code sign-in, cancellation, account refresh, and sign-out.
 - Azure OpenAI v1 Responses with API keys in macOS Keychain or short-lived Entra
@@ -17,13 +17,15 @@ Apple Silicon and macOS 14 or later; no .NET runtime is required by the built ap
 - Two usage levels: each source card shows its local daily totals and opens its
   own report; the Usage page aggregates all sources or filters one source.
   Reports include request counts, input/output/cache tokens, source/model breakdown
-  and failures for today, seven days, or thirty days.
+  and failures for today, seven days, thirty days, or a custom date range.
+  Hourly/daily timelines include empty buckets and follow the local time zone.
 - Copilot account quota, remaining percentage, overages, and reset date when
   GitHub provides them. Missing quota is unknown, never an invented zero.
 - Sanitized request/error summaries and access to the original bridge logs.
-- System/environment proxy, direct connection, or a custom HTTP/HTTPS/SOCKS5
-  proxy. Network settings are process-local and never change macOS proxy settings.
-- Start/stop controls, port conflict detection, and a menu bar item. Closing the
+- Reusable Proxy profiles (system, direct, HTTP/HTTPS/SOCKS5), independently
+  bound to each source. Account-only login/discovery has its own proxy choice.
+  Network settings are process-local and never change macOS proxy settings.
+- Start/stop controls, port conflict detection, and a native menu bar item with left/right-click start/stop, refresh and today's usage. Closing the
   window keeps the app running; quitting stops only its own child processes.
 
 ## Build and open
@@ -33,13 +35,13 @@ the repository's `global.json`. A full Xcode installation is not needed.
 
 ```bash
 scripts/build-macos-app.sh
-open 'artifacts/macos/Copilot Bridge.app'
+open 'artifacts/macos/AgentLink.app'
 ```
 
 Set `BRIDGE_DOTNET` to the SDK executable if it is not on PATH. The script also
 checks `~/.dotnet/dotnet`. It publishes both bridge executables, builds the Swift
 UI, generates an icon, verifies ad-hoc code signatures, and produces
-`artifacts/macos/Copilot-Bridge-macOS-arm64.zip` and a drag-to-Applications DMG.
+`artifacts/macos/AgentLink-macOS-arm64.zip` and a drag-to-Applications DMG.
 
 The resulting app is a local development build, **not Developer ID signed or
 Apple notarized**. Distribution beyond local testing needs the owner's Apple
@@ -48,16 +50,14 @@ stable Dock / Spotlight entry.
 
 ## First use
 
-1. Open **Sources**. For Copilot, manage the GitHub sign-in under **Account**.
-   For Azure OpenAI, add a source with a resource endpoint, deployment names,
-   and either an API key or an Azure CLI identity (optionally scoped to a
-   subscription UUID). Azure-only operation does not require GitHub login.
-2. Choose proxy settings under **Network** if needed, then start Bridge.
-3. Open **Harness**, select a source and default model for each client, and
-   inspect the preview before applying it.
-4. Start a new Codex / Claude Code session. Some client configuration layers or
-   explicit session options can override the global model.
-5. Inspect local usage and explicitly refresh GitHub quota under **Usage**.
+1. Open **Accounts** and sign in. GitHub device login creates a Copilot source
+   after authorization. Azure accounts can add several resource sources.
+2. Add reusable profiles under **Proxy** if needed, then select a Proxy on each
+   **Sources** card. New sources default to system networking.
+3. Start Bridge from the menu bar or **Bridge Service Settings**.
+4. Open **Agent**, select each client's source and model, and preview/apply its
+   configuration. Start a new client session to use the changed configuration.
+5. Inspect local time-series usage and explicitly refresh GitHub quota in **Usage**.
 
 The app manages `~/.codex/config.toml` (or an inherited `CODEX_HOME`) and
 `~/.claude/settings.json`, reusing the bridge's existing merge code. It preserves
@@ -88,13 +88,13 @@ being able to list a deployment does not imply inference access. Authentication
 errors do not trigger resource creation, role assignment or fallback to another source.
 
 Source changes require stopping the bridge first. A source cannot be deleted
-while a configured harness uses it. Two processes are persistent (app and bridge);
+while a configured Agent uses it. Two processes are persistent (app and bridge);
 CLI helpers, including Azure token acquisition, are temporary. Desktop `appsettings.json` disables interactive
 self-update and request-body tracing. Engine upgrades come with app rebuilds;
 both packaged executables stay together. The main window has no HTTP admin API.
 
 Daily `desktop-activity/*.jsonl` files contain completed request metadata and
-sanitized error templates only. The UI reads the most recent 31 log-day files;
+sanitized error templates only. The UI reads the most recent 366 log-day files;
 files are retained on disk until manually removed. `count_tokens` estimates do
 not inflate generation totals. Missing usage is called out, and cache values
 are shown separately because the two upstream protocols count input differently.
@@ -114,6 +114,7 @@ dotnet test tests/CopilotBridge.UnitTests
 swift run --package-path apps/macos BridgeCoreChecks
 python3 scripts/test-macos-control.py
 python3 scripts/test-source-harness.py
+python3 scripts/test-source-proxies.py
 
 # Native pipe streaming / cancellation contract, using only local child processes:
 swift build --package-path apps/macos --target BridgeCore
@@ -214,9 +215,9 @@ Local Azure CLI, preserving its URL, model selection and historical usage.
 Account and resource mutations require a stopped app-owned bridge. The app never
 stops the separately installed CLI bridge on port 8765.
 
-The sidebar order is Overview, Accounts, Sources, Agent, Usage, Errors, and Bridge
+The sidebar order is Overview, Accounts, Sources, Proxy, Agent, Usage, Errors, and Bridge
 Service Settings. A persistent top-right Service Settings button opens the port,
-proxy and service lifecycle controls from any page.
+and service lifecycle controls from any page.
 
 
 Account-routing verification (macos.3): real Codex 0.141.0 with gpt-6-astra and
@@ -236,7 +237,7 @@ configuration. A new GitHub device login creates its Copilot source only after
 successful authorization. Pending login profiles do not enable service startup.
 Azure accounts can add several resource sources after login or use manual API keys.
 
-Pressing Start applies the port and proxy values currently entered in Service
+Pressing Start applies the port value currently entered in Service
 Settings, even if Save was not pressed separately. An occupied new port is rejected
 before stopping the existing owned service or replacing saved settings. Success is
 reported only after the new listener signals readiness. Agent config files remain a
@@ -248,8 +249,49 @@ starts the actual bundled AOT engine on free ephemeral ports, and never invokes 
 client configuration write or a remote inference request:
 
 ```bash
-bash scripts/test-macos-network.sh "artifacts/macos-network/Copilot Bridge.app/Contents/Resources"
+bash scripts/test-macos-network.sh "artifacts/macos-network/AgentLink.app/Contents/Resources"
 ```
 
 It checks edited-port startup, persisted settings, real HTTP listener movement,
 occupied-port preservation, failed-start reporting, and account-before-source state.
+
+
+## AgentLink identity and source proxies
+
+The display name, window title, menu-bar item and distribution archives are
+AgentLink. The bundle ID, executable names, Keychain service and Application
+Support directory intentionally retain their existing identities, preserving
+accounts, preferences, client command-auth paths and history across upgrades.
+
+`COPILOT_BRIDGE_PROXIES_FILE` points to `proxies.json` beside `sources.json`.
+Its `profiles` array contains public ID/name/mode/address metadata, `bindings`
+map source IDs to profile IDs, and `account_proxy_id` selects transport for
+account-only login, quota and Azure discovery. Built-ins are `system` and
+`direct`. The former global desktop proxy migrates atomically to existing
+source bindings on first launch. New sources use `system`. Referenced proxies
+cannot be deleted; unknown references fail closed before startup. Stop the
+owned service before editing profiles or bindings. No request switches a
+process-wide proxy. A failed explicit proxy never falls back to direct.
+
+The menu bar remains available after closing the main window. Both left and
+right mouse buttons open the same native menu, with service controls and usage
+readback that do not activate the window. Page shortcuts reopen that page.
+
+Proxy-routing verification (macos.6): real Codex gpt-6-astra and Claude Code
+claude-opus-5.5 completed multi-file tool tasks through two different explicit
+CONNECT proxies in one bridge process, sharing a GitHub identity. Both proxies
+carried GitHub auth and Copilot model connections. Codex recorded four matching
+tool round trips and nine passing task tests, with zero router fatals in the
+client log window (158 rows); Claude recorded three round trips and fourteen
+passing task tests. Disposable credential copies were removed after the run.
+
+`test-source-proxies.py` additionally checks 24 concurrent same-model Azure
+fixture requests across two proxies and direct networking, credential isolation,
+and fail-closed behavior for an unavailable proxy. The Swift calendar/migration
+checks and .NET profile checks include deliberate rejected mutations.
+
+The native menu contract (`scripts/test-macos-menu.sh <app-resources>`) verifies
+both mouse event masks, status-item persistence, navigation and actual AOT
+start/stop while the main window is closed. Removing right-click handling makes
+that test fail. UI review also covers creating a Proxy, independently binding an
+Azure source, and switching hourly/daily usage charts in a disposable app.

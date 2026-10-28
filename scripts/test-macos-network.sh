@@ -11,5 +11,6 @@ swiftc -I "$build_dir/Modules" "$build_dir"/BridgeCore.build/*.swift.o \
   apps/macos/Sources/BridgeApp/SourceKeychain.swift \
   apps/macos/Sources/BridgeApp/AppStore.swift \
   apps/macos/Sources/BridgeApp/AccountsStore.swift \
+  apps/macos/Sources/BridgeApp/ProxyStore.swift \
   scripts/macos-network-check.swift -o artifacts/macos-network-check
 artifacts/macos-network-check "$resources"

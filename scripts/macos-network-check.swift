@@ -29,7 +29,7 @@ import Darwin
             try store.saveSource(ModelSource(id: "azure-fixture", name: "Fixture", endpoint: "https://example.openai.azure.com",
                 deployments: ["fixture-deployment"], accountId: "azure-local"), key: "")
             try expect(store.hasSource && store.canStart, "Configured Azure resources enable the source step")
-            store.portText = String(newPort); store.proxyMode = .direct
+            store.portText = String(newPort)
             store.startService()
             try await wait { store.running && store.busy == nil }
             try expect(store.appliedPort == newPort && defaults.integer(forKey: "port") == newPort,

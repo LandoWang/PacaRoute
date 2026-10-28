@@ -9,12 +9,12 @@ if [[ -z "$dotnet_bin" ]]; then echo 'Install the .NET 10 SDK or set BRIDGE_DOTN
 if [[ "$(uname -s)" != Darwin ]]; then echo 'Build this app on macOS.' >&2; exit 1; fi
 if [[ "$(uname -m)" != arm64 ]]; then echo 'This build currently supports Apple Silicon.' >&2; exit 1; fi
 
-app_dir="$output_dir/Copilot Bridge.app"
+app_dir="$output_dir/AgentLink.app"
 engine_dir="$repo_dir/artifacts/macos-engine"
 mkdir -p "$engine_dir" "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources/bridge"
 cd "$repo_dir"
-"$dotnet_bin" publish src/CopilotBridge.Cli -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.4
-"$dotnet_bin" publish src/CopilotBridge.Updater -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.4
+"$dotnet_bin" publish src/CopilotBridge.Cli -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.6
+"$dotnet_bin" publish src/CopilotBridge.Updater -c Release -r osx-arm64 -o "$engine_dir" -p:Version=0.5.28-macos.6
 swift build --package-path apps/macos -c release
 swift_bin_dir="$(swift build --package-path apps/macos -c release --show-bin-path)"
 cp "$swift_bin_dir/CopilotBridgeMac" "$app_dir/Contents/MacOS/CopilotBridgeMac"
@@ -28,9 +28,9 @@ settings['Tracing']['Enabled'] = False
 settings['Logging']['LogLevel']['CopilotBridge.Cli'] = 'Information'
 (app / 'Contents/Resources/bridge/appsettings.json').write_text(json.dumps(settings, indent=2) + '\n')
 info = {
-    'CFBundleName': 'Copilot Bridge', 'CFBundleDisplayName': 'Copilot Bridge',
+    'CFBundleName': 'AgentLink', 'CFBundleDisplayName': 'AgentLink',
     'CFBundleIdentifier': 'com.landowang.CopilotBridge', 'CFBundleExecutable': 'CopilotBridgeMac',
-    'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.5.28', 'CFBundleVersion': '4',
+    'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.5.28', 'CFBundleVersion': '6',
     'LSMinimumSystemVersion': '14.0', 'LSApplicationCategoryType': 'public.app-category.developer-tools',
     'NSHighResolutionCapable': True, 'NSPrincipalClass': 'NSApplication',
     'CFBundleIconFile': 'AppIcon',
@@ -43,6 +43,6 @@ codesign --force --sign - "$app_dir/Contents/Resources/bridge/copilot-bridge"
 codesign --force --sign - "$app_dir/Contents/Resources/bridge/copilot-updater"
 codesign --force --sign - "$app_dir"
 codesign --verify --deep --strict "$app_dir"
-ditto -c -k --sequesterRsrc --keepParent "$app_dir" "$output_dir/Copilot-Bridge-macOS-arm64.zip"
-bash "$repo_dir/scripts/package-macos-dmg.sh" "$app_dir" "$output_dir/Copilot-Bridge-macOS-arm64.dmg"
+ditto -c -k --sequesterRsrc --keepParent "$app_dir" "$output_dir/AgentLink-macOS-arm64.zip"
+bash "$repo_dir/scripts/package-macos-dmg.sh" "$app_dir" "$output_dir/AgentLink-macOS-arm64.dmg"
 printf 'Built: %s\n' "$app_dir"
