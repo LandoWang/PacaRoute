@@ -14,9 +14,11 @@ final class Runtime {
     let executable: URL
     private var lockFD: Int32 = -1
 
-    init() throws {
+    init(root explicitRoot: URL? = nil, resources explicitResources: URL? = nil) throws {
         let fm = FileManager.default
-        if let override = ProcessInfo.processInfo.environment["COPILOT_BRIDGE_APP_HOME"] {
+        if let explicitRoot {
+            root = explicitRoot
+        } else if let override = ProcessInfo.processInfo.environment["COPILOT_BRIDGE_APP_HOME"] {
             root = URL(fileURLWithPath: override, isDirectory: true)
         } else {
             root = try fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
@@ -29,7 +31,7 @@ final class Runtime {
         guard lockFD >= 0, flock(lockFD, LOCK_EX | LOCK_NB) == 0 else {
             throw AppFailure(message: "Copilot Bridge 已在运行。请从 Dock 或菜单栏打开已有窗口。")
         }
-        guard let resources = Bundle.main.resourceURL else { throw AppFailure(message: "应用资源不可用。") }
+        guard let resources = explicitResources ?? Bundle.main.resourceURL else { throw AppFailure(message: "应用资源不可用。") }
         let source = resources.appendingPathComponent("bridge")
         let sourceBinary = source.appendingPathComponent("copilot-bridge")
         guard fm.isExecutableFile(atPath: sourceBinary.path) else {

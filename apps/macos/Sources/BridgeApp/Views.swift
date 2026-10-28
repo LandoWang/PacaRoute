@@ -144,17 +144,19 @@ struct OverviewView: View {
                         .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(2).opacity(0.75)
                     Text(store.running ? "你的工具，已连接。" : "从一个简单的连接开始。")
                         .font(.system(size: 27, weight: .semibold))
-                    Text(store.canStart ? "启动本地服务，再将 Codex 或 Claude Code 连接到模型来源。" : "添加 Copilot 或 Azure OpenAI 来源，把模型带到开发工具。")
+                    Text(store.hasSource ? "启动本地服务，再为 Agent 选择来源和模型。" : "先添加账号，再连接模型来源，最后配置你的 Agent。")
                         .font(.subheadline).opacity(0.8).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 10) {
-                        if !store.canStart {
+                        if !store.hasAccount {
+                            Button("添加账号") { store.page = .account }.buttonStyle(.borderedProminent).tint(.white).foregroundStyle(Color(red: 0.08, green: 0.3, blue: 0.28))
+                        } else if !store.hasSource {
                             Button("添加来源") { store.page = .sources }.buttonStyle(.borderedProminent).tint(.white).foregroundStyle(Color(red: 0.08, green: 0.3, blue: 0.28))
                         } else {
                             Button(store.running ? "停止 Bridge" : "启动 Bridge") {
                                 if store.running { store.stopService() } else { store.startService() }
                             }.buttonStyle(.borderedProminent).tint(.white).foregroundStyle(Color(red: 0.08, green: 0.3, blue: 0.28))
                                 .disabled(store.serviceState == "starting" || store.serviceState == "stopping")
-                            Button("配置客户端") { store.page = .clients }.buttonStyle(.bordered).tint(.white)
+                            Button("配置 Agent") { store.page = .clients }.buttonStyle(.bordered).tint(.white)
                         }
                     }.padding(.top, 6)
                 }
@@ -169,12 +171,14 @@ struct OverviewView: View {
                 StatCard(title: "失败请求", value: totals.failures.formatted(), icon: "exclamationmark.circle")
             }
             Card {
-                Text("三步开始").font(.headline)
-                step("1", "添加模型来源", "连接 GitHub Copilot 或 Azure OpenAI。", done: store.canStart, page: .sources)
+                Text("四步开始").font(.headline)
+                step("1", "添加账号", "使用 device login 登录 GitHub 或 Azure，也可以添加使用 API Key 的 Azure 账号。", done: store.hasAccount, page: .account)
                 Divider()
-                step("2", "启动本地 Bridge", "服务地址 localhost:\(String(store.appliedPort))。关闭窗口后仍可从菜单栏管理。", done: store.running, page: .overview)
+                step("2", "添加模型来源", "GitHub 登录后自动创建 Copilot 来源；Azure 账号下可添加多个 AOAI 资源及其模型部署。", done: store.hasSource, page: .sources)
                 Divider()
-                step("3", "连接客户端并选择模型", "预览配置后再应用，原文件会自动备份。", done: store.clients.contains { $0.connected && !$0.drifted }, page: .clients)
+                step("3", "启动 Bridge", "在服务配置中选择端口，点击启动即可应用。当前已保存端口：\(String(store.appliedPort))。", done: store.running, page: .network)
+                Divider()
+                step("4", "配置 Agent", "为 Codex、Claude Code 选择来源 × 模型，预览并应用连接配置。", done: store.clients.contains { $0.connected && !$0.drifted }, page: .clients)
             }
             Text("统计从此应用启动的 Bridge 开始记录；不会读取已有 CLI 的聊天记录。")
                 .font(.caption).foregroundStyle(.secondary)
@@ -452,7 +456,10 @@ struct NetworkView: View {
                 Spacer()
                 TextField("8765", text: $store.portText).textFieldStyle(.roundedBorder).frame(width: 120)
             }
-            Text("只监听 localhost。修改端口后，需要重新应用客户端连接配置。").font(.caption).foregroundStyle(.secondary)
+            Text("只监听 localhost。修改后点击“保存并启动”即可使用新端口；已连接的 Agent 需另行预览并应用新地址。")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("已保存端口：\(String(store.appliedPort))\(store.running ? " · 服务运行中" : " · 服务未启动")")
+                .font(.caption).foregroundStyle(.secondary)
             Divider()
             Label("出站代理", systemImage: "network").font(.headline)
             Picker("代理方式", selection: $store.proxyMode) {
@@ -478,8 +485,8 @@ struct NetworkView: View {
                     Text("\(store.serviceLabel) · localhost:\(String(store.appliedPort))").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button(store.running ? "停止" : "启动") { if store.running { store.stopService() } else { store.startService() } }
-                    .disabled(!store.canStart || store.signingIn || store.serviceState == "starting" || store.serviceState == "stopping")
+                Button(store.running ? "停止" : store.networkChanged ? "保存并启动" : "启动") { if store.running { store.stopService() } else { store.startService() } }
+                    .disabled(!store.canStart || store.busy != nil || (!store.running && !store.networkValid) || store.signingIn || store.serviceState == "starting" || store.serviceState == "stopping")
             }
         }
     }

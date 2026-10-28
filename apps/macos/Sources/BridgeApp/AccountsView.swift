@@ -101,11 +101,14 @@ struct AccountCard: View {
                     Button("从 Azure 选择 AOAI 资源", systemImage: "cloud") { importing = true }.disabled(!mutable)
                     Button("手动添加资源 / API Key") { manual = true }.disabled(!mutable)
                 }
-            } else if account.id != "copilot" && store.accountSources(account).isEmpty {
+            } else if account.id != "copilot" && store.accountSources(account).isEmpty && store.accountLoggedIn(account) {
                 Button("添加 Copilot 来源") {
                     do { try store.saveSource(ModelSource(id: account.id, name: "Copilot", endpoint: "", deployments: [], accountId: account.id, kind: "copilot"), key: "") }
                     catch { store.showError(error) }
                 }.disabled(!mutable)
+            } else if account.kind == "github" && !store.accountLoggedIn(account) {
+                Text("完成 GitHub 授权后会自动创建 Copilot 来源，无需手动添加。")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .sheet(isPresented: $importing) { AzureResourcePicker(account: account).environmentObject(store) }

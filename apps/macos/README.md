@@ -66,6 +66,21 @@ regions. A timestamped `.bridge-*.bak` sibling contains the previous bytes. To
 restore manually, stop any client editing that file and copy the desired backup
 over its original path. No configuration is applied merely by launching the app.
 
+Use **Agent → Restore configuration** on either client card to choose a dated
+backup. The picker prefers a valid snapshot from before Bridge was selected and
+labels snapshots that still connect to Bridge. Preview, then confirm **Back up
+current configuration and restore**. This restores the entire file, including
+settings edited after that snapshot; the current bytes are backed up first so
+the restore can itself be undone. New configurations also record that the file
+was previously absent, allowing restore to remove only that configuration file.
+Older installations with no recorded original state cannot reconstruct it.
+
+Backup contents and credentials are never displayed. Recovery requires no login
+or running proxy and rejects a changed current file or changed backup after
+preview. Start a new client session after restoring; existing sessions retain
+the configuration they already loaded.
+
+
 See the [official Codex provider configuration reference](https://learn.chatgpt.com/docs/config-file/config-advanced#custom-model-providers)
 for provider / command-auth semantics and global configuration precedence.
 
@@ -227,3 +242,29 @@ The installed Claude 2.1.179 was rejected by the existing model version gate; a
 temporary 2.1.306 installation passed without updating the user's global CLI.
 Azure subscription/resource/deployment discovery passed against the selected
 subscription; live Azure inference remains UNVERIFIED for the permission reason above.
+
+
+## Port editing and first-run guide
+
+The guide starts with Accounts, then Sources, then starting Bridge, then Agent
+configuration. A new GitHub device login creates its Copilot source only after
+successful authorization. Pending login profiles do not enable service startup.
+Azure accounts can add several resource sources after login or use manual API keys.
+
+Pressing Start applies the port and proxy values currently entered in Service
+Settings, even if Save was not pressed separately. An occupied new port is rejected
+before stopping the existing owned service or replacing saved settings. Success is
+reported only after the new listener signals readiness. Agent config files remain a
+separate preview/apply action; changing a service port does not silently rewrite them.
+The separately installed legacy bridge is never stopped by these controls.
+
+The app-store/network contract check uses isolated preferences and application data,
+starts the actual bundled AOT engine on free ephemeral ports, and never invokes a
+client configuration write or a remote inference request:
+
+```bash
+bash scripts/test-macos-network.sh "artifacts/macos-network/Copilot Bridge.app/Contents/Resources"
+```
+
+It checks edited-port startup, persisted settings, real HTTP listener movement,
+occupied-port preservation, failed-start reporting, and account-before-source state.

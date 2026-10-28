@@ -67,6 +67,10 @@ extension AppStore {
             }
             accountStates[account.id] = try await execute(["desktop", "account-status", "--account", account.id])
             if account.kind == "github" {
+                if account.id == "copilot" { loggedIn = true }
+                if !account.builtin && !accountSources(account).contains(where: { $0.kind == "copilot" }) {
+                    try saveSource(ModelSource(id: account.id, name: "Copilot", endpoint: "", deployments: [], accountId: account.id, kind: "copilot"), key: "")
+                }
                 let details = try await execute(["desktop", "account", "--account", account.id])
                 accountStates[account.id] = details
                 if let username = details.login, !account.builtin, let runtime {
@@ -80,7 +84,9 @@ extension AppStore {
                 loggedIn = true; login = accountStates[account.id]?.login; quota = accountStates[account.id]?.quota
                 quotaError = accountStates[account.id]?.quotaError; quotaUpdated = Date()
             }
-            notice = "\(account.name) 登录成功。Azure 账号可以继续添加多个 AOAI 资源。"
+            notice = account.kind == "github"
+                ? "GitHub 登录成功，Copilot 来源已自动创建。前往 Agent 页选择来源和模型。"
+                : "\(account.name) 登录成功。接下来可为此账号添加一个或多个 AOAI 资源来源。"
         } catch { if signingIn { showError(error) } }
     }
 
@@ -104,9 +110,6 @@ extension AppStore {
         try JSONEncoder().encode(next.filter { !$0.builtin }).write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         accounts = next
-        if account.kind == "github" {
-            try saveSource(ModelSource(id: account.id, name: "Copilot", endpoint: "", deployments: [], accountId: account.id, kind: "copilot"), key: "")
-        }
     }
 
     func removeAccount(_ account: AccountProfile) throws {

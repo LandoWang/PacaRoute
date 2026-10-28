@@ -77,9 +77,10 @@ struct LocalIssue: Identifiable {
     private var appliedMode: ProxyMode
     private var appliedProxy: String
     private(set) var appliedPort: Int
+    private let defaults: UserDefaults
 
-    init() {
-        let defaults = UserDefaults.standard
+    init(defaults: UserDefaults = .standard, makeRuntime: () throws -> Runtime = { try Runtime() }) {
+        self.defaults = defaults
         let mode = ProxyMode(rawValue: defaults.string(forKey: "proxyMode") ?? "system") ?? .system
         let address = defaults.string(forKey: "proxyAddress") ?? "http://127.0.0.1:7890"
         let port = defaults.integer(forKey: "port")
@@ -88,7 +89,7 @@ struct LocalIssue: Identifiable {
         appliedPort = (1024...65535).contains(port) ? port : 8765
         portText = String(appliedPort)
         do {
-            runtime = try Runtime()
+            runtime = try makeRuntime()
             if let file = runtime?.root.appendingPathComponent("accounts.json"), FileManager.default.fileExists(atPath: file.path) {
                 let saved = try JSONDecoder().decode([AccountProfile].self, from: Data(contentsOf: file)).map { try $0.validated() }
                 accounts += saved
@@ -105,7 +106,15 @@ struct LocalIssue: Identifiable {
     }
 
     var ready: Bool { runtime != nil && runtimeError == nil }
-    var canStart: Bool { loggedIn || !sources.isEmpty }
+    var hasAccount: Bool { loggedIn || accounts.contains { !$0.builtin } || accountStates["azure-local"]?.loggedIn == true || !sources.isEmpty }
+    var hasSource: Bool {
+        loggedIn || sources.contains { source in
+            if source.kind != "copilot" { return true }
+            guard let account = accounts.first(where: { $0.id == source.accountId }) else { return false }
+            return accountLoggedIn(account)
+        }
+    }
+    var canStart: Bool { hasSource }
     var running: Bool { serviceState == "running" }
     var serviceLabel: String {
         switch serviceState { case "starting": return "正在启动"; case "running": return "运行中"; case "stopping": return "正在停止"; default: return "已停止" }
@@ -207,6 +216,16 @@ struct LocalIssue: Identifiable {
     }
 
     func startService() {
+        guard ready, canStart, !signingIn, busy == nil, serviceState == "stopped" else { return }
+        guard networkValid else { showError(AppFailure(message: "请填写有效的端口与代理地址后再启动。")); return }
+        if networkChanged {
+            Task { await saveNetwork(startIfStopped: true) }
+        } else {
+            launchService()
+        }
+    }
+
+    private func launchService() {
         guard let runtime, ready, canStart, !signingIn, serviceState == "stopped" else { return }
         guard Self.portAvailable(appliedPort) else {
             showError(AppFailure(message: "端口 \(appliedPort) 已被占用。请在 Bridge 服务配置中选择其他端口，再更新客户端配置。")); return
@@ -244,24 +263,34 @@ struct LocalIssue: Identifiable {
 
     func stopService() { guard service != nil else { return }; serviceState = "stopping"; service?.stop() }
 
-    func saveNetwork() async {
-        guard networkValid, busy == nil, !signingIn else { return }
-        busy = "正在应用网络设置"
+    func saveNetwork(startIfStopped: Bool = false) async {
+        guard networkValid, busy == nil, !signingIn, serviceState != "stopping" else { return }
+        let nextPort = Int(portText)!, nextMode = proxyMode, nextProxy = proxyAddress
         let restart = serviceState == "running" || serviceState == "starting"
+        let shouldStart = restart || startIfStopped
+        if shouldStart && (!restart || nextPort != appliedPort) && !Self.portAvailable(nextPort) {
+            showError(AppFailure(message: "端口 \(nextPort) 已被占用，请选择其他端口。当前服务与已保存设置保持不变。")); return
+        }
+        busy = "正在应用网络设置"
+        defer { busy = nil }
         if restart {
             stopService()
             for _ in 0..<100 where serviceState != "stopped" { try? await Task.sleep(nanoseconds: 100_000_000) }
-            guard serviceState == "stopped" else { busy = nil; showError(AppFailure(message: "Bridge 尚未停止，请稍后重试。")); return }
+            guard serviceState == "stopped" else { showError(AppFailure(message: "Bridge 尚未停止，请稍后重试。")); return }
         }
-        appliedMode = proxyMode; appliedProxy = proxyAddress; appliedPort = Int(portText)!
-        let defaults = UserDefaults.standard
+        appliedMode = nextMode; appliedProxy = nextProxy; appliedPort = nextPort
         defaults.set(appliedMode.rawValue, forKey: "proxyMode")
         defaults.set(appliedProxy, forKey: "proxyAddress")
         defaults.set(appliedPort, forKey: "port")
         do { try await refreshStatus() } catch { showError(error) }
-        busy = nil
-        if restart { startService() }
-        notice = "网络设置已保存。若修改了端口，请到 Agent 页重新应用连接配置。"
+        if shouldStart {
+            launchService()
+            for _ in 0..<910 where serviceState == "starting" { try? await Task.sleep(nanoseconds: 100_000_000) }
+            guard serviceState == "running" else { return }
+            notice = "Bridge 已运行于 localhost:\(appliedPort)。若 Agent 仍使用旧端口，请到 Agent 页预览并应用连接配置。"
+        } else {
+            notice = "设置已保存，当前未启动服务。下次启动将使用 localhost:\(appliedPort)。"
+        }
     }
 
     func refreshActivity() async {
