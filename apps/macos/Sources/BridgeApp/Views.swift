@@ -225,7 +225,10 @@ struct ClientCard: View {
     let clientID: String
     private var state: ClientState? { store.clients.first { $0.id == clientID } }
     private var selection: Binding<String> { clientID == "codex" ? $store.selectedCodex : $store.selectedClaude }
-    private var sourceSelection: Binding<String> { clientID == "codex" ? $store.codexSource : $store.claudeSource }
+    private var sourceSelection: Binding<String> {
+        Binding(get: { clientID == "codex" ? store.codexSource : store.claudeSource },
+                set: { store.selectSource($0, client: clientID) })
+    }
     private var available: [BridgeModel] {
         store.availableModels(sourceSelection.wrappedValue).filter { clientID == "codex" ? $0.codex : $0.claude }
     }
@@ -252,9 +255,6 @@ struct ClientCard: View {
                         Text("来源已移除 · " + sourceSelection.wrappedValue).tag(sourceSelection.wrappedValue)
                     }
                 }.labelsHidden()
-                .onChange(of: sourceSelection.wrappedValue) {
-                    selection.wrappedValue = available.first?.id ?? ""
-                }
             }
             HStack(spacing: 20) {
                 Text("默认模型").font(.subheadline)
@@ -266,7 +266,18 @@ struct ClientCard: View {
                     ForEach(available) { model in Text(model.name + " · " + model.id).tag(model.id) }
                 }.labelsHidden().frame(maxWidth: .infinity)
             }
-            if store.isCopilot(sourceSelection.wrappedValue) && available.isEmpty { Text("登录后点击“刷新可用模型”，获取账号当前支持的模型。").font(.caption).foregroundStyle(.secondary) }
+            if store.checkingAccounts {
+                Text("正在恢复已保存的登录…").font(.caption).foregroundStyle(.secondary)
+            } else if store.loadingModelSources.contains(sourceSelection.wrappedValue) {
+                ProgressView("正在更新可用模型…").controlSize(.small)
+            } else if let error = store.modelErrors[sourceSelection.wrappedValue] {
+                Text(error).font(.caption).foregroundStyle(.secondary)
+            } else if store.isCopilot(sourceSelection.wrappedValue) && available.isEmpty {
+                Text(store.modelAccount(sourceSelection.wrappedValue).map { store.accountLoggedIn($0) } == true
+                     ? "暂无可用模型，可点击“刷新可用模型”重试，无需重新登录。"
+                     : "此来源的账号尚未登录，请到账号页登录。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if !store.isCopilot(sourceSelection.wrappedValue) {
                 Text("使用 Azure deployment 名称；需要此资源的模型调用权限。客户端工具能力需按部署验证。")
                     .font(.caption).foregroundStyle(.secondary)
@@ -280,9 +291,13 @@ struct ClientCard: View {
                     Button("在 Finder 中查看") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }.buttonStyle(.borderless)
                 }
                 Button("预览并应用") { Task { await store.prepareConfig(clientID) } }
-                    .buttonStyle(.borderedProminent).disabled(store.busy != nil || !store.ready || store.signingIn)
+                    .buttonStyle(.borderedProminent).disabled(store.busy != nil || !store.ready || store.signingIn
+                        || (selection.wrappedValue.isEmpty && store.loadingModelSources.contains(sourceSelection.wrappedValue)))
             }
+            Text("切换来源或模型无需重启 Bridge。应用后，请新建 Agent 会话以使用新配置。")
+                .font(.caption).foregroundStyle(.secondary)
         }
+        .task(id: sourceSelection.wrappedValue) { await store.loadModels(for: sourceSelection.wrappedValue) }
     }
 }
 

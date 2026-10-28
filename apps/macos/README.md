@@ -92,6 +92,20 @@ The UI never receives Copilot bearer tokens. Azure source metadata is saved in
 `~/Library/Application Support/Copilot Bridge/sources.json`. API keys are stored
 in the login Keychain (`com.lando.copilot-bridge.azure`) and read only into the
 owned bridge child's stdin pipe, never argv, UserDefaults or client config.
+Within one app session, each successfully read API key is cached in memory and
+reused when Bridge restarts. Saving a key updates the cache; removing its source
+or quitting the app clears it. A new app session still reads Keychain normally.
+Saved GitHub login is restored from the encrypted credential store; ordinary
+desktop login resumes it, while **Account actions → Reauthorize** explicitly
+starts a new device flow. Public model catalogs persist per source/account for
+one hour and refresh automatically when needed. Failed refreshes preserve the
+last usable list and do not clear saved login.
+
+Selecting an existing source or model on **Agent** never restarts Bridge. Apply
+the preview and start a new client session to use the updated configuration.
+Editing source endpoints, credentials, accounts or Proxy profiles remains a
+separate operation requiring the service to be stopped.
+
 Azure CLI mode invokes `az account get-access-token` and caches the lease until
 shortly before expiration. This requires data-plane Responses permissions;
 being able to list a deployment does not imply inference access. Authentication

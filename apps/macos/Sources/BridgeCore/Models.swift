@@ -38,7 +38,7 @@ public struct ClientState: Decodable, Identifiable {
     public var name: String { id == "codex" ? "Codex" : "Claude Code" }
 }
 
-public struct BridgeModel: Decodable, Identifiable {
+public struct BridgeModel: Codable, Identifiable {
     public let id: String
     public let name: String
     public let vendor: String?

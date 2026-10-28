@@ -38,6 +38,9 @@ struct LocalIssue: Identifiable {
 @MainActor final class AppStore: ObservableObject {
     @Published var page: Page = .overview
     @Published var loggedIn = false
+    @Published var checkingAccounts = true
+    @Published var loadingModelSources: Set<String> = []
+    @Published var modelErrors: [String: String] = [:]
     @Published var login: String?
     @Published var clients: [ClientState] = []
     @Published var accounts: [AccountProfile] = [.copilot, .localAzure]
@@ -77,10 +80,15 @@ struct LocalIssue: Identifiable {
     private var activityCache: [String: (Int, Date, [Activity])] = [:]
     private var refreshTimer: Timer?
     private(set) var appliedPort: Int
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
+    let credentials: SourceCredentialCache
+    var modelCatalogs: [String: SavedModelCatalog] = [:]
+    var modelEpochs: [String: Int] = [:]
 
-    init(defaults: UserDefaults = .standard, makeRuntime: () throws -> Runtime = { try Runtime() }) {
+    init(defaults: UserDefaults = .standard, credentials: SourceCredentialCache = SourceCredentialCache(),
+         makeRuntime: () throws -> Runtime = { try Runtime() }) {
         self.defaults = defaults
+        self.credentials = credentials
         let mode = ProxyMode(rawValue: defaults.string(forKey: "proxyMode") ?? "system") ?? .system
         let address = defaults.string(forKey: "proxyAddress") ?? "http://127.0.0.1:7890"
         let port = defaults.integer(forKey: "port")
@@ -107,6 +115,7 @@ struct LocalIssue: Identifiable {
             }
         }
         catch { runtimeError = error.localizedDescription }
+        restoreModelCatalogs()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refreshActivity() }
         }
@@ -155,16 +164,20 @@ struct LocalIssue: Identifiable {
 
     func refresh() async {
         guard ready, busy == nil else { return }
+        checkingAccounts = true
         busy = "正在刷新"
-        defer { busy = nil }
         do { try await refreshStatus() } catch { showError(error) }
         await refreshAccountStatuses()
+        checkingAccounts = false
+        busy = nil
         await refreshActivity()
+        await refreshModels(force: false)
     }
 
     private func refreshStatus() async throws {
         let reply = try await execute(["desktop", "status", "--port", String(appliedPort)])
         loggedIn = reply.loggedIn ?? false
+        if !loggedIn { invalidateModelCatalogs(accountID: "copilot") }
         clients = reply.clients ?? []
         for client in clients {
             if client.id == "codex" { selectedCodex = client.model ?? ""; codexSource = client.source ?? "copilot" }
@@ -183,16 +196,10 @@ struct LocalIssue: Identifiable {
         } catch { quotaError = error.localizedDescription; showError(error) }
     }
 
-    func refreshModels() async {
-        guard busy == nil, !signingIn else { return }
-        busy = "正在获取来源模型"
-        defer { busy = nil }
+    func refreshModels(force: Bool = true) async {
+        guard ready, !signingIn else { return }
         for sourceID in Set([codexSource, claudeSource]) {
-            do {
-                let reply = try await execute(["desktop", "models", "--source", sourceID])
-                sourceModels[sourceID] = reply.models ?? []
-                if sourceID == "copilot" { models = reply.models ?? [] }
-            } catch { sourceModels[sourceID] = nil; showError(error) }
+            await loadModels(for: sourceID, force: force)
         }
     }
 
@@ -228,8 +235,9 @@ struct LocalIssue: Identifiable {
             let result = try await execute(args)
             preview = nil
             try await refreshStatus()
-            notice = result.backupPath.map { "配置已保存。原文件备份：\($0)\n请新建客户端会话以使用新配置。" }
-                ?? "配置已保存。请新建客户端会话以使用新配置。"
+            defaults.set(plan.model, forKey: "model.\(plan.client).\(plan.source)")
+            notice = "来源与模型已应用，Bridge 无需重启。请新建 Agent 会话以使用新配置。"
+                + (result.backupPath.map { "\n原文件备份：\($0)" } ?? "")
         } catch { showError(error); preview = nil }
     }
 
@@ -252,7 +260,7 @@ struct LocalIssue: Identifiable {
         service = child; serviceState = "starting"
         do {
             var keys: [String: String] = [:]
-            for source in sources where source.kind == "azure-openai" && source.authMode == "api-key" { keys[source.id] = try SourceKeychain.read(source.id) }
+            for source in sources where source.kind == "azure-openai" && source.authMode == "api-key" { keys[source.id] = try credentials.read(source.id) }
             var envelope = try JSONEncoder().encode(keys); envelope.append(10)
             var environment = runtime.environment(mode: .system, proxy: "")
             environment["COPILOT_BRIDGE_SECRETS_STDIN"] = "1"
@@ -368,12 +376,13 @@ struct LocalIssue: Identifiable {
         if source.kind == "azure-openai" && source.authMode == "api-key" {
             if !key.isEmpty {
                 guard !key.contains(where: { $0.isNewline || $0.isWhitespace }) else { throw AppFailure(message: "API Key 不能含空白字符。") }
-                try SourceKeychain.save(key, for: source.id)
-            } else { _ = try SourceKeychain.read(source.id) }
+                try credentials.save(key, for: source.id)
+            } else { _ = try credentials.read(source.id) }
         }
         var next = sources.filter { $0.id != source.id }; next.append(source)
         try ModelSource.encode(next).write(to: runtime.root.appendingPathComponent("sources.json"), options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: runtime.root.appendingPathComponent("sources.json").path)
+        if sources.first(where: { $0.id == source.id })?.accountId != source.accountId { invalidateModelCatalog(source.id) }
         sources = next
     }
 
@@ -386,10 +395,11 @@ struct LocalIssue: Identifiable {
         try ModelSource.encode(next).write(to: runtime.root.appendingPathComponent("sources.json"), options: .atomic)
         sources = next
         var bindings = proxies; bindings.bindings.removeValue(forKey: source.id); try saveProxies(bindings)
-        try SourceKeychain.delete(source.id)
+        try credentials.delete(source.id)
+        invalidateModelCatalog(source.id)
     }
 
-    func shutdown() { refreshTimer?.invalidate(); stopService(); jobs.values.forEach { $0.stop() } }
+    func shutdown() { refreshTimer?.invalidate(); stopService(); jobs.values.forEach { $0.stop() }; credentials.clear() }
     var hasRunningChildren: Bool { service?.running == true || jobs.values.contains { $0.running } }
 
     private static func portAvailable(_ port: Int) -> Bool {

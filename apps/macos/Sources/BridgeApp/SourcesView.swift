@@ -10,7 +10,7 @@ struct SourcesView: View {
             HStack {
                 Label("GitHub Copilot", systemImage: "person.crop.circle").font(.headline)
                 Spacer()
-                Text(store.loggedIn ? "已登录" : "待登录").foregroundStyle(.secondary)
+                Text(store.checkingAccounts ? "正在恢复登录…" : store.loggedIn ? "已保存登录" : "待登录").foregroundStyle(.secondary)
                 Button("管理登录") { store.page = .account }
             }
             VStack(alignment: .leading, spacing: 10) {

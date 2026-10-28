@@ -2532,6 +2532,22 @@ self-updates; app updates replace both packaged executables together. Explicit
 process-local proxy settings apply to all outbound HTTP through DefaultProxy.
 Absent desktop environment variables, existing CLI behavior is unchanged.
 
+Desktop login resumes a saved GitHub credential through the authentication facade;
+only explicit reauthorization starts a new device flow. Login state is checked
+locally on launch, independently from model discovery. Public model catalogs are
+cached per source/account and refreshed in the background; a discovery failure
+must not erase saved login or a usable catalog. Catalog caches are not credentials.
+
+The app keeps successfully read Azure API keys in session memory, reuses them
+across owned Bridge restarts, updates them after a successful Keychain save and
+clears them on source deletion or app shutdown. A new app session still obtains
+keys from Keychain. No additional credential file is introduced.
+
+Selecting an existing source/model on the Agent page only changes the client's
+configuration. The running Bridge serves every configured source and is neither
+stopped nor restarted for that operation. Existing client sessions may retain
+loaded settings; the UI distinguishes a new Agent session from a Bridge restart.
+
 Desktop-only telemetry records completed request metadata and sanitized errors
 (no prompts, request/response bodies, or credentials) in daily JSONL files next to
 the runtime. Usage is observed bridge traffic, not billing. Copilot quota is fetched

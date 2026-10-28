@@ -57,13 +57,19 @@ struct AccountCard: View {
             if let login = store.accountStates[account.id]?.login ?? (account.id == "copilot" ? store.login : nil) {
                 Text(login).textSelection(.enabled)
             }
-            Text(store.accountLoggedIn(account) ? "已保存登录" : account.kind == "azure" ? "刷新可检查登录状态；API Key 来源不需要 CLI 登录。" : "待登录")
+            Text(store.checkingAccounts ? "正在恢复已保存的登录…" : store.accountLoggedIn(account) ? "已保存登录 · 重开应用自动恢复" : account.kind == "azure" ? "刷新可检查登录状态；API Key 来源不需要 CLI 登录。" : "待登录")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 if account.id != "azure-local" {
-                    Button(store.accountLoggedIn(account) ? "重新登录" : "登录") { Task { await store.signInAccount(account) } }
-                        .buttonStyle(.borderedProminent).disabled(!mutable)
-                    Button("退出登录") { Task { await store.signOutAccount(account) } }.disabled(!mutable)
+                    if !store.accountLoggedIn(account) {
+                        Button("登录") { Task { await store.signInAccount(account) } }
+                            .buttonStyle(.borderedProminent).disabled(!mutable || store.checkingAccounts)
+                    } else {
+                        Menu("账号操作") {
+                            Button("重新授权…") { Task { await store.signInAccount(account, reauthorize: true) } }
+                            Button("退出登录") { Task { await store.signOutAccount(account) } }
+                        }.disabled(!mutable)
+                    }
                 }
                 Button(account.kind == "github" ? "读取账号与额度" : "刷新登录状态") {
                     showQuota = account.kind == "github"

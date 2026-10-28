@@ -15,7 +15,7 @@ internal static class DesktopCommand
 {
     public static Command Build()
     {
-        var action = new Argument<string>("action") { Description = "status, account, models, login, logout, configure" };
+        var action = new Argument<string>("action") { Description = "status, account, models, login, reauthorize, logout, configure" };
         var client = new Option<string?>("--client");
         var source = new Option<string>("--source") { DefaultValueFactory = _ => "copilot" };
         var account = new Option<string?>("--account");
@@ -93,11 +93,8 @@ internal static class DesktopCommand
             VerificationUri = challenge.VerificationUri, ExpiresIn = challenge.ExpiresIn.TotalSeconds,
         }));
 
-        if (action == "login")
-        {
-            await auth.LoginAsync(ct);
-            return new DesktopReply { LoggedIn = true };
-        }
+        if (action is "login" or "reauthorize")
+            return await LoginAsync(auth, reauthorize: action == "reauthorize", ct);
         if (action == "logout")
         {
             auth.SignOut();
@@ -132,8 +129,8 @@ internal static class DesktopCommand
         if (action == "account")
         {
             var user = await auth.GetGitHubUserAsync(ct);
-            try { return new DesktopReply { Login = user.Login, Quota = await auth.GetAccountUsageAsync(ct) }; }
-            catch (Exception ex) { return new DesktopReply { Login = user.Login, QuotaError = DesktopTelemetry.Sanitize(ex.Message) }; }
+            try { return new DesktopReply { LoggedIn = true, Login = user.Login, Quota = await auth.GetAccountUsageAsync(ct) }; }
+            catch (Exception ex) { return new DesktopReply { LoggedIn = true, Login = user.Login, QuotaError = DesktopTelemetry.Sanitize(ex.Message) }; }
         }
         if (action == "models")
         {
@@ -154,6 +151,13 @@ internal static class DesktopCommand
             };
         }
         throw new ArgumentException("Unknown desktop action.");
+    }
+
+    internal static async Task<DesktopReply> LoginAsync(AuthService auth, bool reauthorize, CancellationToken ct)
+    {
+        if (reauthorize) await auth.LoginAsync(ct);
+        else await auth.EnsureGitHubTokenAsync(ct);
+        return new DesktopReply { LoggedIn = true };
     }
 
     private static void Write(DesktopReply reply)

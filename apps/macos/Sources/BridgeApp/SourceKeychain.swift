@@ -1,6 +1,36 @@
 import Foundation
 import Security
 
+/// A successful Keychain read lasts for this app session, not just one child process.
+/// Failed reads/writes never replace a usable cached key. Nothing is persisted here.
+final class SourceCredentialCache {
+    private var values: [String: String] = [:]
+    private let readKey: (String) throws -> String
+    private let saveKey: (String, String) throws -> Void
+    private let deleteKey: (String) throws -> Void
+
+    init(read: @escaping (String) throws -> String = SourceKeychain.read,
+         save: @escaping (String, String) throws -> Void = { try SourceKeychain.save($0, for: $1) },
+         delete: @escaping (String) throws -> Void = SourceKeychain.delete) {
+        readKey = read; saveKey = save; deleteKey = delete
+    }
+    func read(_ id: String) throws -> String {
+        if let value = values[id] { return value }
+        let value = try readKey(id)
+        values[id] = value
+        return value
+    }
+    func save(_ value: String, for id: String) throws {
+        try saveKey(value, id)
+        values[id] = value
+    }
+    func delete(_ id: String) throws {
+        try deleteKey(id)
+        values[id] = nil
+    }
+    func clear() { values.removeAll() }
+}
+
 /// No credential readback is exposed to views. Keys only travel to the owned bridge pipe.
 enum SourceKeychain {
     private static let service = "com.lando.copilot-bridge.azure"

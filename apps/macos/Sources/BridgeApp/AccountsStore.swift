@@ -28,6 +28,7 @@ extension AppStore {
             do {
                 let status = try await execute(["desktop", "account-status", "--account", account.id])
                 if status.loggedIn != true || accountStates[account.id]?.login == nil { accountStates[account.id] = status }
+                if status.loggedIn != true { invalidateModelCatalogs(accountID: account.id) }
             }
             catch { showError(error) }
         }
@@ -51,12 +52,12 @@ extension AppStore {
         do { try saveAccount(account); await signInAccount(account) } catch { showError(error) }
     }
 
-    func signInAccount(_ account: AccountProfile) async {
+    func signInAccount(_ account: AccountProfile, reauthorize: Bool = false) async {
         guard !signingIn, busy == nil, serviceState == "stopped" else { return }
         signingIn = true; signingInAccount = account.id; deviceCode = nil; deviceURL = nil
         defer { signingIn = false; signingInAccount = nil; deviceCode = nil; deviceURL = nil; deviceExpires = nil }
         do {
-            _ = try await execute(["desktop", "login", "--account", account.id], timeout: 900, isLogin: true) { [weak self] reply in
+            _ = try await execute(["desktop", reauthorize && account.kind == "github" ? "reauthorize" : "login", "--account", account.id], timeout: 900, isLogin: true) { [weak self] reply in
                 guard reply.event == "device_code" else { return }
                 self?.deviceCode = reply.userCode
                 self?.deviceExpires = Date().addingTimeInterval(reply.expiresIn ?? 900)
@@ -66,14 +67,16 @@ extension AppStore {
                 }
             }
             accountStates[account.id] = try await execute(["desktop", "account-status", "--account", account.id])
+            invalidateModelCatalogs(accountID: account.id)
             if account.kind == "github" {
                 if account.id == "copilot" { loggedIn = true }
                 if !account.builtin && !accountSources(account).contains(where: { $0.kind == "copilot" }) {
                     try saveSource(ModelSource(id: account.id, name: "Copilot", endpoint: "", deployments: [], accountId: account.id, kind: "copilot"), key: "")
                 }
-                let details = try await execute(["desktop", "account", "--account", account.id])
-                accountStates[account.id] = details
-                if let username = details.login, !account.builtin, let runtime {
+                // Account/quota lookup is optional: a network error must not undo saved login.
+                let details = try? await execute(["desktop", "account", "--account", account.id])
+                if let details { accountStates[account.id] = details }
+                if let username = details?.login, !account.builtin, let runtime {
                     var next = accounts
                     if let index = next.firstIndex(where: { $0.id == account.id }) { next[index].name = username }
                     try JSONEncoder().encode(next.filter { !$0.builtin }).write(to: runtime.root.appendingPathComponent("accounts.json"), options: .atomic)
@@ -87,6 +90,7 @@ extension AppStore {
             notice = account.kind == "github"
                 ? "GitHub 登录成功，Copilot 来源已自动创建。前往 Agent 页选择来源和模型。"
                 : "\(account.name) 登录成功。接下来可为此账号添加一个或多个 AOAI 资源来源。"
+            Task { await self.refreshModels(force: true) }
         } catch { if signingIn { showError(error) } }
     }
 
@@ -96,6 +100,7 @@ extension AppStore {
         defer { busy = nil }
         do {
             accountStates[account.id] = try await execute(["desktop", "logout", "--account", account.id])
+            invalidateModelCatalogs(accountID: account.id)
             for source in accountSources(account) { sourceModels[source.id] = nil }
             if account.id == "copilot" { loggedIn = false; login = nil; quota = nil; quotaUpdated = nil; models = [] }
         } catch { showError(error) }
