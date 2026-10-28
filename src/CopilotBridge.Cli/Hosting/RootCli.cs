@@ -171,6 +171,7 @@ internal static class RootCli
         root.Subcommands.Add(authCommand);
         root.Subcommands.Add(debugCommand);
         root.Subcommands.Add(configCommand);
+        root.Subcommands.Add(CopilotBridge.Cli.Desktop.DesktopCommand.Build());
 
         // Default action when no subcommand is given: behave like 'serve' on
         // the default port (== whatever appsettings.json declares).

@@ -615,3 +615,11 @@ Enterprise administrators must explicitly enable the new-model policy during rol
 - [`docs/codex-implementation-design.md`](docs/codex-implementation-design.md) — Codex inference + model-metadata paths
 - [`docs/token-storage.md`](docs/token-storage.md) — token-at-rest threat model
 - [`docs/design.md`](docs/design.md) — original design doc
+
+
+## Native macOS application
+
+This branch includes a SwiftUI desktop app for GitHub sign-in, client
+configuration, model selection, local usage, Copilot quota, errors, and proxy
+settings. See [the macOS app guide](apps/macos/README.md) for builds, first use,
+data locations, and verification. Build with `scripts/build-macos-app.sh`.

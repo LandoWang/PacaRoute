@@ -2515,3 +2515,24 @@ format remains compatible). Diag log is additive (new section in the JSON).
 - ~~**Diag log for production debugging** — currently `[Conditional]` strips
   it from Release.~~ **Resolved (v0.3)**: Serilog now logs in Release too;
   level is controlled at runtime via `BRIDGE_LOG_LEVEL`. No build-time gate.
+
+
+## Native macOS control surface
+
+The SwiftUI app in `apps/macos` invokes the bundled bridge through a local
+`desktop` JSON-lines command contract. No HTTP administration endpoint is added.
+Credentials remain behind AuthService/CredentialService and never cross into the
+UI. Client configuration reuses the existing JSON/TOML merge, with explicit model
+selection, a content fingerprint checked before applying a preview, and private
+timestamped backups. Merely launching the app does not change client files.
+
+The app installs its bundled runtime in its own Application Support directory and
+only manages the child process it started. Desktop mode disables interactive
+self-updates; app updates replace both packaged executables together. Explicit
+process-local proxy settings apply to all outbound HTTP through DefaultProxy.
+Absent desktop environment variables, existing CLI behavior is unchanged.
+
+Desktop-only telemetry records completed request metadata and sanitized errors
+(no prompts, request/response bodies, or credentials) in daily JSONL files next to
+the runtime. Usage is observed bridge traffic, not billing. Copilot quota is fetched
+separately from GitHub and unavailable quota fields remain unknown.

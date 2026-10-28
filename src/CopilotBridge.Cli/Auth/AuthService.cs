@@ -239,6 +239,37 @@ public sealed class AuthService : IAuthService, IDisposable
         _credentials.SignOut();
     }
 
+    // The account quota endpoint is GitHub-owned (not CAPI). Keep credential
+    // refresh/rejection handling inside this facade; the desktop never gets tokens.
+    internal async Task<Desktop.CopilotAccountUsage> GetAccountUsageAsync(CancellationToken ct = default)
+    {
+        var credential = await _credentials.GetUsableAsync(ct).ConfigureAwait(false);
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                "https://api.github.com/copilot_internal/user");
+            request.Headers.Authorization = new AuthenticationHeaderValue("token", credential.AccessToken);
+            request.Headers.Accept.ParseAdd("application/json");
+            // Mirrors references/copilot-api/src/lib/api-config.ts (GitHub headers).
+            request.Headers.UserAgent.ParseAdd("GitHubCopilotChat/0.26.7");
+            request.Headers.TryAddWithoutValidation("editor-version", "vscode/1.95.0");
+            request.Headers.TryAddWithoutValidation("editor-plugin-version", "copilot-chat/0.26.7");
+            request.Headers.TryAddWithoutValidation("x-github-api-version", "2025-04-01");
+            using var response = await _httpClientFactory.CreateClient(UpstreamHttpClientNames.GitHubAuth)
+                .SendAsync(request, ct).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.Unauthorized && attempt == 0)
+            {
+                credential = await _credentials.RecoverAfterRejectionAsync(credential, ct).ConfigureAwait(false);
+                continue;
+            }
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"Copilot quota is unavailable (HTTP {(int)response.StatusCode}).");
+            return await response.Content.ReadFromJsonAsync(JsonContext.Default.CopilotAccountUsage, ct)
+                .ConfigureAwait(false) ?? throw new InvalidOperationException("GitHub returned no quota data.");
+        }
+        throw new InvalidOperationException("Copilot quota could not be loaded.");
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

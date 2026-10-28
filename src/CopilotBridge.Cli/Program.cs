@@ -28,6 +28,7 @@ var invocationConfig = new InvocationConfiguration
 
 try
 {
+    CopilotBridge.Cli.Desktop.DesktopNetwork.ApplyEnvironment();
     // Capture the original argument vector verbatim before System.CommandLine
     // parsing, so the updater can relaunch the replacement bridge with the exact
     // same arguments and working directory.

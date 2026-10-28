@@ -19,6 +19,7 @@ internal sealed class RequestSummaryLogger
 
     public void Log(RequestSummary s)
     {
+        CopilotBridge.Cli.Desktop.DesktopTelemetry.Record(s);
         // The per-request trace id is NOT rendered here: the endpoint pushes it
         // onto the log context as "ReqTrace" for the whole handler, and
         // ReqTraceFormatEnricher prefixes EVERY in-request line — this summary

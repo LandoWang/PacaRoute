@@ -128,3 +128,8 @@ tests/behavior-runs/
 # tests/.../Fixtures/, design docs under docs/). Never commit scratch itself.
 # See docs/codex-protocol-research.md §3.4 + tests/.../Fixtures/README.md.
 docs/scratch/
+
+# Native macOS build products and desktop-only local runtime state.
+apps/macos/.build/
+apps/macos/.swiftpm/
+desktop-activity/

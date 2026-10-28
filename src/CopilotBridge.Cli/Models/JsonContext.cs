@@ -9,6 +9,7 @@ using CopilotBridge.Cli.Models.Copilot;
 using CopilotBridge.Cli.Models.Codex;
 using CopilotBridge.Cli.Models.GitHub;
 using CopilotBridge.Cli.Models.Responses;
+using CopilotBridge.Cli.Desktop;
 
 namespace CopilotBridge.Cli.Models;
 
@@ -28,6 +29,9 @@ namespace CopilotBridge.Cli.Models;
 [JsonSerializable(typeof(GitHubCredentialRecord))]
 [JsonSerializable(typeof(CredentialFileRecord))]
 [JsonSerializable(typeof(GitHubUser))]
+[JsonSerializable(typeof(DesktopReply))]
+[JsonSerializable(typeof(DesktopActivity))]
+[JsonSerializable(typeof(CopilotAccountUsage))]
 // Public GitHub Releases REST surface — read anonymously by the startup
 // auto-update discovery client. A List<GitHubRelease> is the page shape; the
 // element and its assets are reachable from it. SnakeCaseLower maps

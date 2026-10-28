@@ -80,6 +80,10 @@ internal static class ServeCommand
 
         var app = builder.Build();
 
+        if (Environment.GetEnvironmentVariable("COPILOT_BRIDGE_DESKTOP") == "1")
+            app.Lifetime.ApplicationStarted.Register(() =>
+                Console.WriteLine("{\"ok\":true,\"event\":\"ready\"}"));
+
         app.MapMessages();
         app.MapCountTokens();
         app.MapModels();

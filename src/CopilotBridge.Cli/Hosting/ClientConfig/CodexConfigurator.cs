@@ -207,7 +207,7 @@ internal sealed class CodexConfigurator : IClientConfigurator
     /// lifting the node, rather than hand-constructing — a hand-built node carries no
     /// trivia (no <c>=</c> spacing, no newline) and renders as malformed TOML.
     /// </remarks>
-    private static void UpsertTopLevelString(DocumentSyntax doc, string key, string value)
+    internal static void UpsertTopLevelString(DocumentSyntax doc, string key, string value)
     {
         var fragment = Tomlyn.Parsing.SyntaxParser.Parse($"{key} = \"{value}\"\n", "fragment");
         var fragmentKv = (KeyValueSyntax)fragment.KeyValues.GetChild(0)!;
@@ -315,7 +315,7 @@ internal sealed class CodexConfigurator : IClientConfigurator
         table.Items.Add(fragmentKv);
     }
 
-    private static string? FindTopLevelString(DocumentSyntax doc, string key)
+    internal static string? FindTopLevelString(DocumentSyntax doc, string key)
     {
         foreach (var kv in doc.KeyValues)
         {

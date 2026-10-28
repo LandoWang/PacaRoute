@@ -96,6 +96,9 @@ internal static class SerilogBootstrapper
             // drops every audit event.
             .Destructure.AsScalar<BridgeIoPayload>();
 
+        if (Environment.GetEnvironmentVariable("COPILOT_BRIDGE_DESKTOP") == "1")
+            config = config.WriteTo.Sink(new CopilotBridge.Cli.Desktop.DesktopTelemetry());
+
         if (sink is not null)
         {
             // Bridge IO events go to the audit sink only — keep them out of
