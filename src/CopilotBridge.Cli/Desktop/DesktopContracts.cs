@@ -18,7 +18,12 @@ internal sealed record DesktopReply
     public string? Fingerprint { get; init; }
     public IReadOnlyList<string>? Changes { get; init; }
     public string? BackupPath { get; init; }
+    public List<DesktopSubscription>? Subscriptions { get; init; }
+    public List<DesktopResource>? Resources { get; init; }
 }
+
+internal sealed record DesktopSubscription(string Id, string Name, string Login);
+internal sealed record DesktopResource(string Id, string Name, string Endpoint);
 
 internal sealed record DesktopClient(string Id, string Path, bool Connected, bool Drifted, string? Model, string? Error, string Source = "copilot");
 internal sealed record DesktopModel(string Id, string Name, string? Vendor, bool Claude, bool Codex);

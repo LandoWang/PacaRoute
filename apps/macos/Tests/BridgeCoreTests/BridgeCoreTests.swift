@@ -18,6 +18,22 @@ final class BridgeCoreTests {
         catch SourceFailure.invalid { }
     }
 
+    func testAccountOwnershipSurvivesSourceRoundtrip() throws {
+        let github = ModelSource(id: "github-work", name: "Work", endpoint: "", deployments: [], accountId: "github-work", kind: "copilot")
+        let azure = ModelSource(id: "azure-one", name: "One", endpoint: "https://example.openai.azure.com",
+            deployments: ["shared-model"], accountId: "azure-work")
+        var second = azure; second.id = "azure-two"; second.endpoint = "https://other.openai.azure.com"
+        let decoded = try ModelSource.decode(ModelSource.encode([github, azure, second]))
+        expectEqual(decoded.map(\.accountId), ["github-work", "azure-work", "azure-work"])
+        expectEqual(decoded[0].kind, "copilot")
+        expectEqual(decoded[1].deployments, decoded[2].deployments)
+        expectFalse(decoded[1].endpoint == decoded[2].endpoint)
+        var invalid = azure; invalid.accountId = "../escape"
+        do { _ = try invalid.validated(); fatalError("Unsafe account ID accepted") } catch SourceFailure.invalid { }
+        var orphan = github; orphan.accountId = nil
+        do { _ = try orphan.validated(); fatalError("Unbound GitHub source accepted") } catch SourceFailure.invalid { }
+    }
+
     func testSplitUTF8AndPartialJSONAreNotLost() throws {
         var buffer = JSONLineBuffer()
         let bytes = Data("{\"ok\":true,\"event\":\"result\",\"error\":\"测试\"}\n".utf8)
@@ -83,6 +99,7 @@ func expectNil<T>(_ value: T?, file: StaticString = #file, line: UInt = #line) {
         tests.testEstimatesAndErrorsDoNotInflateUsageOrDoubleCountCache()
         tests.testProxyValidationRefusesCredentialsAndInvalidDestinations()
         try tests.testSourceCatalogHasNoCredentialsAndRejectsCredentialURLs()
-        print("Passed 5 Swift contract checks")
+        try tests.testAccountOwnershipSurvivesSourceRoundtrip()
+        print("Passed 6 Swift contract checks")
     }
 }

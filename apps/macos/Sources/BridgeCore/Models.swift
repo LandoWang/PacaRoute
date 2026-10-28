@@ -17,6 +17,8 @@ public struct Reply: Decodable {
     public let fingerprint: String?
     public let changes: [String]?
     public let backupPath: String?
+    public let subscriptions: [AzureSubscription]?
+    public let resources: [AzureResource]?
 
     public static func decode(_ data: Data) throws -> Reply {
         let decoder = JSONDecoder()
@@ -147,4 +149,31 @@ public enum ProxyMode: String, CaseIterable, Identifiable {
               u.query == nil, u.fragment == nil, u.path.isEmpty || u.path == "/" else { return false }
         return u.port.map { (1...65535).contains($0) } ?? true
     }
+}
+
+
+public struct AccountProfile: Codable, Identifiable, Equatable {
+    public var id: String
+    public var name: String
+    public var kind: String
+    public init(id: String, name: String, kind: String) { self.id = id; self.name = name; self.kind = kind }
+    public static let copilot = AccountProfile(id: "copilot", name: "GitHub Copilot", kind: "github")
+    public static let localAzure = AccountProfile(id: "azure-local", name: "本机 Azure CLI", kind: "azure")
+    public var builtin: Bool { id == "copilot" || id == "azure-local" }
+    public func validated() throws -> AccountProfile {
+        guard id.range(of: "^[a-z][a-z0-9-]{0,62}$", options: .regularExpression) != nil,
+              !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name.count <= 100,
+              ["github", "azure"].contains(kind) else { throw SourceFailure.invalid }
+        return self
+    }
+}
+public struct AzureSubscription: Decodable, Identifiable {
+    public let id: String
+    public let name: String
+    public let login: String
+}
+public struct AzureResource: Decodable, Identifiable {
+    public let id: String
+    public let name: String
+    public let endpoint: String
 }

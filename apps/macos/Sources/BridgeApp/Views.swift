@@ -26,7 +26,7 @@ struct RootView: View {
                     Image(systemName: store.loggedIn ? "person.crop.circle.fill" : "person.crop.circle")
                         .font(.title2).foregroundStyle(store.loggedIn ? accent : .secondary)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(store.login ?? (store.loggedIn ? "GitHub 已登录" : "尚未登录")).font(.caption).fontWeight(.medium)
+                        Text("账号与模型来源").font(.caption).fontWeight(.medium)
                         Text("本地运行 · macOS").font(.caption2).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -67,6 +67,10 @@ struct RootView: View {
                 }
             }
             ToolbarItem(placement: .automatic) {
+                Button { store.page = .network } label: { Label("服务配置", systemImage: "slider.horizontal.3").labelStyle(.titleAndIcon) }
+                    .help("Bridge 服务配置：端口、代理与服务启停")
+            }
+            ToolbarItem(placement: .automatic) {
                 Button { Task { await store.refresh() } } label: { Image(systemName: "arrow.clockwise") }
                     .help("刷新本地状态").disabled(store.busy != nil || !store.ready)
             }
@@ -82,11 +86,11 @@ struct RootView: View {
         switch store.page {
         case .sources: return "管理 Copilot、Azure OpenAI 的连接与可用模型。"
         case .overview: return "将模型来源连接到你的开发工具。"
-        case .account: return "连接 GitHub，授权后即可使用账号可用的 Copilot 模型。"
-        case .clients: return "每个 Harness 独立选择来源和默认模型。"
+        case .account: return "通过 device login 连接 GitHub、Azure，并管理账号下的资源。"
+        case .clients: return "每个 Agent 独立选择来源和默认模型。"
         case .usage: return "了解本机请求、token 消耗与账号剩余额度。"
         case .errors: return "集中查看失败请求与应用操作错误。"
-        case .network: return "控制 Bridge 的本地端口与出站代理。"
+        case .network: return "管理本地服务、监听端口和出站代理。"
         }
     }
 }
@@ -193,53 +197,6 @@ struct OverviewView: View {
     }
 }
 
-struct AccountView: View {
-    @EnvironmentObject var store: AppStore
-    var body: some View {
-        Card {
-            HStack(spacing: 16) {
-                Image(systemName: "person.crop.circle.fill").font(.system(size: 48)).foregroundStyle(accent)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(store.login ?? (store.loggedIn ? "GitHub 已登录" : "连接你的 GitHub 账号")).font(.title3).fontWeight(.semibold)
-                    Text(store.loggedIn ? "凭据已加密保存；可刷新以确认账号与额度。" : "需要可使用 Copilot 的 GitHub 账号。")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }
-            }
-            Divider()
-            if store.signingIn {
-                if let code = store.deviceCode {
-                    Text("在 GitHub 授权页输入验证码").font(.headline)
-                    HStack(spacing: 14) {
-                        Text(code).font(.system(size: 32, weight: .medium, design: .monospaced)).textSelection(.enabled)
-                        Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(code, forType: .string) } label: { Image(systemName: "doc.on.doc") }.help("复制验证码")
-                    }
-                    HStack {
-                        Button("打开 GitHub 授权页") { if let url = store.deviceURL { NSWorkspace.shared.open(url) } }
-                        ProgressView().controlSize(.small)
-                        Text("等待授权…").font(.caption).foregroundStyle(.secondary)
-                    }
-                    if let date = store.deviceExpires { Text("验证码有效至 \(date.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
-                } else { HStack { ProgressView().controlSize(.small); Text("正在请求验证码…") } }
-                Button("取消登录", role: .cancel) { store.cancelSignIn() }
-            } else {
-                HStack {
-                    Button(store.loggedIn ? "重新登录" : "使用 GitHub 登录") { Task { await store.signIn() } }
-                        .buttonStyle(.borderedProminent).disabled(store.serviceState != "stopped" || store.busy != nil || !store.ready)
-                    if store.loggedIn {
-                        Button("刷新账号与额度") { Task { await store.refreshAccount() } }.disabled(store.busy != nil)
-                        Spacer()
-                        Button("退出登录", role: .destructive) { Task { await store.signOut() } }
-                            .disabled(store.serviceState != "stopped" || store.busy != nil)
-                    }
-                }
-                if store.serviceState != "stopped" { Text("更换账号或退出登录前，请先停止 Bridge。").font(.caption).foregroundStyle(.secondary) }
-            }
-        }
-        EmptyCard(icon: "lock.shield", title: "凭据留在本机", text: "此应用使用独立的凭据目录，不会覆盖原有 CLI 的登录。GitHub token 不会传给 Codex、Claude Code 或界面。")
-        if store.loggedIn { QuotaView() }
-    }
-}
-
 struct ClientsView: View {
     @EnvironmentObject var store: AppStore
     var body: some View {
@@ -247,7 +204,7 @@ struct ClientsView: View {
             Label("配置作用于全局默认值", systemImage: "doc.text").foregroundStyle(.secondary).font(.subheadline)
             Spacer()
             Button("刷新可用模型") { Task { await store.refreshModels() } }
-                .disabled(!store.loggedIn || store.busy != nil || store.signingIn)
+                .disabled(!store.ready || store.busy != nil || store.signingIn)
         }
         ForEach(["codex", "claude-code"], id: \.self) { id in
             ClientCard(clientID: id)
@@ -264,9 +221,7 @@ struct ClientCard: View {
     private var selection: Binding<String> { clientID == "codex" ? $store.selectedCodex : $store.selectedClaude }
     private var sourceSelection: Binding<String> { clientID == "codex" ? $store.codexSource : $store.claudeSource }
     private var available: [BridgeModel] {
-        if sourceSelection.wrappedValue == "copilot" { return store.models.filter { clientID == "codex" ? $0.codex : $0.claude } }
-        return (store.sources.first { $0.id == sourceSelection.wrappedValue }?.deployments ?? [])
-            .map { BridgeModel(id: $0, name: $0, vendor: "Azure OpenAI", claude: true, codex: true) }
+        store.availableModels(sourceSelection.wrappedValue).filter { clientID == "codex" ? $0.codex : $0.claude }
     }
     var body: some View {
         Card {
@@ -286,27 +241,27 @@ struct ClientCard: View {
                 Text("来源").font(.subheadline)
                 Picker("来源", selection: sourceSelection) {
                     Text("GitHub Copilot").tag("copilot")
-                    ForEach(store.sources) { source in Text(source.name).tag(source.id) }
+                    ForEach(store.sources) { source in Text(store.sourceName(source.id)).tag(source.id) }
                     if sourceSelection.wrappedValue != "copilot" && !store.sources.contains(where: { $0.id == sourceSelection.wrappedValue }) {
                         Text("来源已移除 · " + sourceSelection.wrappedValue).tag(sourceSelection.wrappedValue)
                     }
                 }.labelsHidden()
                 .onChange(of: sourceSelection.wrappedValue) {
-                    if !available.contains(where: { $0.id == selection.wrappedValue }) { selection.wrappedValue = available.first?.id ?? "" }
+                    selection.wrappedValue = available.first?.id ?? ""
                 }
             }
             HStack(spacing: 20) {
                 Text("默认模型").font(.subheadline)
                 Picker("默认模型", selection: selection) {
-                    Text(sourceSelection.wrappedValue == "copilot" ? "保留当前默认值" : "选择 Deployment").tag("")
+                    Text(store.isCopilot(sourceSelection.wrappedValue) ? "选择模型 / 保留当前默认值" : "选择 Deployment").tag("")
                     if !selection.wrappedValue.isEmpty && !available.contains(where: { $0.id == selection.wrappedValue }) {
                         Text(selection.wrappedValue + "（当前配置）").tag(selection.wrappedValue)
                     }
                     ForEach(available) { model in Text(model.name + " · " + model.id).tag(model.id) }
                 }.labelsHidden().frame(maxWidth: .infinity)
             }
-            if sourceSelection.wrappedValue == "copilot" && store.models.isEmpty { Text("登录后点击“刷新可用模型”，获取账号当前支持的模型。").font(.caption).foregroundStyle(.secondary) }
-            if sourceSelection.wrappedValue != "copilot" {
+            if store.isCopilot(sourceSelection.wrappedValue) && available.isEmpty { Text("登录后点击“刷新可用模型”，获取账号当前支持的模型。").font(.caption).foregroundStyle(.secondary) }
+            if !store.isCopilot(sourceSelection.wrappedValue) {
                 Text("使用 Azure deployment 名称；需要此资源的模型调用权限。客户端工具能力需按部署验证。")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -352,18 +307,21 @@ struct ConfigurationSheet: View {
 
 struct QuotaView: View {
     @EnvironmentObject var store: AppStore
+    var account: AccountProfile = .copilot
+    private var quota: AccountQuota? { account.id == "copilot" ? store.quota : store.accountStates[account.id]?.quota }
+    private var quotaError: String? { account.id == "copilot" ? store.quotaError : store.accountStates[account.id]?.quotaError }
     var body: some View {
         Card {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Copilot 账号额度").font(.headline)
-                    Text(store.quota?.copilotPlan.map { "套餐：\($0)" } ?? "来自 GitHub 的账号数据")
+                    Text(account.name + " · Copilot 额度").font(.headline)
+                    Text(quota?.copilotPlan.map { "套餐：\($0)" } ?? "来自 GitHub 的账号数据")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("刷新额度") { Task { await store.refreshAccount() } }.disabled(!store.loggedIn || store.busy != nil || store.signingIn)
+                Button("刷新额度") { Task { await store.refreshAccount(account) } }.disabled(!store.accountLoggedIn(account) || store.busy != nil || store.signingIn)
             }
-            if let snapshots = store.quota?.quotaSnapshots, !snapshots.isEmpty {
+            if let snapshots = quota?.quotaSnapshots, !snapshots.isEmpty {
                 ForEach(snapshots.keys.sorted(), id: \.self) { key in
                     if let quota = snapshots[key] {
                         VStack(alignment: .leading, spacing: 7) {
@@ -382,13 +340,13 @@ struct QuotaView: View {
                         }.padding(.vertical, 4)
                     }
                 }
-                if let reset = store.quota?.quotaResetDate { Text("额度重置：\(reset)").font(.caption).foregroundStyle(.secondary) }
+                if let reset = quota?.quotaResetDate { Text("额度重置：\(reset)").font(.caption).foregroundStyle(.secondary) }
             } else {
-                Text(store.quotaError ?? (store.loggedIn ? "点击刷新读取账号额度。" : "登录 GitHub 后可查看额度。"))
+                Text(quotaError ?? (store.accountLoggedIn(account) ? "点击刷新读取账号额度。" : "登录 GitHub 后可查看额度。"))
                     .font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
             }
             HStack {
-                if let date = store.quotaUpdated { Text("更新于 \(date.formatted(date: .abbreviated, time: .shortened))").font(.caption2).foregroundStyle(.secondary) }
+                if account.id == "copilot", let date = store.quotaUpdated { Text("更新于 \(date.formatted(date: .abbreviated, time: .shortened))").font(.caption2).foregroundStyle(.secondary) }
                 Spacer()
                 Link("在 GitHub 查看用量 ↗", destination: URL(string: "https://github.com/settings/copilot/features")!).font(.caption)
             }
@@ -412,7 +370,7 @@ struct UsageView: View {
             Spacer()
             Picker("来源", selection: $store.usageSource) {
                 Text("全部来源").tag("all"); Text("GitHub Copilot").tag("copilot")
-                ForEach(store.sources) { source in Text(source.name).tag(source.id) }
+                ForEach(store.sources) { source in Text(store.sourceName(source.id)).tag(source.id) }
             }.frame(width: 210)
             Picker("时间范围", selection: $store.usageDays) { Text("今天").tag(1); Text("7 天").tag(7); Text("30 天").tag(30) }
                 .pickerStyle(.segmented).frame(width: 210)
@@ -434,8 +392,12 @@ struct UsageView: View {
         } else { EmptyCard(icon: "chart.bar", title: "还没有请求记录", text: "启动 Bridge 并通过已连接的客户端发起请求后，这里会自动更新。") }
         Text("仅统计此应用管理的 Bridge；count_tokens 预估不计入请求量。输入与缓存按上游原始值分别展示，不相加。\(store.totals.missingUsage > 0 ? "有 \(store.totals.missingUsage) 次请求缺少完整 token 数据，总量可能不完整。" : "")")
             .font(.caption).foregroundStyle(.secondary)
-        if store.usageSource == "all" || store.usageSource == "copilot" { QuotaView() }
-        else {
+        ForEach(store.accounts.filter { account in
+            account.kind == "github" && (store.usageSource == "all" ||
+                (store.usageSource == "copilot" && account.id == "copilot") ||
+                store.sources.contains { $0.id == store.usageSource && $0.accountId == account.id })
+        }) { account in QuotaView(account: account) }
+        if store.usageSource != "all" && !store.isCopilot(store.usageSource) {
             Card {
                 Text("Azure 账号用量").font(.headline)
                 Text("以上是本机请求统计；Azure 配额与账单以 Azure Portal 为准。").font(.caption).foregroundStyle(.secondary)
@@ -517,7 +479,7 @@ struct NetworkView: View {
                 }
                 Spacer()
                 Button(store.running ? "停止" : "启动") { if store.running { store.stopService() } else { store.startService() } }
-                    .disabled(!store.loggedIn || store.signingIn || store.serviceState == "starting" || store.serviceState == "stopping")
+                    .disabled(!store.canStart || store.signingIn || store.serviceState == "starting" || store.serviceState == "stopping")
             }
         }
     }

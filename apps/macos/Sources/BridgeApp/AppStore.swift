@@ -4,7 +4,7 @@ import BridgeCore
 import Darwin
 
 enum Page: String, CaseIterable, Identifiable {
-    case sources = "来源", overview = "概览", account = "账号", clients = "Harness", usage = "用量", errors = "错误", network = "网络"
+    case overview = "导览", account = "账号", sources = "来源", clients = "Agent", usage = "用量", errors = "错误", network = "Bridge 服务配置"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -39,6 +39,10 @@ struct LocalIssue: Identifiable {
     @Published var loggedIn = false
     @Published var login: String?
     @Published var clients: [ClientState] = []
+    @Published var accounts: [AccountProfile] = [.copilot, .localAzure]
+    @Published var accountStates: [String: Reply] = [:]
+    @Published var sourceModels: [String: [BridgeModel]] = [:]
+    @Published var signingInAccount: String?
     @Published var sources: [ModelSource] = []
     @Published var codexSource = "copilot"
     @Published var claudeSource = "copilot"
@@ -85,6 +89,11 @@ struct LocalIssue: Identifiable {
         portText = String(appliedPort)
         do {
             runtime = try Runtime()
+            if let file = runtime?.root.appendingPathComponent("accounts.json"), FileManager.default.fileExists(atPath: file.path) {
+                let saved = try JSONDecoder().decode([AccountProfile].self, from: Data(contentsOf: file)).map { try $0.validated() }
+                accounts += saved
+                guard Set(accounts.map(\.id)).count == accounts.count else { throw SourceFailure.invalid }
+            }
             if let file = runtime?.root.appendingPathComponent("sources.json"), FileManager.default.fileExists(atPath: file.path) {
                 sources = try ModelSource.decode(Data(contentsOf: file))
             }
@@ -122,6 +131,7 @@ struct LocalIssue: Identifiable {
         busy = "正在刷新"
         defer { busy = nil }
         do { try await refreshStatus() } catch { showError(error) }
+        await refreshAccountStatuses()
         await refreshActivity()
     }
 
@@ -147,48 +157,21 @@ struct LocalIssue: Identifiable {
     }
 
     func refreshModels() async {
-        guard loggedIn, busy == nil, !signingIn else { return }
-        busy = "正在获取可用模型"
+        guard busy == nil, !signingIn else { return }
+        busy = "正在获取来源模型"
         defer { busy = nil }
-        do {
-            let reply = try await execute(["desktop", "models"])
-            models = reply.models ?? []
-            if models.isEmpty { notice = "此账号暂未返回当前 bridge 支持的模型。" }
-        } catch { showError(error) }
+        for sourceID in Set([codexSource, claudeSource]) {
+            do {
+                let reply = try await execute(["desktop", "models", "--source", sourceID])
+                sourceModels[sourceID] = reply.models ?? []
+                if sourceID == "copilot" { models = reply.models ?? [] }
+            } catch { sourceModels[sourceID] = nil; showError(error) }
+        }
     }
 
-    func signIn() async {
-        guard !signingIn, loginProcess == nil, busy == nil, serviceState == "stopped" else { return }
-        signingIn = true; deviceCode = nil; deviceURL = nil
-        defer { signingIn = false; loginProcess = nil; deviceCode = nil; deviceURL = nil; deviceExpires = nil }
-        do {
-            _ = try await execute(["desktop", "login"], timeout: 900, isLogin: true) { [weak self] reply in
-                guard reply.event == "device_code" else { return }
-                self?.deviceCode = reply.userCode
-                self?.deviceExpires = Date().addingTimeInterval(reply.expiresIn ?? 900)
-                if let string = reply.verificationUri, let url = URL(string: string),
-                   url.scheme == "https", url.host == "github.com" {
-                    self?.deviceURL = url
-                    NSWorkspace.shared.open(url)
-                }
-            }
-            try await refreshStatus()
-            notice = "GitHub 登录成功。现在可以启动 Bridge 并连接客户端。"
-        } catch { if signingIn { showError(error) } }
-    }
-
+    func signIn() async { await signInAccount(.copilot) }
     func cancelSignIn() { signingIn = false; loginProcess?.stop() }
-
-    func signOut() async {
-        guard serviceState == "stopped", busy == nil, !signingIn else { return }
-        busy = "正在退出登录"
-        defer { busy = nil }
-        do {
-            _ = try await execute(["desktop", "logout"])
-            loggedIn = false; login = nil; quota = nil; quotaUpdated = nil; models = []
-            notice = "已删除此应用保存的登录凭据。客户端配置仍保留。"
-        } catch { showError(error) }
-    }
+    func signOut() async { await signOutAccount(.copilot) }
 
     func prepareConfig(_ client: String) async {
         guard busy == nil, !signingIn else { return }
@@ -226,13 +209,13 @@ struct LocalIssue: Identifiable {
     func startService() {
         guard let runtime, ready, canStart, !signingIn, serviceState == "stopped" else { return }
         guard Self.portAvailable(appliedPort) else {
-            showError(AppFailure(message: "端口 \(appliedPort) 已被占用。请在网络页选择其他端口，再更新客户端配置。")); return
+            showError(AppFailure(message: "端口 \(appliedPort) 已被占用。请在 Bridge 服务配置中选择其他端口，再更新客户端配置。")); return
         }
         let child = BridgeProcess()
         service = child; serviceState = "starting"
         do {
             var keys: [String: String] = [:]
-            for source in sources where source.authMode == "api-key" { keys[source.id] = try SourceKeychain.read(source.id) }
+            for source in sources where source.kind == "azure-openai" && source.authMode == "api-key" { keys[source.id] = try SourceKeychain.read(source.id) }
             var envelope = try JSONEncoder().encode(keys); envelope.append(10)
             var environment = runtime.environment(mode: appliedMode, proxy: appliedProxy)
             environment["COPILOT_BRIDGE_SECRETS_STDIN"] = "1"
@@ -278,7 +261,7 @@ struct LocalIssue: Identifiable {
         do { try await refreshStatus() } catch { showError(error) }
         busy = nil
         if restart { startService() }
-        notice = "网络设置已保存。若修改了端口，请到客户端页重新应用连接配置。"
+        notice = "网络设置已保存。若修改了端口，请到 Agent 页重新应用连接配置。"
     }
 
     func refreshActivity() async {
@@ -302,7 +285,7 @@ struct LocalIssue: Identifiable {
         activity = result.values.flatMap { $0.2 }.sorted { $0.timestamp > $1.timestamp }
     }
 
-    private func execute(_ arguments: [String], timeout: TimeInterval = 90, isLogin: Bool = false,
+    func execute(_ arguments: [String], timeout: TimeInterval = 90, isLogin: Bool = false,
                          onReply: @escaping @MainActor (Reply) -> Void = { _ in }) async throws -> Reply {
         guard let runtime else { throw AppFailure(message: runtimeError ?? "Runtime is unavailable.") }
         let id = UUID(), child = BridgeProcess()
@@ -327,13 +310,17 @@ struct LocalIssue: Identifiable {
     }
 
     func sourceName(_ id: String) -> String {
-        id == "copilot" ? "GitHub Copilot" : sources.first { $0.id == id }?.name ?? id
+        id == "copilot" ? "GitHub Copilot" : sources.first { $0.id == id }.map { source in
+            (accounts.first { a in a.id == (source.accountId ?? "azure-local") }?.name ?? "") + " / " + source.name
+        } ?? id
     }
 
     func saveSource(_ candidate: ModelSource, key: String) throws {
         guard let runtime, serviceState == "stopped" else { throw AppFailure(message: "请先停止 Bridge，再修改来源。") }
         let source = try candidate.validated()
-        if source.authMode == "api-key" {
+        guard let account = accounts.first(where: { $0.id == (source.accountId ?? "azure-local") }),
+              account.kind == (source.kind == "copilot" ? "github" : "azure") else { throw SourceFailure.invalid }
+        if source.kind == "azure-openai" && source.authMode == "api-key" {
             if !key.isEmpty {
                 guard !key.contains(where: { $0.isNewline || $0.isWhitespace }) else { throw AppFailure(message: "API Key 不能含空白字符。") }
                 try SourceKeychain.save(key, for: source.id)
@@ -348,7 +335,7 @@ struct LocalIssue: Identifiable {
     func removeSource(_ source: ModelSource) throws {
         guard let runtime, serviceState == "stopped" else { throw AppFailure(message: "请先停止 Bridge。") }
         guard !clients.contains(where: { $0.connected && $0.source == source.id }) else {
-            throw AppFailure(message: "此来源仍被 Harness 使用，请先为它选择其他来源并应用配置。")
+            throw AppFailure(message: "此来源仍被 Agent 使用，请先为它选择其他来源并应用配置。")
         }
         let next = sources.filter { $0.id != source.id }
         try ModelSource.encode(next).write(to: runtime.root.appendingPathComponent("sources.json"), options: .atomic)

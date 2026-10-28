@@ -2572,3 +2572,21 @@ billing/quota. A registered source/harness combination is not a compatibility
 claim: real client tool execution must be verified separately for each pair.
 Official Azure wire reference:
 https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/responses
+
+
+### Account ownership
+
+Accounts own login identity; sources own resource endpoints and model catalogs.
+`accounts.json` contains public metadata only. Each new GitHub account has its own
+CredentialService, encrypted store, Copilot lease cache and catalog overlay. Request
+source selection binds these immutable account services before endpoint dispatch;
+there is no mutable process-wide selected account. Legacy routes and credentials
+remain the default Copilot account. Named Copilot sources use the existing pipelines.
+
+New Azure accounts use isolated Azure CLI config directories under the application
+account directory for device login, discovery and inference token acquisition.
+Token caches are keyed by account plus subscription. The legacy `azure-local` account
+explicitly uses the user's existing CLI identity without changing it. Multiple AOAI
+resources can reference one account, with independent deployment lists and Keychain
+keys. Discovery reads subscriptions/resources/deployments only; it does not grant
+permissions or fetch resource keys. Source and account edits require a stopped bridge.

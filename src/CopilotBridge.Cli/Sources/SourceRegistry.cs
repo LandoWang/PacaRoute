@@ -14,6 +14,7 @@ internal sealed record ModelSource
     private string? _authMode;
     public string AuthMode { get => _authMode ?? "azure-cli"; init => _authMode = value; }
     public string? SubscriptionId { get; init; }
+    public string? AccountId { get; init; }
     public required string[] Deployments { get; init; }
 
     [System.Text.Json.Serialization.JsonIgnore]
@@ -43,6 +44,14 @@ internal sealed partial class SourceRegistry
     {
         if (!SourceId().IsMatch(source.Id) || source.Id == "copilot")
             throw new ArgumentException("Use a unique lowercase source ID (letters, digits and hyphens).");
+        if (source.AccountId is not null && !SourceId().IsMatch(source.AccountId))
+            throw new ArgumentException("Invalid account ID.");
+        if (source.Kind == "copilot")
+        {
+            if (string.IsNullOrWhiteSpace(source.Name) || source.Name.Length > 100 || source.AccountId is null)
+                throw new ArgumentException("Copilot sources require an account and name.");
+            return source;
+        }
         if (source.Kind != "azure-openai" || source.AuthMode is not ("azure-cli" or "api-key"))
             throw new ArgumentException("Unsupported source or authentication mode.");
         if (!Uri.TryCreate(source.Endpoint, UriKind.Absolute, out var uri)

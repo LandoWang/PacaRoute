@@ -35,6 +35,19 @@ internal static class SourceRouting
                 ? http.RequestServices.GetRequiredService<SourceRegistry>().Find(parts[2]) : null;
             if (source is null) { await Error(http, 404, "Unknown model source."); return; }
             var route = "/" + parts[3];
+            if (source.Kind == "copilot")
+            {
+                http.Items[typeof(ModelSource)] = source;
+                if (!http.RequestServices.GetRequiredService<IAuthService>().IsAuthenticated)
+                { await Error(http, 401, "Sign in to this GitHub account."); return; }
+                if (!(route.StartsWith("/codex/", StringComparison.Ordinal) || route.StartsWith("/cc/", StringComparison.Ordinal)))
+                { await Error(http, 404, "Unsupported source route."); return; }
+                using var accountScope = Serilog.Context.LogContext.PushProperty("ModelSource", source.Id);
+                http.Request.Path = route;
+                try { await next(http); }
+                finally { http.Request.Path = path; }
+                return;
+            }
             if (http.Request.Method == "GET" && route is "/codex/models" or "/cc/v1/models")
             {
                 using var buffer = new MemoryStream();

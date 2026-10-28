@@ -94,7 +94,7 @@ internal static class CodexResponsesEndpoint
         // off it (finalizing the streaming capture). Null if the pipeline threw.
         BridgeResponse? pipelineResponse = null;
 
-        var summary = new RequestSummary { Kind = "responses" };
+        var summary = new RequestSummary { Kind = "responses", Source = (httpCtx.Items[typeof(Sources.ModelSource)] as Sources.ModelSource)?.Id ?? "copilot" };
 
         try
         {

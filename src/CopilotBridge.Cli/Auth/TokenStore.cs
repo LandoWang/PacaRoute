@@ -39,6 +39,9 @@ internal static class TokenStore
         Action<string>? diagnostic = null) =>
         new(AppContext.BaseDirectory, s_protector, diagnostic);
 
+    internal static CredentialStore CreateAccountCredentialStore(string directory) =>
+        new(directory, s_protector);
+
     private static ITokenProtector CreateProtector() =>
         OperatingSystem.IsWindows()
             ? new WindowsDpapiTokenProtector(s_entropy)

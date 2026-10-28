@@ -56,6 +56,41 @@ with tempfile.TemporaryDirectory(prefix="bridge-source-contract-") as temp:
     sources = [{"id": source, "name": source, "endpoint": "https://example.openai.azure.com",
                 "auth_mode": "api-key", "deployments": ["company-deployment-4-1-2026-01-01"]}
                for source in ["azure-dev", "azure-other"]]
+    # Account contract: two AOAI resources share one login; a second identity with
+    # the same subscription/model must obtain and use its own token.
+    subscription = "11111111-1111-1111-1111-111111111111"
+    accounts_file = root / "accounts.json"
+    accounts_file.write_text(json.dumps([
+        {"id": "azure-work", "name": "Work", "kind": "azure"},
+        {"id": "azure-personal", "name": "Personal", "kind": "azure"},
+        {"id": "github-work", "name": "GitHub Work", "kind": "github"}]))
+    for source_id, account in [("azure-one", "azure-work"), ("azure-two", "azure-work"), ("azure-three", "azure-personal")]:
+        sources.append({"id": source_id, "name": source_id, "endpoint": "https://example.openai.azure.com",
+            "auth_mode": "azure-cli", "account_id": account, "subscription_id": subscription,
+            "deployments": [sources[0]["deployments"][0]]})
+    sources.append({"id": "github-work", "name": "Work Copilot", "kind": "copilot", "account_id": "github-work",
+        "endpoint": "", "deployments": []})
+    fake_az = root / "az-fixture"
+    fake_az.write_text("""#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+account_dir = Path(os.environ['AZURE_CONFIG_DIR'])
+assert account_dir.name in ['azure-work', 'azure-personal']
+args = sys.argv[1:]
+if args[0] == 'login':
+    assert '--use-device-code' in args
+    print('To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code ABCD12345 to authenticate.', file=sys.stderr, flush=True)
+    (account_dir / 'fixture-login').write_text('yes')
+elif args[0] == 'logout':
+    (account_dir / 'fixture-login').unlink(missing_ok=True)
+elif args[:2] == ['account', 'list']:
+    print(json.dumps([{'id':'11111111-1111-1111-1111-111111111111','name':'Fixture','state':'Enabled','user':{'name':account_dir.name}}] if (account_dir / 'fixture-login').exists() else []))
+elif args[:2] == ['account', 'get-access-token']:
+    with (account_dir / 'acquisitions').open('a') as f: f.write('request\\n')
+    print(json.dumps({'accessToken':'fixture-token-' + account_dir.name, 'expires_on':9999999999}))
+else: raise SystemExit(2)
+""")
+    fake_az.chmod(0o700)
     source_file = root / "sources.json"
     source_file.write_text(json.dumps(sources))
     claude = root / "claude.json"
@@ -70,6 +105,7 @@ with tempfile.TemporaryDirectory(prefix="bridge-source-contract-") as temp:
         sock.bind(("127.0.0.1", 0)); port = sock.getsockname()[1]
     env = dict(os.environ, COPILOT_BRIDGE_DESKTOP="1", COPILOT_BRIDGE_PROXY_MODE="direct",
                COPILOT_BRIDGE_SOURCES_FILE=str(source_file),
+               COPILOT_BRIDGE_ACCOUNTS_FILE=str(accounts_file), COPILOT_BRIDGE_TEST_AZURE_CLI=str(fake_az),
                COPILOT_BRIDGE_TEST_AZURE_UPSTREAM=f"http://127.0.0.1:{upstream.server_port}/",
                COPILOT_BRIDGE_TEST_CLAUDE_SETTINGS_PATH=str(claude), CODEX_HOME=str(codex_home))
     base = [DOTNET, str(runtime / "copilot-bridge.dll")]
@@ -79,6 +115,15 @@ with tempfile.TemporaryDirectory(prefix="bridge-source-contract-") as temp:
         assert result.returncode == 0, (result.stderr, result.stdout)
         return [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')][-1]
 
+    for account in ["azure-work", "azure-personal"]:
+        result = subprocess.run(base + ["desktop", "login", "--account", account], cwd=runtime, env=env, capture_output=True, text=True, timeout=30)
+        replies = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+        assert result.returncode == 0 and replies[0]["event"] == "device_code" and replies[0]["user_code"] == "ABCD12345", result.stdout
+        assert command("desktop", "account-status", "--account", account)["logged_in"]
+    command("desktop", "logout", "--account", "azure-work")
+    assert not command("desktop", "account-status", "--account", "azure-work")["logged_in"]
+    assert command("desktop", "account-status", "--account", "azure-personal")["logged_in"]
+    assert not command("desktop", "account-status", "--account", "github-work")["logged_in"]
     model = sources[0]["deployments"][0]
     assert command("desktop", "models", "--source", "azure-dev")["models"][0]["id"] == model
     for client in ["codex", "claude-code"]:
@@ -142,6 +187,13 @@ with tempfile.TemporaryDirectory(prefix="bridge-source-contract-") as temp:
             assert post("/sources/missing/codex/responses", native)[0] == 404
             assert post("/sources/azure-dev/codex/responses", b'{"model":"other"}')[0] == 400
             assert post("/codex/responses", native)[0] == 401
+            assert post("/sources/github-work/codex/responses", native)[0] == 401
+            for source_id, account in [("azure-one", "azure-work"), ("azure-three", "azure-personal"), ("azure-two", "azure-work")]:
+                assert post(f"/sources/{source_id}/codex/responses", native)[0] == 200
+                assert observed[-1][1].get("Authorization") == "Bearer fixture-token-" + account
+            for account in ["azure-work", "azure-personal"]:
+                assert (root / "accounts" / account / "acquisitions").read_text().count("request") == 1
+
         finally:
             child.send_signal(signal.SIGINT)
             try: child.wait(timeout=8)
@@ -152,4 +204,4 @@ with tempfile.TemporaryDirectory(prefix="bridge-source-contract-") as temp:
     assert any(e.get("source") == "azure-dev" and e.get("client") == "Claude Code" for e in events)
     assert any(e.get("source") == "azure-other" and e.get("status") == 403 for e in events)
     assert "private-canary-prompt" not in activity and "fixture-key" not in activity and "downstream-secret" not in activity
-    print("PASS: Azure-only startup, source × harness configuration, native Responses fidelity, Claude translation, source isolation, local estimates and secret-free telemetry")
+    print("PASS: Azure-only startup, source × harness configuration, native Responses fidelity, Claude translation, source/account isolation, device-login events, logout isolation, account-scoped token caching, local estimates and secret-free telemetry")

@@ -6,16 +6,24 @@ public struct ModelSource: Codable, Identifiable, Equatable {
     public var kind = "azure-openai"
     public var endpoint: String
     public var authMode = "azure-cli"
+    public var accountId: String?
     public var subscriptionId: String?
     public var deployments: [String]
 
     public init(id: String, name: String, endpoint: String, authMode: String = "azure-cli",
-                subscriptionId: String? = nil, deployments: [String]) {
+                subscriptionId: String? = nil, deployments: [String], accountId: String? = nil, kind: String = "azure-openai") {
         self.id = id; self.name = name; self.endpoint = endpoint; self.authMode = authMode
-        self.subscriptionId = subscriptionId; self.deployments = deployments
+        self.subscriptionId = subscriptionId; self.deployments = deployments; self.accountId = accountId; self.kind = kind
     }
 
     public func validated() throws -> ModelSource {
+        if let accountId, accountId.range(of: "^[a-z][a-z0-9-]{0,62}$", options: .regularExpression) == nil { throw SourceFailure.invalid }
+        if kind == "copilot" {
+            guard id.range(of: "^[a-z][a-z0-9-]{0,62}$", options: .regularExpression) != nil, id != "copilot",
+                  !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name.count <= 100,
+                  accountId != nil else { throw SourceFailure.invalid }
+            return self
+        }
         guard id.range(of: "^[a-z][a-z0-9-]{0,62}$", options: .regularExpression) != nil, id != "copilot",
               !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name.count <= 100,
               kind == "azure-openai", ["azure-cli", "api-key"].contains(authMode),

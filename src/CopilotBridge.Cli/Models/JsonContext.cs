@@ -30,6 +30,7 @@ namespace CopilotBridge.Cli.Models;
 [JsonSerializable(typeof(CredentialFileRecord))]
 [JsonSerializable(typeof(GitHubUser))]
 [JsonSerializable(typeof(CopilotBridge.Cli.Sources.ModelSource[]))]
+[JsonSerializable(typeof(CopilotBridge.Cli.Auth.AccountProfile[]))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(DesktopReply))]
 [JsonSerializable(typeof(DesktopActivity))]

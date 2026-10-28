@@ -189,3 +189,41 @@ Private GitHub releases require recipients to have access to that repository.
 Only bundle resources are packaged. Application Support data, GitHub credentials,
 Azure API keys and client configurations are never copied into distribution
 artifacts. The app creates its own per-user state at first launch.
+
+
+## Multiple accounts and resource sources
+
+Use **Accounts → Add GitHub login** for GitHub device authorization. No password,
+PAT or manually entered username is required. After authorization the app reads
+the GitHub username and adds its Copilot source. Repeat for another GitHub identity.
+Each saved identity has its own encrypted credential directory, token refresh and
+model catalog; logging out affects only that identity. The original default Copilot
+login and legacy client URLs remain available.
+
+Add an Azure account, complete device login, then select a subscription and AOAI
+resource. The app reads that resource's OpenAI deployments. Repeat to add multiple
+resources beneath the same account. New Azure identities have isolated CLI config
+directories; **Local Azure CLI** explicitly preserves existing terminal sessions.
+Manual resource entry also supports API keys in Keychain without Azure CLI login.
+Resource discovery does not grant inference permissions or retrieve resource keys.
+
+Agent selectors show **account / resource × model**. Model availability and Copilot
+quota belong to their selected account; local usage retains each source ID and can
+also be aggregated. An existing resource without account metadata is treated as
+Local Azure CLI, preserving its URL, model selection and historical usage.
+Account and resource mutations require a stopped app-owned bridge. The app never
+stops the separately installed CLI bridge on port 8765.
+
+The sidebar order is Overview, Accounts, Sources, Agent, Usage, Errors, and Bridge
+Service Settings. A persistent top-right Service Settings button opens the port,
+proxy and service lifecycle controls from any page.
+
+
+Account-routing verification (macos.3): real Codex 0.141.0 with gpt-6-astra and
+Claude Code 2.1.306 with claude-opus-5.5 completed multi-file tool tasks through a
+named GitHub source. Codex evidence included three matching call/output pairs and
+166 client log rows with zero router fatals; Claude recorded 4 tool round trips.
+The installed Claude 2.1.179 was rejected by the existing model version gate; a
+temporary 2.1.306 installation passed without updating the user's global CLI.
+Azure subscription/resource/deployment discovery passed against the selected
+subscription; live Azure inference remains UNVERIFIED for the permission reason above.

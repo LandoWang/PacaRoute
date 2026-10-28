@@ -80,6 +80,7 @@ internal static class ServeCommand
 
         var sources = Sources.SourceRegistry.Load();
         builder.Services.AddSingleton(sources);
+        AccountServices.Register(builder.Services, sources);
         builder.Services.AddSingleton(await AzureAuthService.FromDesktopAsync(ct));
         builder.Services.AddSingleton<Sources.AzureResponsesClient>();
         var app = builder.Build();

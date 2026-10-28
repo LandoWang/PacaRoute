@@ -38,17 +38,12 @@ internal sealed class AzureAuthService : IDisposable
         try
         {
             var subscription = source.SubscriptionId ?? "";
-            if (_cache.TryGetValue(subscription, out var cached) && cached.Expires > DateTimeOffset.UtcNow.AddMinutes(5))
+            var cacheKey = (source.AccountId ?? "azure-local") + ":" + subscription;
+            if (_cache.TryGetValue(cacheKey, out var cached) && cached.Expires > DateTimeOffset.UtcNow.AddMinutes(5))
                 return cached.Lease;
-            var start = new ProcessStartInfo
-            {
-                FileName = OperatingSystem.IsMacOS() && File.Exists("/opt/homebrew/bin/az") ? "/opt/homebrew/bin/az" : "az",
-                UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true,
-                RedirectStandardInput = true, CreateNoWindow = true,
-            };
-            foreach (var arg in new[] { "account", "get-access-token", "--resource", "https://cognitiveservices.azure.com", "-o", "json" })
-                start.ArgumentList.Add(arg);
-            if (subscription.Length > 0) { start.ArgumentList.Add("--subscription"); start.ArgumentList.Add(subscription); }
+            var arguments = new List<string> { "account", "get-access-token", "--resource", "https://cognitiveservices.azure.com", "-o", "json" };
+            if (subscription.Length > 0) { arguments.Add("--subscription"); arguments.Add(subscription); }
+            var start = AzureAccountService.StartInfo(AccountRegistry.Load(), source.AccountId ?? "azure-local", arguments);
             using var process = Process.Start(start) ?? throw new InvalidOperationException("Azure CLI could not start.");
             process.StandardInput.Close();
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -66,7 +61,7 @@ internal sealed class AzureAuthService : IDisposable
             if (doc.RootElement.TryGetProperty("expires_on", out var expiry)
                 && long.TryParse(expiry.ToString(), out var seconds)) expires = DateTimeOffset.FromUnixTimeSeconds(seconds);
             var lease = new AzureAuthLease("Authorization", "Bearer " + token);
-            _cache[subscription] = (lease, expires);
+            _cache[cacheKey] = (lease, expires);
             return lease;
         }
         finally { _gate.Release(); }

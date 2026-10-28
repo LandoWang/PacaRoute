@@ -105,7 +105,7 @@ internal static class ClaudeCodeMessagesEndpoint
 
         // Per-request summary, populated as the pipeline progresses. Always
         // emitted in finally regardless of error path.
-        var summary = new RequestSummary { Kind = "messages", Source = bridgeCtx.Source?.Id ?? "copilot" };
+        var summary = new RequestSummary { Kind = "messages", Source = bridgeCtx.Source?.Id ?? (httpCtx.Items[typeof(Sources.ModelSource)] as Sources.ModelSource)?.Id ?? "copilot" };
         var usageSnapshot = summary.Usage;
         var inboundBetaSet = ClaudeCodeInboundAdapter.ParseInboundBetas(inboundHeaders);
         summary.InboundBetas = inboundBetaSet.ToArray();

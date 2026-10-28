@@ -56,6 +56,7 @@ final class Runtime {
     func environment(mode: ProxyMode, proxy: String) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["COPILOT_BRIDGE_DESKTOP"] = "1"
+        env["COPILOT_BRIDGE_ACCOUNTS_FILE"] = root.appendingPathComponent("accounts.json").path
         let sourceFile = root.appendingPathComponent("sources.json")
         if FileManager.default.fileExists(atPath: sourceFile.path) { env["COPILOT_BRIDGE_SOURCES_FILE"] = sourceFile.path }
         else { env.removeValue(forKey: "COPILOT_BRIDGE_SOURCES_FILE") }

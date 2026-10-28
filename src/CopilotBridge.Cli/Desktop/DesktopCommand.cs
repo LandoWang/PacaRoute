@@ -18,6 +18,9 @@ internal static class DesktopCommand
         var action = new Argument<string>("action") { Description = "status, account, models, login, logout, configure" };
         var client = new Option<string?>("--client");
         var source = new Option<string>("--source") { DefaultValueFactory = _ => "copilot" };
+        var account = new Option<string?>("--account");
+        var subscription = new Option<string?>("--subscription");
+        var resource = new Option<string?>("--resource");
         var model = new Option<string?>("--model");
         var port = new Option<int>("--port") { DefaultValueFactory = _ => 8765 };
         var apply = new Option<bool>("--apply");
@@ -26,6 +29,9 @@ internal static class DesktopCommand
         command.Arguments.Add(action);
         command.Options.Add(client);
         command.Options.Add(source);
+        command.Options.Add(account);
+        command.Options.Add(subscription);
+        command.Options.Add(resource);
         command.Options.Add(model);
         command.Options.Add(port);
         command.Options.Add(apply);
@@ -36,7 +42,7 @@ internal static class DesktopCommand
             {
                 var reply = await RunAsync(args.GetValue(action)!, args.GetValue(client),
                     args.GetValue(model), args.GetValue(port), args.GetValue(apply),
-                    args.GetValue(fingerprint), args.GetValue(source)!, ct);
+                    args.GetValue(fingerprint), args.GetValue(source)!, args.GetValue(account), args.GetValue(subscription), args.GetValue(resource), ct);
                 Write(reply);
                 return reply.Ok ? 0 : 1;
             }
@@ -50,17 +56,17 @@ internal static class DesktopCommand
     }
 
     private static async Task<DesktopReply> RunAsync(string action, string? client, string? model,
-        int port, bool apply, string? fingerprint, string sourceId, CancellationToken ct)
+        int port, bool apply, string? fingerprint, string sourceId, string? accountId, string? subscription, string? resource, CancellationToken ct)
     {
         if (port is < 1024 or > 65535) throw new ArgumentException("Port must be between 1024 and 65535.");
         var sources = Sources.SourceRegistry.Load();
         var source = sourceId == "copilot" ? null : sources.Find(sourceId)
             ?? throw new ArgumentException("Unknown source.");
-        if (source is not null && action == "models")
+        if (source?.Kind == "azure-openai" && action == "models")
             return new DesktopReply { Models = source.Deployments.Select(d => new DesktopModel(d, d, "Azure OpenAI", true, true)).ToList() };
         if (action == "configure")
         {
-            if (source is not null && (string.IsNullOrEmpty(model) || !source.Deployments.Contains(model)))
+            if (source?.Kind == "azure-openai" && (string.IsNullOrEmpty(model) || !source.Deployments.Contains(model)))
                 throw new ArgumentException("Select a deployment from the chosen source.");
             var plan = DesktopClientConfiguration.Plan(client ?? "", port, model, sourceId);
             var backup = apply ? DesktopClientConfiguration.Apply(plan,
@@ -72,14 +78,18 @@ internal static class DesktopCommand
             };
         }
 
+        var accounts = AccountRegistry.Load();
+        accountId ??= source?.AccountId ?? "copilot";
+        if (accounts.Find(accountId).Kind == "azure")
+            return await AzureAccountService.ExecuteAsync(accounts, accountId, action, subscription, resource, Write, ct);
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("copilot-bridge/0.1");
         var factory = new SingleClientHttpClientFactory(http);
-        using var auth = new AuthService(factory, challenge => Write(new DesktopReply
+        using var auth = accounts.CreateGitHub(accountId, factory, challenge => Write(new DesktopReply
         {
             Event = "device_code", UserCode = challenge.UserCode,
             VerificationUri = challenge.VerificationUri, ExpiresIn = challenge.ExpiresIn.TotalSeconds,
-        }), AuthCommand.LoadLoginProvider());
+        }));
 
         if (action == "login")
         {
@@ -91,6 +101,7 @@ internal static class DesktopCommand
             auth.SignOut();
             return new DesktopReply { LoggedIn = false };
         }
+        if (action == "account-status") return new DesktopReply { LoggedIn = auth.GetCredentialStatus() is not null };
         if (action == "status")
         {
             var clients = new List<DesktopClient>();
