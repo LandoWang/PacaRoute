@@ -5,9 +5,17 @@ struct SourceProxyPicker: View {
     @EnvironmentObject var store: AppStore
     let sourceID: String
     var body: some View {
-        Picker("Proxy", selection: Binding(get: { store.proxies.sourceProxy(sourceID) }, set: { store.bindProxy($0, source: sourceID) })) {
-            ForEach(store.proxies.choices) { Text($0.name).tag($0.id) }
-        }.frame(maxWidth: 430).disabled(store.serviceState != "stopped" || store.signingIn || store.busy != nil)
+        HStack(spacing: 8) {
+            Label("Proxy", systemImage: "network")
+                .font(.caption).foregroundStyle(.secondary)
+            Picker("Proxy", selection: Binding(get: { store.proxies.sourceProxy(sourceID) }, set: { store.bindProxy($0, source: sourceID) })) {
+                ForEach(store.proxies.choices) { Text($0.name).tag($0.id) }
+            }
+            .labelsHidden().pickerStyle(.menu).controlSize(.small)
+            .frame(width: 190).help(store.proxyName(for: sourceID))
+            .disabled(store.serviceState != "stopped" || store.signingIn || store.busy != nil)
+            Spacer(minLength: 0)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

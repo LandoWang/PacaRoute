@@ -13,8 +13,10 @@ struct SourcesView: View {
                 Text(store.loggedIn ? "已登录" : "待登录").foregroundStyle(.secondary)
                 Button("管理登录") { store.page = .account }
             }
-            Text("模型与 Copilot 额度由 GitHub 账号提供。").font(.caption).foregroundStyle(.secondary)
-            SourceProxyPicker(sourceID: "copilot")
+            VStack(alignment: .leading, spacing: 10) {
+                Text("模型与 Copilot 额度由 GitHub 账号提供。").font(.caption).foregroundStyle(.secondary)
+                SourceProxyPicker(sourceID: "copilot")
+            }
             SourceUsageSummary(sourceID: "copilot")
         }
         ForEach(store.sources) { source in
@@ -32,9 +34,11 @@ struct SourcesView: View {
                 Text(store.sourceName(source.id)).font(.caption).foregroundStyle(.secondary)
                 Text(source.endpoint).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                 Text(source.deployments.joined(separator: " · ")).font(.callout)
-                Text(source.kind == "copilot" ? "使用所属 GitHub 账号的登录与模型。" : source.authMode == "azure-cli" ? "使用所属 Azure 账号，令牌自动刷新。" : "API Key 保存在本机 Keychain。")
-                    .font(.caption).foregroundStyle(.secondary)
-                SourceProxyPicker(sourceID: source.id)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(source.kind == "copilot" ? "使用所属 GitHub 账号的登录与模型。" : source.authMode == "azure-cli" ? "使用所属 Azure 账号，令牌自动刷新。" : "API Key 保存在本机 Keychain。")
+                        .font(.caption).foregroundStyle(.secondary)
+                    SourceProxyPicker(sourceID: source.id)
+                }
                 SourceUsageSummary(sourceID: source.id)
             }
         }

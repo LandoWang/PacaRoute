@@ -215,8 +215,8 @@ Local Azure CLI, preserving its URL, model selection and historical usage.
 Account and resource mutations require a stopped app-owned bridge. The app never
 stops the separately installed CLI bridge on port 8765.
 
-The sidebar order is Overview, Accounts, Sources, Proxy, Agent, Usage, Errors, and Bridge
-Service Settings. A persistent top-right Service Settings button opens the port,
+The sidebar order is Overview, Accounts, Sources, Agent, Usage, Proxy, Bridge
+Service Settings, and Errors. A persistent top-right Service Settings button opens the port,
 and service lifecycle controls from any page.
 
 

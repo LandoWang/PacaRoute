@@ -35,7 +35,7 @@ import BridgeCore
             enabled: store.ready && store.busy == nil && !store.signingIn && (store.running || store.canStart) && ["running", "stopped"].contains(store.serviceState))
         add("刷新状态与用量", action: #selector(refresh), enabled: store.ready && store.busy == nil)
         menu.addItem(.separator())
-        for page in [Page.overview, .account, .sources, .proxies, .clients, .usage, .errors, .network] {
+        for page in Page.allCases {
             let title = page == .overview ? "打开 AgentLink" : page.rawValue
             let row = add(title, action: #selector(navigate)); row.representedObject = page.rawValue
         }
