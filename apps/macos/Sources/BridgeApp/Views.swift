@@ -11,8 +11,8 @@ struct RootView: View {
         NavigationSplitView {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
-                    Image(nsImage: AgentLinkMark.image(size: 34)).renderingMode(.template)
-                        .foregroundStyle(Color(red: 0.59, green: 0.36, blue: 0.91)).accessibilityLabel("AgentLink")
+                    Image(nsImage: AgentLinkMark.image(size: 34, colored: true)).renderingMode(.original)
+                        .accessibilityLabel("AgentLink")
                     VStack(alignment: .leading, spacing: 2) {
                         Text("AgentLink").font(.headline)
                         Text("一个入口，连接你的工具").font(.caption2).foregroundStyle(.secondary)
