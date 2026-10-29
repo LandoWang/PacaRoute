@@ -6,6 +6,7 @@ private let accent = Color(red: 0.12, green: 0.53, blue: 0.47)
 
 struct RootView: View {
     @EnvironmentObject var store: AppStore
+    @StateObject private var sessions = SessionsStore()
     var body: some View {
         NavigationSplitView {
             VStack(spacing: 0) {
@@ -50,6 +51,7 @@ struct RootView: View {
                     case .overview: OverviewView()
                     case .account: AccountView()
                     case .clients: ClientsView()
+                    case .sessions: SessionsView(store: sessions)
                     case .usage: UsageView()
                     case .errors: ErrorsView()
                     case .network: NetworkView()
@@ -90,6 +92,7 @@ struct RootView: View {
         case .overview: return "将模型来源连接到你的开发工具。"
         case .account: return "通过 device login 连接 GitHub、Azure，并管理账号下的资源。"
         case .clients: return "每个 Agent 独立选择来源和默认模型。"
+        case .sessions: return "浏览本地历史，理解任务进展、工具结果与未完成事项。"
         case .usage: return "了解本机请求、token 消耗与账号剩余额度。"
         case .errors: return "集中查看失败请求与应用操作错误。"
         case .network: return "管理本地服务、监听端口和出站代理。"
@@ -182,7 +185,7 @@ struct OverviewView: View {
                 Divider()
                 step("4", "配置 Agent", "为 Codex、Claude Code 选择来源 × 模型，预览并应用连接配置。", done: store.clients.contains { $0.connected && !$0.drifted }, page: .clients)
             }
-            Text("统计从此应用启动的 Bridge 开始记录；不会读取已有 CLI 的聊天记录。")
+            Text("用量统计来自此应用启动的 Bridge；本地聊天历史可在「会话」页按需读取。")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

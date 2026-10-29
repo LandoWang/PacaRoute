@@ -2639,3 +2639,13 @@ source filters use identical boundaries; token omissions remain explicit, and
 count_tokens estimates/errors do not become additional request counts. The
 menu-bar status item handles both mouse buttons, survives window closure, and
 controls only the service process owned by this app.
+
+### Local session understanding in AgentLink
+
+The native macOS UI has a separate `LocalSessions` module for read-only client
+histories. It uses system SQLite for Codex indexes/projections and bounded JSONL
+pages for Claude Code and legacy Codex. Browsing does not depend on Bridge, resume
+a client, or write to client state. See `docs/local-sessions.md` for adapters,
+coverage limits and verification. Explicit analysis requests send only the previewed
+evidence to the chosen existing source via the loopback Responses route, without
+tools or stored model state. This adds no daemon and does not change Agent defaults.

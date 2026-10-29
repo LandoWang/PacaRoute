@@ -4,7 +4,7 @@ import BridgeCore
 import Darwin
 
 enum Page: String, CaseIterable, Identifiable {
-    case overview = "导览", account = "账号", sources = "来源", clients = "Agent", usage = "用量", proxies = "Proxy", network = "Bridge 服务配置", errors = "错误"
+    case overview = "导览", account = "账号", sources = "来源", clients = "Agent", sessions = "会话", usage = "用量", proxies = "Proxy", network = "Bridge 服务配置", errors = "错误"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -13,6 +13,7 @@ enum Page: String, CaseIterable, Identifiable {
         case .overview: return "square.grid.2x2"
         case .account: return "person.crop.circle"
         case .clients: return "slider.horizontal.3"
+        case .sessions: return "bubble.left.and.bubble.right"
         case .usage: return "chart.bar.xaxis"
         case .errors: return "exclamationmark.bubble"
         case .network: return "network"

@@ -320,3 +320,14 @@ both mouse event masks, status-item persistence, navigation and actual AOT
 start/stop while the main window is closed. Removing right-click handling makes
 that test fail. UI review also covers creating a Proxy, independently binding an
 Azure source, and switching hourly/daily usage charts in a disposable app.
+
+## Local sessions (build 11)
+
+The Sessions page reads local Codex and Claude Code history without starting a
+client or Bridge. Browse messages, tool results and errors; inspect recorded
+model/provider metadata and token usage when available. Choose a separate source
+and model for explicit, previewable analysis of goals, decisions, evidence and
+unfinished work. Analysis does not modify Agent defaults. It uses the existing
+Bridge, adds no daemon, and discloses the bounded history it sends. See
+[`docs/local-sessions.md`](../../docs/local-sessions.md) for storage formats,
+limitations and the synthetic real-model analysis verification.

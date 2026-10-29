@@ -1,0 +1,5 @@
+- [x] Implement read-only Codex and Claude Code adapters with bounded pagination.
+- [x] Add session catalog, timeline, local evidence overview and explicit model analysis.
+- [x] Verify contracts, mutation checks and read-only real local history access.
+- [x] Verify the UI and analysis request against a real bundled Bridge.
+- [x] Build and verify separate Apple Silicon and Intel packages.
