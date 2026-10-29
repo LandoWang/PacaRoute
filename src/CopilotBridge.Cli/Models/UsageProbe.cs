@@ -31,9 +31,10 @@ internal sealed class UsageSnapshot
 }
 
 /// <summary>
-/// Pure parsers that pull <see cref="Usage"/> out of the three response shapes
+/// Pure parsers that pull usage counters out of the response shapes
 /// the bridge sees:
 /// <list type="bullet">
+///   <item>Buffered Responses bodies and terminal Responses SSE events.</item>
 ///   <item>Non-streaming Anthropic body (<see cref="TryReadBuffered"/>).</item>
 ///   <item>Streaming SSE events (<see cref="TryUpdateFromStreamEvent"/>),
 ///         which Anthropic emits cumulatively on <c>message_start</c> and
@@ -47,6 +48,43 @@ internal sealed class UsageSnapshot
 /// </summary>
 internal static class UsageProbe
 {
+    public static void TryReadResponsesBuffered(ReadOnlySpan<byte> body, UsageSnapshot snapshot)
+    {
+        if (body.IsEmpty) return;
+        try
+        {
+            ApplyResponses(JsonSerializer.Deserialize(body, JsonContext.Default.ResponsesUsageBody)?.Usage, snapshot);
+        }
+        catch (JsonException) { /* Observability must not break response delivery. */ }
+    }
+
+    public static void TryUpdateFromResponsesEvent(string? eventType, string data, UsageSnapshot snapshot)
+    {
+        // Ignore provisional usage (often zero) in response.created/in_progress.
+        if (string.IsNullOrEmpty(data) || (!string.IsNullOrEmpty(eventType) && !IsResponsesTerminal(eventType))) return;
+        try
+        {
+            var envelope = JsonSerializer.Deserialize(data, JsonContext.Default.ResponsesUsageEvent);
+            if (IsResponsesTerminal(string.IsNullOrEmpty(eventType) ? envelope?.Type : eventType))
+                ApplyResponses(envelope?.Response?.Usage, snapshot);
+        }
+        catch (JsonException) { /* Missing/malformed usage remains unknown. */ }
+    }
+
+    private static bool IsResponsesTerminal(string? type) =>
+        type is "response.completed" or "response.incomplete" or "response.failed";
+
+    private static void ApplyResponses(ResponsesUsageValues? usage, UsageSnapshot snapshot)
+    {
+        if (usage is null) return;
+        // Counters are cumulative. Cached input is a subset of input, and reasoning
+        // a subset of output; neither is added to the reported totals.
+        if (usage.InputTokens is >= 0) snapshot.InputTokens = usage.InputTokens;
+        if (usage.OutputTokens is >= 0) snapshot.OutputTokens = usage.OutputTokens;
+        if (usage.InputTokensDetails?.CachedTokens is >= 0)
+            snapshot.CacheReadInputTokens = usage.InputTokensDetails.CachedTokens;
+    }
+
     public static void TryReadBuffered(ReadOnlySpan<byte> body, UsageSnapshot snapshot)
     {
         if (body.IsEmpty) return;
@@ -154,4 +192,27 @@ internal sealed record MessageStartMessage
 internal sealed record MessageDeltaUsageEnvelope
 {
     public MessageDeltaUsage? Usage { get; init; }
+}
+
+internal sealed record ResponsesUsageBody
+{
+    public ResponsesUsageValues? Usage { get; init; }
+}
+
+internal sealed record ResponsesUsageEvent
+{
+    public string? Type { get; init; }
+    public ResponsesUsageBody? Response { get; init; }
+}
+
+internal sealed record ResponsesUsageValues
+{
+    public int? InputTokens { get; init; }
+    public int? OutputTokens { get; init; }
+    public ResponsesInputTokenDetails? InputTokensDetails { get; init; }
+}
+
+internal sealed record ResponsesInputTokenDetails
+{
+    public int? CachedTokens { get; init; }
 }

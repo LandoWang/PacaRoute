@@ -239,6 +239,7 @@ internal static class CodexResponsesEndpoint
                 var clientStream = outboundAdapter.AdaptStreamAsync(bridgeCtx.Response.EventStream, ct);
                 await foreach (var evt in clientStream.WithCancellation(ct))
                 {
+                    UsageProbe.TryUpdateFromResponsesEvent(evt.EventType, evt.Data, summary.Usage);
                     if (shouldSignalReasoningIncluded && !reasoningIncludedSignaled)
                     {
                         SignalReasoningIncluded(httpCtx.Response, responseHeaders);
@@ -256,6 +257,7 @@ internal static class CodexResponsesEndpoint
             {
                 httpCtx.Response.StatusCode = responseStatus;
                 var outBody = await outboundAdapter.AdaptBufferedAsync(bridgeCtx.Response.BufferedBody, ct);
+                UsageProbe.TryReadResponsesBuffered(outBody, summary.Usage);
                 if (shouldSignalReasoningIncluded)
                 {
                     SignalReasoningIncluded(httpCtx.Response, responseHeaders);

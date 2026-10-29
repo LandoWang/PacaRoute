@@ -1,0 +1,4 @@
+- [x] Reproduce missing endpoint summary usage with a failing regression check.
+- [x] Add AOT-safe Responses usage observation for streaming and buffered paths.
+- [x] Verify parser contracts, endpoint wiring, byte fidelity and actual request telemetry.
+- [x] Package and install separate macOS architecture builds.

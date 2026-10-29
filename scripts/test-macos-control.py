@@ -134,7 +134,10 @@ with tempfile.TemporaryDirectory(prefix="bridge-desktop-contract-") as temp:
             events = [json.loads(line) for file in (runtime / "desktop-activity").glob("*.jsonl") for line in file.read_text().splitlines()]
             requests = [item for item in events if item["kind"] == "request"]
             assert any(item.get("input_tokens") == 100 and item.get("output_tokens") == 20 for item in requests), requests
-            assert any(item.get("client") == "Codex" for item in requests), requests
+            codex = [item for item in requests if item.get("client") == "Codex"]
+            assert len(codex) == 1, codex
+            # The fixture reports 22 input, 42 output (including 32 reasoning), no cache.
+            assert (codex[0].get("input_tokens"), codex[0].get("output_tokens"), codex[0].get("cache_read_tokens")) == (22, 42, 0), codex
             assert any(item["kind"] == "estimate" for item in events), events
             assert any(item.get("status", 200) >= 400 for item in requests), requests
             assert "fixture prompt" not in json.dumps(events) and "fixture response" not in json.dumps(events)

@@ -63,7 +63,8 @@ public class CodexEndpointTests
         DefaultHttpContext Http,
         StartTrackingResponseFeature ResponseFeature,
         string Body,
-        IReadOnlyList<BridgeIoPayload> Audits);
+        IReadOnlyList<BridgeIoPayload> Audits,
+        IReadOnlyList<RecordedEvent> Logs);
 
     private static async Task<EndpointResult> InvokeDetailed(
         string requestJson,
@@ -95,7 +96,7 @@ public class CodexEndpointTests
             DummyPipeline,
             new ResponsesToIrInboundAdapter(NullLogger<ResponsesToIrInboundAdapter>.Instance),
             new IrToResponsesOutboundAdapter(bridgeCtx, NullLogger<IrToResponsesOutboundAdapter>.Instance),
-            new RequestSummaryLogger(NullLogger<RequestSummaryLogger>.Instance),
+            new RequestSummaryLogger(loggerFactory.CreateLogger<RequestSummaryLogger>()),
             audit,
             NullLogger<CodexResponsesEndpointTag>.Instance);
 
@@ -110,7 +111,8 @@ public class CodexEndpointTests
             http,
             responseFeature,
             Encoding.UTF8.GetString(respStream.ToArray()),
-            audits);
+            audits,
+            recorder.Events);
     }
 
     private static async Task<(int Status, string Body)> Invoke(
@@ -658,6 +660,41 @@ public class CodexEndpointTests
         Assert.Equal(109440, u.Cached);   // the cache hit reached the client through HandleAsync
         Assert.Equal(315, u.Output);
         Assert.Equal(109904, u.Total);    // input + output; cached is a subset, not added
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ResponsesUsage_ReachesRequestSummary_IndependentlyOfTracing(bool streaming, bool tracing)
+    {
+        const string native = """
+            {"object":"response","status":"completed","usage":{"input_tokens":109589,"output_tokens":315,"input_tokens_details":{"cached_tokens":109440},"output_tokens_details":{"reasoning_tokens":100}}}
+            """;
+        var result = await InvokeDetailed(ValidRequest, ctx =>
+        {
+            ctx.Target = new RouteTarget(BackendVendor.CopilotResponses, "/responses", "gpt-5.5");
+            ctx.Response.Status = StatusCodes.Status200OK;
+            if (streaming)
+            {
+                ctx.Response.Mode = ResponseMode.Streaming;
+                ctx.Response.EventStream = ToAsync(RunT3OverCopilotSse(109589, 109440, 315, 100));
+            }
+            else
+            {
+                ctx.Response.Mode = ResponseMode.Buffered;
+                ctx.Response.BufferedBody = Encoding.UTF8.GetBytes(native);
+                ctx.Response.Headers["Content-Type"] = "application/json";
+            }
+        }, tracingEnabled: tracing);
+
+        Assert.Equal(200, result.Http.Response.StatusCode);
+        if (streaming) Assert.Equal((109589L, 109440L, 315L, 109904L), UsageFromCompletedEvent(result.Body));
+        else Assert.Equal(native, result.Body);
+        var summary = Assert.Single(result.Logs.Where(e =>
+            e.Properties.TryGetValue("Kind", out var kind) && Equals(kind, "responses")));
+        Assert.Equal("{in:109589 out:315 cache_read:109440 cache_creation:0}", summary.Properties["UsageDisplay"]);
     }
 
     /// <summary>

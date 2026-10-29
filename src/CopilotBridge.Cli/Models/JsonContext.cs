@@ -99,4 +99,8 @@ namespace CopilotBridge.Cli.Models;
 [JsonSerializable(typeof(CountTokensResponse))]
 [JsonSerializable(typeof(MessageStartUsageEnvelope))]
 [JsonSerializable(typeof(MessageDeltaUsageEnvelope))]
+[JsonSerializable(typeof(ResponsesUsageBody))]
+[JsonSerializable(typeof(ResponsesUsageEvent))]
+[JsonSerializable(typeof(ResponsesUsageValues))]
+[JsonSerializable(typeof(ResponsesInputTokenDetails))]
 internal partial class JsonContext : JsonSerializerContext;

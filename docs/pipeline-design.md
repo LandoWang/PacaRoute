@@ -2550,7 +2550,11 @@ loaded settings; the UI distinguishes a new Agent session from a Bridge restart.
 
 Desktop-only telemetry records completed request metadata and sanitized errors
 (no prompts, request/response bodies, or credentials) in daily JSONL files next to
-the runtime. Usage is observed bridge traffic, not billing. Copilot quota is fetched
+the runtime. Usage is observed bridge traffic, not billing. Codex response summaries
+observe Responses token totals in buffered bodies and terminal SSE events, even
+when tracing is disabled. Cumulative values replace prior values; cached input is
+a subset, not extra input. Missing usage stays unknown. Observation never rewrites
+client response bytes. Copilot quota is fetched
 separately from GitHub and unavailable quota fields remain unknown.
 
 
