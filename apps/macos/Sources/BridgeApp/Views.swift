@@ -2,7 +2,7 @@ import SwiftUI
 import Charts
 import BridgeCore
 
-private let accent = Color(red: 0.12, green: 0.53, blue: 0.47)
+private let accent = AuroraTheme.accent
 
 struct RootView: View {
     @EnvironmentObject var store: AppStore
@@ -19,9 +19,13 @@ struct RootView: View {
                     }
                     Spacer()
                 }.padding(.horizontal, 18).padding(.vertical, 24)
-                List(Page.allCases, selection: Binding(get: { Optional(store.page) }, set: { if let value = $0 { store.page = value } })) { page in
-                    Label(page.rawValue, systemImage: page.icon).tag(page).padding(.vertical, 5)
-                }.listStyle(.sidebar)
+                ScrollView {
+                    VStack(spacing: 4) {
+                        ForEach(Page.allCases) { page in
+                            AuroraNavigationRow(page: page, selected: store.page == page) { store.page = page }
+                        }
+                    }.padding(.horizontal, 12).padding(.bottom, 12)
+                }
                 Divider()
                 HStack(spacing: 10) {
                     Image(systemName: store.loggedIn ? "person.crop.circle.fill" : "person.crop.circle")
@@ -32,7 +36,7 @@ struct RootView: View {
                     }
                     Spacer()
                 }.padding(18)
-            }.navigationSplitViewColumnWidth(min: 205, ideal: 220, max: 250)
+            }.background(AuroraTheme.sidebar).navigationSplitViewColumnWidth(min: 205, ideal: 220, max: 250)
         } detail: {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -57,7 +61,7 @@ struct RootView: View {
                     case .network: NetworkView()
                     }
                 }.padding(30).frame(maxWidth: 1050, alignment: .leading).frame(maxWidth: .infinity)
-            }.background(Color(nsColor: .windowBackgroundColor))
+            }.background(AuroraTheme.canvas)
         }
         .tint(accent)
         .frame(minWidth: 930, minHeight: 650)
@@ -105,8 +109,8 @@ struct Card<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) { content }
             .padding(22).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.06)))
+            .background(AuroraTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(AuroraTheme.border, lineWidth: 1))
     }
 }
 
@@ -117,7 +121,7 @@ struct EmptyCard: View {
     var body: some View {
         Card {
             HStack(alignment: .top, spacing: 16) {
-                Image(systemName: icon).font(.title2).foregroundStyle(accent).frame(width: 32)
+                Image(systemName: icon).font(.title2).foregroundStyle(AuroraTheme.violetInk).frame(width: 32)
                 VStack(alignment: .leading, spacing: 7) {
                     Text(title).font(.headline)
                     Text(text).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -131,9 +135,10 @@ struct StatCard: View {
     let title: String
     let value: String
     let icon: String
+    var tone: Color = AuroraTheme.violetInk
     var body: some View {
         Card {
-            HStack { Text(title).font(.caption).foregroundStyle(.secondary); Spacer(); Image(systemName: icon).foregroundStyle(accent) }
+            HStack { Text(title).font(.caption).foregroundStyle(.secondary); Spacer(); Image(systemName: icon).foregroundStyle(tone) }
             Text(value).font(.system(size: 28, weight: .semibold, design: .rounded)).monospacedDigit()
         }
     }
@@ -146,34 +151,34 @@ struct OverviewView: View {
             HStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
                     Label { Text("AGENTLINK") } icon: { Image(nsImage: AgentLinkMark.image(size: 16)).renderingMode(.template) }
-                        .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(2).opacity(0.75)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(2).foregroundStyle(AuroraTheme.mint)
                     Text(store.running ? "你的工具，已连接。" : "从一个简单的连接开始。")
                         .font(.system(size: 27, weight: .semibold))
                     Text(store.hasSource ? "启动本地服务，再为 Agent 选择来源和模型。" : "先添加账号，再连接模型来源，最后配置你的 Agent。")
-                        .font(.subheadline).opacity(0.8).fixedSize(horizontal: false, vertical: true)
+                        .font(.subheadline).foregroundStyle(AuroraTheme.heroSecondary).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 10) {
                         if !store.hasAccount {
-                            Button("添加账号") { store.page = .account }.buttonStyle(.borderedProminent).tint(.white).foregroundStyle(Color(red: 0.08, green: 0.3, blue: 0.28))
+                            Button("添加账号") { store.page = .account }.auroraProminent(onDarkSurface: true)
                         } else if !store.hasSource {
-                            Button("添加来源") { store.page = .sources }.buttonStyle(.borderedProminent).tint(.white).foregroundStyle(Color(red: 0.08, green: 0.3, blue: 0.28))
+                            Button("添加来源") { store.page = .sources }.auroraProminent(onDarkSurface: true)
                         } else {
                             Button(store.running ? "停止 Bridge" : "启动 Bridge") {
                                 if store.running { store.stopService() } else { store.startService() }
-                            }.buttonStyle(.borderedProminent).tint(.white).foregroundStyle(Color(red: 0.08, green: 0.3, blue: 0.28))
+                            }.auroraProminent(onDarkSurface: true)
                                 .disabled(store.serviceState == "starting" || store.serviceState == "stopping")
                             Button("配置 Agent") { store.page = .clients }.buttonStyle(.bordered).tint(.white)
                         }
                     }.padding(.top, 6)
                 }
                 Spacer(minLength: 0)
-                Image(nsImage: AgentLinkMark.image(size: 86)).renderingMode(.template).opacity(0.45).accessibilityHidden(true)
-            }.padding(28).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
-                .background(LinearGradient(colors: [Color(red: 0.08, green: 0.28, blue: 0.27), Color(red: 0.13, green: 0.43, blue: 0.38)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20))
+                Image(nsImage: AgentLinkMark.image(size: 86, colored: true)).renderingMode(.original).accessibilityHidden(true)
+            }.padding(28).foregroundStyle(AuroraTheme.heroText).frame(maxWidth: .infinity, alignment: .leading)
+                .background(AuroraTheme.hero, in: RoundedRectangle(cornerRadius: 20))
             let totals = UsageTotals(store.activity.filter { Calendar.current.isDateInToday($0.timestamp) })
             HStack(spacing: 14) {
                 StatCard(title: "今日请求", value: totals.requests.formatted(), icon: "arrow.left.arrow.right")
                 StatCard(title: "今日输出 token", value: totals.output.formatted(), icon: "text.alignleft")
-                StatCard(title: "失败请求", value: totals.failures.formatted(), icon: "exclamationmark.circle")
+                StatCard(title: "失败请求", value: totals.failures.formatted(), icon: "exclamationmark.circle", tone: .orange)
             }
             Card {
                 Text("四步开始").font(.headline)
@@ -192,9 +197,9 @@ struct OverviewView: View {
     private func step(_ number: String, _ title: String, _ subtitle: String, done: Bool, page: Page) -> some View {
         HStack(spacing: 14) {
             ZStack {
-                Circle().fill(accent.opacity(0.1)).frame(width: 30, height: 30)
+                Circle().fill(done ? AuroraTheme.softMint : AuroraTheme.softViolet).frame(width: 30, height: 30)
                 if done { Image(systemName: "checkmark").foregroundStyle(accent) }
-                else { Text(number).font(.system(.caption, design: .monospaced)).foregroundStyle(accent) }
+                else { Text(number).font(.system(.caption, design: .monospaced)).foregroundStyle(AuroraTheme.violetInk) }
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.subheadline).fontWeight(.medium)
@@ -238,7 +243,7 @@ struct ClientCard: View {
     var body: some View {
         Card {
             HStack(spacing: 14) {
-                Image(systemName: clientID == "codex" ? "terminal" : "asterisk").font(.title).foregroundStyle(accent)
+                Image(systemName: clientID == "codex" ? "terminal" : "asterisk").font(.title).foregroundStyle(AuroraTheme.violetInk)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(clientID == "codex" ? "Codex" : "Claude Code").font(.title3).fontWeight(.semibold)
                     Text(state?.path ?? "正在读取配置路径…").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
@@ -246,7 +251,7 @@ struct ClientCard: View {
                 Spacer()
                 Text(state?.drifted == true ? "需要更新连接" : (state?.connected == true ? "已连接" : "未连接"))
                     .font(.caption).padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(accent.opacity(0.1), in: Capsule()).foregroundStyle(accent)
+                    .background(AuroraTheme.softMint, in: Capsule()).foregroundStyle(accent)
             }
             Divider()
             HStack(spacing: 20) {
@@ -294,7 +299,7 @@ struct ClientCard: View {
                     Button("在 Finder 中查看") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }.buttonStyle(.borderless)
                 }
                 Button("预览并应用") { Task { await store.prepareConfig(clientID) } }
-                    .buttonStyle(.borderedProminent).disabled(store.busy != nil || !store.ready || store.signingIn
+                    .auroraProminent().disabled(store.busy != nil || !store.ready || store.signingIn
                         || (selection.wrappedValue.isEmpty && store.loadingModelSources.contains(sourceSelection.wrappedValue)))
             }
             Text("切换来源或模型无需重启 Bridge。应用后，请新建 Agent 会话以使用新配置。")
@@ -322,7 +327,7 @@ struct ConfigurationSheet: View {
             HStack {
                 Button("取消", role: .cancel) { store.preview = nil }.keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("备份并应用") { Task { await store.applyConfig(plan) } }.buttonStyle(.borderedProminent)
+                Button("备份并应用") { Task { await store.applyConfig(plan) } }.auroraProminent()
                     .keyboardShortcut(.defaultAction).disabled(store.busy != nil)
             }
         }.padding(28).frame(width: 620)
@@ -495,7 +500,7 @@ struct NetworkView: View {
                 if store.networkChanged { Text("有未应用的修改").font(.caption).foregroundStyle(.secondary) }
                 Spacer()
                 Button(store.running ? "应用并重启 Bridge" : "应用网络设置") { Task { await store.saveNetwork() } }
-                    .buttonStyle(.borderedProminent).disabled(!store.networkValid || store.busy != nil || store.signingIn || !store.ready)
+                    .auroraProminent().disabled(!store.networkValid || store.busy != nil || store.signingIn || !store.ready)
             }
         }
         Card {

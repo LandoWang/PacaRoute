@@ -63,7 +63,7 @@ struct AccountCard: View {
                 if account.id != "azure-local" {
                     if !store.accountLoggedIn(account) {
                         Button("登录") { Task { await store.signInAccount(account) } }
-                            .buttonStyle(.borderedProminent).disabled(!mutable || store.checkingAccounts)
+                            .auroraProminent().disabled(!mutable || store.checkingAccounts)
                     } else {
                         Menu("账号操作") {
                             Button("重新授权…") { Task { await store.signInAccount(account, reauthorize: true) } }
@@ -146,7 +146,7 @@ struct AccountEditor: View {
                         try store.saveAccount(AccountProfile(id: kind + "-" + UUID().uuidString.prefix(8).lowercased(), name: name, kind: kind))
                         dismiss()
                     } catch { self.error = error.localizedDescription }
-                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                }.auroraProminent().keyboardShortcut(.defaultAction)
             }
         }.padding(28).frame(width: 520)
     }
@@ -189,7 +189,7 @@ struct AzureResourcePicker: View {
                 Button("刷新订阅") { Task { await loadSubscriptions() } }.disabled(loading)
                 Spacer()
                 Button("添加资源及模型") { Task { await importResource() } }
-                    .buttonStyle(.borderedProminent).disabled(loading || resource.isEmpty)
+                    .auroraProminent().disabled(loading || resource.isEmpty)
             }
         }.padding(28).frame(width: 660)
         .task { await loadSubscriptions() }

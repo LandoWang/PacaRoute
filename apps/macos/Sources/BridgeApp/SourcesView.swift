@@ -111,7 +111,7 @@ struct SourceEditor: View {
                             deployments: deployments.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }, accountId: accountID)
                         try store.saveSource(source, key: key); key = ""; dismiss()
                     } catch { self.error = error.localizedDescription }
-                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                }.auroraProminent().keyboardShortcut(.defaultAction)
             }
         }.padding(28).frame(width: 650)
         .onAppear {

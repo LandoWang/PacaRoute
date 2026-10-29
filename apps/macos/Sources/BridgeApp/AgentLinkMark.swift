@@ -68,7 +68,7 @@ enum AgentLinkMark {
                 context.setShadow(offset: .zero, blur: 4.8 * scale, color: ink.withAlphaComponent(0.46).cgColor)
             }
             context.setStrokeColor((color ?? ink).cgColor)
-            context.setLineWidth(compact ? 7.6 : 5.2)
+            context.setLineWidth(compact ? 15.2 : 10.4)
             context.addPath(path); context.strokePath()
             context.restoreGState()
         }

@@ -30,6 +30,7 @@ struct UsageTimelineView: View {
                             .foregroundStyle(by: .value("类别", "请求"))
                         LineMark(x: .value("时间", bucket.start), y: .value("次数", bucket.totals.failures))
                             .foregroundStyle(by: .value("类别", "失败"))
+                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
                     }
                 }
                 if let selected {
@@ -38,6 +39,8 @@ struct UsageTimelineView: View {
             }
             .chartXScale(domain: store.usageInterval.start...store.usageInterval.end)
             .chartXSelection(value: $selectedDate)
+            .chartForegroundStyleScale(domain: metric == "tokens" ? ["输入", "输出"] : ["请求", "失败"],
+                                       range: metric == "tokens" ? [AuroraTheme.violetInk, AuroraTheme.accent] : [AuroraTheme.accent, Color.orange])
             .chartLegend(position: .bottom)
             .frame(height: 220)
             if let selected {

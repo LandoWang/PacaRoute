@@ -115,7 +115,7 @@ struct SessionsView: View {
             excerpt("最近的用户消息", item: store.items.last { $0.kind == .user })
             excerpt("最近的回复（原文摘录）", item: store.items.last { $0.kind == .assistant })
             excerpt("最近的错误", item: store.items.last { $0.kind == .error })
-            Button("理解这个会话") { section = "理解" }.buttonStyle(.borderedProminent).disabled(store.items.isEmpty)
+            Button("理解这个会话") { section = "理解" }.auroraProminent().disabled(store.items.isEmpty)
         }
     }
 
@@ -141,7 +141,7 @@ struct SessionsView: View {
                                 } label: { Text(String(item.text.prefix(110))).font(.caption).lineLimit(2).foregroundStyle(.secondary) }
                             }
                         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(item.kind == .error ? Color.red.opacity(0.06) : Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+                            .background(item.kind == .error ? Color.red.opacity(0.06) : AuroraTheme.surface, in: RoundedRectangle(cornerRadius: 10))
                     }
                 }
             }
@@ -175,7 +175,7 @@ struct SessionsView: View {
                     Button("取消") { store.cancelAnalysis() }
                 } else {
                     Button("分析会话") { store.analyze(source: source, sourceName: app.sourceName(source), model: model, port: app.appliedPort) }
-                        .buttonStyle(.borderedProminent).disabled(!app.running || store.items.isEmpty || model.isEmpty || store.reading)
+                        .auroraProminent().disabled(!app.running || store.items.isEmpty || model.isEmpty || store.reading)
                 }
             }
             if !app.running { Text("启动 Bridge 后即可分析；本地浏览仍可使用。").font(.caption).foregroundStyle(.secondary) }

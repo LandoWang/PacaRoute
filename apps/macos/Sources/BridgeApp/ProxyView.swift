@@ -92,7 +92,7 @@ struct ProxyEditor: View {
                         var next = store.proxies; next.profiles.removeAll { $0.id == profile.id }; next.profiles.append(try profile.validated())
                         try store.saveProxies(next); dismiss()
                     } catch { self.error = error.localizedDescription }
-                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                }.auroraProminent().keyboardShortcut(.defaultAction)
             }
         }.padding(28).frame(width: 520).textFieldStyle(.roundedBorder)
             .onAppear { if let original { name = original.name; address = original.address ?? address } }
