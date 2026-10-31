@@ -1,0 +1,4 @@
+- [x] Capture live CPU and a failing unchanged-refresh regression.
+- [x] Implement incremental, serialized telemetry refresh and efficient decoding.
+- [x] Verify split writes, file changes, unchanged polling, totals and performance.
+- [ ] Build both macOS architectures, install the update without stopping live traffic.

@@ -78,7 +78,8 @@ struct LocalIssue: Identifiable {
     private var service: BridgeProcess?
     private var loginProcess: BridgeProcess?
     private var jobs: [UUID: BridgeProcess] = [:]
-    private var activityCache: [String: (Int, Date, [Activity])] = [:]
+    private let activityReader = ActivityLogReader()
+    private var refreshingActivity = false
     private var refreshTimer: Timer?
     private(set) var appliedPort: Int
     let defaults: UserDefaults
@@ -319,24 +320,15 @@ struct LocalIssue: Identifiable {
     }
 
     func refreshActivity() async {
-        guard let runtime else { return }
+        guard let runtime, !refreshingActivity else { return }
+        refreshingActivity = true
+        defer { refreshingActivity = false }
         let directory = runtime.directory.appendingPathComponent("desktop-activity")
-        let prior = activityCache
-        let result = await Task.detached(priority: .utility) { () -> [String: (Int, Date, [Activity])] in
-            let fm = FileManager.default
-            let files = (try? fm.contentsOfDirectory(at: directory,
-                includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey])) ?? []
-            var next: [String: (Int, Date, [Activity])] = [:]
-            for file in files.filter({ $0.pathExtension == "jsonl" }).sorted(by: { $0.path > $1.path }).prefix(366) {
-                guard let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
-                      let size = values.fileSize, let date = values.contentModificationDate else { continue }
-                if let cached = prior[file.path], cached.0 == size, cached.1 == date { next[file.path] = cached; continue }
-                if let data = try? Data(contentsOf: file) { next[file.path] = (size, date, ActivityReader.decode(data)) }
-            }
-            return next
+        let reader = activityReader
+        let result = await Task.detached(priority: .utility) {
+            await reader.refresh(directory: directory)
         }.value
-        activityCache = result
-        activity = result.values.flatMap { $0.2 }.sorted { $0.timestamp > $1.timestamp }
+        if let result { activity = result }
     }
 
     func execute(_ arguments: [String], timeout: TimeInterval = 90, isLogin: Bool = false,

@@ -105,14 +105,20 @@ public struct UsageTotals {
 public struct JSONLineBuffer {
     private var bytes = Data()
     public init() {}
+    init(pendingBytes: Data) { bytes = pendingBytes }
+    var pendingBytes: Data { bytes }
     public mutating func append(_ chunk: Data) -> [Data] {
         bytes.append(chunk)
         var result: [Data] = []
-        while let index = bytes.firstIndex(of: 10) {
-            let line = Data(bytes[..<index])
-            bytes.removeSubrange(...index)
+        var start = bytes.startIndex
+        for index in bytes.indices where bytes[index] == 10 {
+            let line = Data(bytes[start..<index])
+            start = index + 1
             if !line.isEmpty { result.append(line) }
         }
+        // Remove the consumed prefix once: removing it per line copies the
+        // remaining file repeatedly and makes a whole-file read quadratic.
+        if start > bytes.startIndex { bytes.removeSubrange(..<start) }
         if bytes.count > 1_048_576 { bytes.removeAll() }
         return result
     }
@@ -121,18 +127,25 @@ public struct JSONLineBuffer {
 public enum ActivityReader {
     public static func decode(_ data: Data) -> [Activity] {
         var lines = JSONLineBuffer()
+        let decoder = makeDecoder()
+        return lines.append(data).compactMap { try? decoder.decode(Activity.self, from: $0) }
+    }
+
+    static func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let wholeSeconds = ISO8601DateFormatter()
+        wholeSeconds.formatOptions = [.withInternetDateTime]
         decoder.dateDecodingStrategy = .custom { value in
             let string = try value.singleValueContainer().decode(String.self)
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: string) { return date }
-            formatter.formatOptions = [.withInternetDateTime]
-            guard let date = formatter.date(from: string) else { throw CocoaError(.coderReadCorrupt) }
+            guard let date = fractional.date(from: string) ?? wholeSeconds.date(from: string) else {
+                throw CocoaError(.coderReadCorrupt)
+            }
             return date
         }
-        return lines.append(data).compactMap { try? decoder.decode(Activity.self, from: $0) }
+        return decoder
     }
 }
 

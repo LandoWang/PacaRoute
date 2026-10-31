@@ -8,7 +8,7 @@ let package = Package(
     targets: [
         .systemLibrary(name: "CSQLite", path: "Sources/CSQLite"),
         .target(name: "LocalSessions", dependencies: ["CSQLite"]),
-        .target(name: "BridgeCore"),
+        .target(name: "BridgeCore", dependencies: ["CSQLite"]),
         .executableTarget(name: "BridgeApp", dependencies: ["BridgeCore", "LocalSessions"]),
         .executableTarget(name: "LocalSessionChecks", dependencies: ["LocalSessions", "CSQLite"], path: "Tests/LocalSessionChecks"),
         .executableTarget(name: "BridgeCoreChecks", dependencies: ["BridgeCore"], path: "Tests/BridgeCoreTests"),

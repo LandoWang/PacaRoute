@@ -2558,6 +2558,20 @@ client response bytes. Copilot quota is fetched
 separately from GitHub and unavailable quota fields remain unknown.
 
 
+The desktop keeps a disposable SQLite metadata index beside its activity logs,
+with indexes on time and source/time. Parsed records and byte checkpoints commit
+in one transaction; reopening restores them without re-parsing JSONL history.
+A missing, incompatible or corrupt index is rebuilt from source logs. No new
+credentials or request/response bodies are stored.
+
+The desktop tails activity logs incrementally on a serial background reader. An
+unchanged file is not decoded again; appended bytes retain incomplete JSON/UTF-8
+lines until completed. Truncation, replacement and deletion invalidate only that
+file's cache. Date parsers are reused, refresh triggers cannot overlap, and an
+unchanged snapshot does not publish a UI update. Initial history loading is linear
+in log size; subsequent polling reads only appended bytes plus a bounded tail
+check, while request/token totals and unknown-usage semantics stay unchanged.
+
 ## Source × harness routing (native desktop)
 
 A source owns authentication, endpoint and a deployment catalog. A harness owns
