@@ -6,6 +6,7 @@ struct SourcesView: View {
     @State private var editing: ModelSource?
     @State private var creating = false
     var body: some View {
+        SourcePoolsSection()
         Card {
             HStack {
                 Label("GitHub Copilot", systemImage: "person.crop.circle").font(.headline)

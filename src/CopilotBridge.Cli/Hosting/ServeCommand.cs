@@ -84,7 +84,13 @@ internal static class ServeCommand
         AccountServices.Register(builder.Services, sources);
         builder.Services.AddSingleton(await AzureAuthService.FromDesktopAsync(ct));
         builder.Services.AddSingleton<Sources.AzureResponsesClient>();
+        builder.Services.AddSingleton(new Sources.SourcePoolRegistry(sources, Sources.SourcePoolRegistry.ConfigurationPath));
+        builder.Services.AddSingleton<Sources.PoolTransport>();
+        builder.Services.AddSingleton(_ => new Sources.PoolAffinityStore(
+            Environment.GetEnvironmentVariable("COPILOT_BRIDGE_POOL_STATE_FILE")
+                ?? Path.Combine(AppContext.BaseDirectory, "source-pool-sessions.jsonl")));
         var app = builder.Build();
+        Sources.PoolRouting.Use(app);
         Sources.SourceRouting.Use(app);
         app.UseRouting();
 

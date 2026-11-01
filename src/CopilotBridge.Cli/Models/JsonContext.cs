@@ -21,6 +21,8 @@ namespace CopilotBridge.Cli.Models;
     // deserializer otherwise requires the discriminator first and would 400 the
     // request. .NET 9+ buffers properties until the discriminator is found.
     AllowOutOfOrderMetadataProperties = true)]
+[JsonSerializable(typeof(CopilotBridge.Cli.Sources.SourcePool[]))]
+[JsonSerializable(typeof(CopilotBridge.Cli.Sources.PoolBinding))]
 [JsonSerializable(typeof(DeviceCodeRequest))]
 [JsonSerializable(typeof(DeviceCodeResponse))]
 [JsonSerializable(typeof(AccessTokenRequest))]

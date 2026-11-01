@@ -12,6 +12,6 @@ swiftc -I "$repo_dir/apps/macos/Sources/CSQLite" -I "$build_dir/Modules" "$build
   apps/macos/Sources/BridgeApp/AppStore.swift \
   apps/macos/Sources/BridgeApp/AccountsStore.swift \
   apps/macos/Sources/BridgeApp/ModelCatalogStore.swift \
-  apps/macos/Sources/BridgeApp/ProxyStore.swift \
+  apps/macos/Sources/BridgeApp/SourcePoolStore.swift apps/macos/Sources/BridgeApp/ProxyStore.swift \
   scripts/macos-network-check.swift -o artifacts/macos-network-check
 artifacts/macos-network-check "$resources"

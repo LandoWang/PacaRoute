@@ -1,0 +1,5 @@
+- [x] Verify session identifiers from real Codex and Claude Code requests.
+- [x] Add typed pool configuration, weighted persistent bindings and bounded failover.
+- [x] Add pool editing and Agent selection in the macOS app, with live weight updates.
+- [x] Verify contracts and a real multi-step headless client with failover and resume.
+- [x] Package both architectures and install the final app update.

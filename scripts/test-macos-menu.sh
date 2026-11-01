@@ -10,7 +10,7 @@ swiftc -I "$repo_dir/apps/macos/Sources/CSQLite" -I "$build_dir/Modules" "$build
  apps/macos/Sources/BridgeApp/Runtime.swift apps/macos/Sources/BridgeApp/SourceKeychain.swift \
  apps/macos/Sources/BridgeApp/AppStore.swift apps/macos/Sources/BridgeApp/AccountsStore.swift \
  apps/macos/Sources/BridgeApp/ModelCatalogStore.swift \
- apps/macos/Sources/BridgeApp/ProxyStore.swift apps/macos/Sources/BridgeApp/StatusMenuController.swift \
+ apps/macos/Sources/BridgeApp/SourcePoolStore.swift apps/macos/Sources/BridgeApp/ProxyStore.swift apps/macos/Sources/BridgeApp/StatusMenuController.swift \
  apps/macos/Sources/BridgeApp/AgentLinkMark.swift \
  scripts/macos-menu-check.swift -o artifacts/macos-menu-check
 artifacts/macos-menu-check "$resources"

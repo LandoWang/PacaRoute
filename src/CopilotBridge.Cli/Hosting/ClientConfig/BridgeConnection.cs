@@ -10,7 +10,9 @@ namespace CopilotBridge.Cli.Hosting.ClientConfig;
 /// override if given, else <c>Server:Port</c> from appsettings (default 8765).</param>
 internal sealed record BridgeConnection(int Port, string SourceId = "copilot")
 {
-    private string Prefix => SourceId == "copilot" ? "" : $"/sources/{Uri.EscapeDataString(SourceId)}";
+    private string Prefix => SourceId.StartsWith("pool:", StringComparison.Ordinal)
+        ? $"/pools/{Uri.EscapeDataString(SourceId[5..])}"
+        : SourceId == "copilot" ? "" : $"/sources/{Uri.EscapeDataString(SourceId)}";
 
     /// <summary>Base URL Claude Code points <c>ANTHROPIC_BASE_URL</c> at.</summary>
     public string ClaudeCodeBaseUrl => $"http://localhost:{Port}{Prefix}/cc";

@@ -259,7 +259,9 @@ struct ClientCard: View {
                 Picker("来源", selection: sourceSelection) {
                     Text("GitHub Copilot").tag("copilot")
                     ForEach(store.sources) { source in Text(store.sourceName(source.id)).tag(source.id) }
-                    if sourceSelection.wrappedValue != "copilot" && !store.sources.contains(where: { $0.id == sourceSelection.wrappedValue }) {
+                    ForEach(store.sourcePools.filter { $0.agent == clientID }) { pool in Text("来源池 / " + pool.name).tag(pool.connectionID) }
+                    if sourceSelection.wrappedValue != "copilot" && !store.sources.contains(where: { $0.id == sourceSelection.wrappedValue })
+                        && store.pool(sourceSelection.wrappedValue)?.agent != clientID {
                         Text("来源已移除 · " + sourceSelection.wrappedValue).tag(sourceSelection.wrappedValue)
                     }
                 }.labelsHidden()
@@ -267,7 +269,7 @@ struct ClientCard: View {
             HStack(spacing: 20) {
                 Text("默认模型").font(.subheadline)
                 Picker("默认模型", selection: selection) {
-                    Text(store.isCopilot(sourceSelection.wrappedValue) ? "选择模型 / 保留当前默认值" : "选择 Deployment").tag("")
+                    Text(store.pool(sourceSelection.wrappedValue) != nil ? "选择来源池模型" : store.isCopilot(sourceSelection.wrappedValue) ? "选择模型 / 保留当前默认值" : "选择 Deployment").tag("")
                     if !selection.wrappedValue.isEmpty && !available.contains(where: { $0.id == selection.wrappedValue }) {
                         Text(selection.wrappedValue + "（当前配置）").tag(selection.wrappedValue)
                     }

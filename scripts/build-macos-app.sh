@@ -35,8 +35,8 @@ for arch in "${architectures[@]}"; do
     if [[ "$arch" == x64 ]]; then swift_arch=x86_64; fi
     engine_dir="$repo_dir/artifacts/macos-engine-$arch"
     mkdir -p "$engine_dir"
-    "$dotnet_bin" publish src/CopilotBridge.Cli -c Release -r "osx-$arch" -o "$engine_dir" -p:Version=0.5.28-macos.9
-    "$dotnet_bin" publish src/CopilotBridge.Updater -c Release -r "osx-$arch" -o "$engine_dir" -p:Version=0.5.28-macos.9
+    "$dotnet_bin" publish src/CopilotBridge.Cli -c Release -r "osx-$arch" -o "$engine_dir" -p:Version=0.5.28-macos.10
+    "$dotnet_bin" publish src/CopilotBridge.Updater -c Release -r "osx-$arch" -o "$engine_dir" -p:Version=0.5.28-macos.10
     swift build --package-path apps/macos -c release --arch "$swift_arch"
     swift_bin_dir="$(swift build --package-path apps/macos -c release --arch "$swift_arch" --show-bin-path)"
     ui_binaries+=("$swift_bin_dir/CopilotBridgeMac")
@@ -66,7 +66,7 @@ settings['Logging']['LogLevel']['CopilotBridge.Cli'] = 'Information'
 info = {
     'CFBundleName': 'AgentLink', 'CFBundleDisplayName': 'AgentLink',
     'CFBundleIdentifier': 'com.landowang.CopilotBridge', 'CFBundleExecutable': 'CopilotBridgeMac',
-    'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.5.28', 'CFBundleVersion': '15',
+    'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.5.28', 'CFBundleVersion': '16',
     'LSMinimumSystemVersion': '14.0', 'LSApplicationCategoryType': 'public.app-category.developer-tools',
     'NSHighResolutionCapable': True, 'NSPrincipalClass': 'NSApplication',
     'CFBundleIconFile': 'AppIcon',

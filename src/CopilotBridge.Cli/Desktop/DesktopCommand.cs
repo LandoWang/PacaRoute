@@ -60,12 +60,19 @@ internal static class DesktopCommand
     {
         if (port is < 1024 or > 65535) throw new ArgumentException("Port must be between 1024 and 65535.");
         var sources = Sources.SourceRegistry.Load();
-        var source = sourceId == "copilot" ? null : sources.Find(sourceId)
+        var pools = new Sources.SourcePoolRegistry(sources, Sources.SourcePoolRegistry.ConfigurationPath);
+        var pool = sourceId.StartsWith("pool:", StringComparison.Ordinal)
+            ? pools.Find(sourceId[5..]) ?? throw new ArgumentException("Unknown source pool.") : null;
+        var source = sourceId == "copilot" || pool is not null ? null : sources.Find(sourceId)
             ?? throw new ArgumentException("Unknown source.");
+        if (pool is not null && action == "models")
+            return new DesktopReply { Models = [new DesktopModel(pool.Model, pool.Name, "Source pool", pool.Agent == "claude-code", pool.Agent == "codex")] };
         if (source?.Kind == "azure-openai" && action == "models")
             return new DesktopReply { Models = source.Deployments.Select(d => new DesktopModel(d, d, "Azure OpenAI", true, true)).ToList() };
         if (action == "configure")
         {
+            if (pool is not null && (client != pool.Agent || model != pool.Model))
+                throw new ArgumentException("Select this source pool's configured Agent and model.");
             if (source?.Kind == "azure-openai" && (string.IsNullOrEmpty(model) || !source.Deployments.Contains(model)))
                 throw new ArgumentException("Select a deployment from the chosen source.");
             var plan = DesktopClientConfiguration.Plan(client ?? "", port, model, sourceId);
@@ -114,11 +121,13 @@ internal static class DesktopCommand
                     {
                         var segments = current.AbsolutePath.Split('/');
                         if (segments.Length >= 4 && segments[1] == "sources") currentSource = segments[2];
+                        if (segments.Length >= 4 && segments[1] == "pools") currentSource = "pool:" + segments[2];
                     }
                     if (currentSource != "copilot")
                         state = DesktopClientConfiguration.Client(id).Read(new BridgeConnection(port, currentSource), ConfigScope.Global);
                     clients.Add(new DesktopClient(id, state.TargetPath, state.ConfiguredForBridge,
-                        state.Drifted || (currentSource != "copilot" && sources.Find(currentSource) is null),
+                        state.Drifted || (currentSource.StartsWith("pool:", StringComparison.Ordinal)
+                            ? pools.Find(currentSource[5..]) is null : currentSource != "copilot" && sources.Find(currentSource) is null),
                         DesktopClientConfiguration.ReadModel(id, state.TargetPath), null, currentSource));
                 }
                 catch (Exception ex) { clients.Add(new DesktopClient(id, "", false, false, null, DesktopTelemetry.Sanitize(ex.Message))); }

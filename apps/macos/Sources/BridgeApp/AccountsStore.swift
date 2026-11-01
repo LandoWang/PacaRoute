@@ -16,6 +16,10 @@ extension AppStore {
     }
 
     func availableModels(_ source: String) -> [BridgeModel] {
+        if let pool = pool(source) {
+            return [BridgeModel(id: pool.model, name: pool.name + "（按权重）", vendor: "Source pool",
+                claude: pool.agent == "claude-code", codex: pool.agent == "codex")]
+        }
         if source == "copilot" { return models }
         if isCopilot(source) { return sourceModels[source] ?? [] }
         return (sources.first { $0.id == source }?.deployments ?? []).map {

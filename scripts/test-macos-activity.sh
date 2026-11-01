@@ -11,6 +11,6 @@ artifacts/cpu-investigation/activity-reader-check
 swiftc -parse-as-library -O -I "$repo_dir/apps/macos/Sources/CSQLite" -I "$build_dir/Modules" "$build_dir"/BridgeCore.build/*.swift.o \
  apps/macos/Sources/BridgeApp/Runtime.swift apps/macos/Sources/BridgeApp/SourceKeychain.swift \
  apps/macos/Sources/BridgeApp/AppStore.swift apps/macos/Sources/BridgeApp/AccountsStore.swift \
- apps/macos/Sources/BridgeApp/ModelCatalogStore.swift apps/macos/Sources/BridgeApp/ProxyStore.swift \
+ apps/macos/Sources/BridgeApp/ModelCatalogStore.swift apps/macos/Sources/BridgeApp/SourcePoolStore.swift apps/macos/Sources/BridgeApp/ProxyStore.swift \
  scripts/macos-activity-refresh-check.swift -o artifacts/cpu-investigation/activity-refresh-check
 artifacts/cpu-investigation/activity-refresh-check

@@ -49,6 +49,8 @@ struct LocalIssue: Identifiable {
     @Published var sourceModels: [String: [BridgeModel]] = [:]
     @Published var signingInAccount: String?
     @Published var sources: [ModelSource] = []
+    @Published var sourcePools: [SourcePool] = []
+    @Published var poolError: String?
     @Published var proxies = ProxyConfiguration()
     @Published var codexSource = "copilot"
     @Published var claudeSource = "copilot"
@@ -106,6 +108,7 @@ struct LocalIssue: Identifiable {
             if let file = runtime?.root.appendingPathComponent("sources.json"), FileManager.default.fileExists(atPath: file.path) {
                 sources = try ModelSource.decode(Data(contentsOf: file))
             }
+            reloadPools()
             if let runtime {
                 let file = runtime.root.appendingPathComponent("proxies.json")
                 if FileManager.default.fileExists(atPath: file.path) { proxies = try ProxyConfiguration.decode(Data(contentsOf: file)) }
@@ -356,7 +359,8 @@ struct LocalIssue: Identifiable {
     }
 
     func sourceName(_ id: String) -> String {
-        id == "copilot" ? "GitHub Copilot" : sources.first { $0.id == id }.map { source in
+        if let pool = pool(id) { return "来源池 / " + pool.name }
+        return id == "copilot" ? "GitHub Copilot" : sources.first { $0.id == id }.map { source in
             (accounts.first { a in a.id == (source.accountId ?? "azure-local") }?.name ?? "") + " / " + source.name
         } ?? id
     }
@@ -364,6 +368,8 @@ struct LocalIssue: Identifiable {
     func saveSource(_ candidate: ModelSource, key: String) throws {
         guard let runtime, serviceState == "stopped" else { throw AppFailure(message: "请先停止 Bridge，再修改来源。") }
         let source = try candidate.validated()
+        let proposed = sources.filter { $0.id != source.id } + [source]
+        for pool in sourcePools { _ = try pool.validated(sources: proposed) }
         guard let account = accounts.first(where: { $0.id == (source.accountId ?? "azure-local") }),
               account.kind == (source.kind == "copilot" ? "github" : "azure") else { throw SourceFailure.invalid }
         if source.kind == "azure-openai" && source.authMode == "api-key" {
@@ -380,6 +386,9 @@ struct LocalIssue: Identifiable {
     }
 
     func removeSource(_ source: ModelSource) throws {
+        if let pool = sourcePools.first(where: { $0.members.contains(where: { $0.sourceId == source.id }) }) {
+            throw AppFailure(message: "此来源被来源池「\(pool.name)」引用，请先编辑该来源池。")
+        }
         guard let runtime, serviceState == "stopped" else { throw AppFailure(message: "请先停止 Bridge。") }
         guard !clients.contains(where: { $0.connected && $0.source == source.id }) else {
             throw AppFailure(message: "此来源仍被 Agent 使用，请先为它选择其他来源并应用配置。")

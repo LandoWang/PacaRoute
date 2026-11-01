@@ -2572,6 +2572,34 @@ unchanged snapshot does not publish a UI update. Initial history loading is line
 in log size; subsequent polling reads only appended bytes plus a bounded tail
 check, while request/token totals and unknown-usage semantics stay unchanged.
 
+## Session source pools
+
+Source pools live in `source-pools.json`, independently of source credentials and
+Proxy bindings. `/pools/{id}/codex` or `/pools/{id}/cc` routes select source/model
+members by relative weights once per new client conversation. Codex `thread-id`
+(with `session-id` fallback) and Claude Code's `X-Claude-Code-Session-Id` or
+`metadata.user_id.session_id` identify sessions. Explicit `X-AgentLink-Session`
+headers support other clients; request IDs, prompts and IP addresses are never
+session keys. Missing identity is rejected for generation requests. Count-token
+estimates do not allocate sessions.
+
+Bindings use hashed Agent/pool/session keys in a private append-only local journal;
+existing sessions require no journal I/O. The journal survives Bridge restarts and
+recovers an uncommitted final line. Weight zero drains new sessions while retaining
+existing bindings. Pool metadata reloads on file changes without restarting Bridge.
+Pool references prevent deleting a member source from the desktop UI.
+
+Failover retries each eligible member at most once for 401/403/408/429, server or
+transport failures, with bounded cooldowns and Retry-After handling. Before response
+output starts, requests can move to another member and persist that new binding.
+After output starts, abort an interrupted stream; never splice or replay another
+source into the partial answer. Server-only response references cannot be silently
+migrated. Only the requested model changes in the forwarded request JSON. The
+proxy-free loopback hop uses the listener port, never the incoming Host header, and
+reuses actual source endpoints and their authentication/protocol/usage behavior.
+Each physical attempt retains source-specific usage; a failover notice adds no
+extra request count. No additional process or provider credential store is added.
+
 ## Source × harness routing (native desktop)
 
 A source owns authentication, endpoint and a deployment catalog. A harness owns
