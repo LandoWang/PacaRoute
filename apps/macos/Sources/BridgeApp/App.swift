@@ -23,20 +23,20 @@ import SwiftUI
     }
 }
 
-@main struct CopilotBridgeApp: App {
+@main struct PacaRouteApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = AppStore()
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        Window("AgentLink", id: "main") {
+        Window("PacaRoute", id: "main") {
             RootView().environmentObject(store).onAppear {
                 delegate.installMenu(store: store) { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
             }
         }.defaultSize(width: 1060, height: 760)
             .commands {
                 CommandGroup(replacing: .newItem) {}
-                CommandMenu("Bridge") {
+                CommandMenu("PacaRoute") {
                     Button("显示主窗口") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
                     Button(store.running ? "停止服务" : "启动服务") { if store.running { store.stopService() } else { store.startService() } }
                         .disabled(!store.canStart)

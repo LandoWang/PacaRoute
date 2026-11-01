@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "CopilotBridgeMac",
+    name: "PacaRouteMac",
     platforms: [.macOS(.v14)],
-    products: [.executable(name: "CopilotBridgeMac", targets: ["BridgeApp"])],
+    products: [.executable(name: "PacaRouteMac", targets: ["BridgeApp"])],
     targets: [
         .systemLibrary(name: "CSQLite", path: "Sources/CSQLite"),
         .target(name: "LocalSessions", dependencies: ["CSQLite"]),

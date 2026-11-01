@@ -1,7 +1,9 @@
-# AgentLink for macOS
+# PacaRoute for macOS
 
-A native SwiftUI desktop app around the existing Native AOT bridge. Supports
-Apple Silicon and Intel Macs running macOS 14 or later; no .NET runtime is required.
+A native SwiftUI desktop app with the Go PacaRoute gateway. Supports Apple Silicon
+and Intel Macs running macOS 14 or later. The package contains Swift + Go and
+requires no .NET runtime or separate bridge installation. See
+[the PacaRoute guide](../../docs/pacaroute.md) for the CLI and browser management UI.
 
 ## Features
 
@@ -30,28 +32,17 @@ Apple Silicon and Intel Macs running macOS 14 or later; no .NET runtime is requi
 
 ## Build and open
 
-Requires Xcode Command Line Tools (including Swift) and the .NET SDK selected by
-the repository's `global.json`. A full Xcode installation is not needed.
+Requires Xcode Command Line Tools and Go 1.26.
 
 ```bash
-scripts/build-macos-app.sh
-open 'artifacts/macos/arm64/AgentLink.app' # Use x64 instead on Intel.
+bash scripts/build-macos-app.sh artifacts/pacaroute-release split
+open artifacts/pacaroute-release/arm64/PacaRoute.app
 ```
 
-Set `BRIDGE_DOTNET` to the SDK executable if it is not on PATH. The script also
-checks `~/.dotnet/dotnet`. By default it produces separate Apple Silicon and
-Intel apps, each containing the matching Swift UI, Native AOT bridge and updater.
-It generates an icon, verifies every architecture and ad-hoc code signature,
-and produces ZIP and drag-to-Applications DMG packages:
-
-- `artifacts/macos/arm64/AgentLink-macOS-arm64.{zip,dmg}` for Apple Silicon.
-- `artifacts/macos/x64/AgentLink-macOS-x64.{zip,dmg}` for Intel.
-
-Pass `arm64` or `x64` as the second argument (after the output directory) to build
-only that architecture. `split` is the default; optional `universal` combines both
-architectures into one app with `lipo` and names its packages `AgentLink-macOS-universal`.
-Cross-compilation requires a macOS SDK and the .NET Native AOT toolchain. Intel
-execution can be checked on an Intel Mac or under Rosetta on Apple Silicon.
+Set `PACAROUTE_GO` to the Go executable if it is not on PATH. The default split
+build creates separate `arm64` and `x64` applications, ZIPs and DMGs under
+`artifacts/pacaroute-release`. Pass either architecture as the second argument to
+build only that package. Intel execution requires an Intel Mac or Rosetta.
 
 The resulting app is a local development build, **not Developer ID signed or
 Apple notarized**. Distribution beyond local testing needs the owner's Apple

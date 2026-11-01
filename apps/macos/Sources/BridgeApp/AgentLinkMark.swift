@@ -15,7 +15,7 @@ enum AgentLinkMark {
             return true
         }
         image.isTemplate = !colored
-        image.accessibilityDescription = "AgentLink · Aurora llama"
+        image.accessibilityDescription = "PacaRoute · Aurora llama"
         return image
     }
 

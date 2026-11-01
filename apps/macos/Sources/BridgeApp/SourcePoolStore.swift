@@ -19,7 +19,7 @@ extension AppStore {
         let pool = try candidate.validated(sources: sources)
         var next = sourcePools.filter { $0.id != pool.id }; next.append(pool)
         let file = runtime.root.appendingPathComponent("source-pools.json")
-        try SourcePool.encode(next, sources: sources).write(to: file, options: .atomic)
+        try runtime.saveMetadata("pools", data: SourcePool.encode(next, sources: sources))
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         sourcePools = next
         notice = "来源池已保存，无需重启 Bridge。权重只影响新会话；0 权重保留已有会话。"
@@ -30,7 +30,7 @@ extension AppStore {
             throw AppFailure(message: "此来源池仍被 Agent 使用，请先选择其他来源并应用配置。")
         }
         let next = sourcePools.filter { $0.id != pool.id }
-        try SourcePool.encode(next, sources: sources).write(to: runtime.root.appendingPathComponent("source-pools.json"), options: .atomic)
+        try runtime.saveMetadata("pools", data: SourcePool.encode(next, sources: sources))
         sourcePools = next
     }
 }

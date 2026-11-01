@@ -13,6 +13,8 @@ enum AuroraTheme {
     static let violetInk = adaptive("violet", light: 0x6951A8, dark: 0xB196FF)
     static let canvas = adaptive("canvas", light: 0xF3F6F8, dark: 0x0C111D)
     static let sidebar = adaptive("sidebar", light: 0xEDF0F7, dark: 0x101727)
+    static let primaryText = adaptive("primary-text", light: 0x1B2536, dark: 0xE6ECF7)
+    static let secondaryText = adaptive("secondary-text", light: 0x576477, dark: 0xADBBD0)
     static let surface = adaptive("surface", light: 0xFFFFFF, dark: 0x151D2A)
     static let border = adaptive("border", light: 0xDCE1EB, dark: 0x303C50)
     static let softMint = adaptive("soft-mint", light: 0xE3F4ED, dark: 0x1B3636)
@@ -66,13 +68,13 @@ struct AuroraNavigationRow: View {
         Button(action: action) {
             HStack(spacing: 11) {
                 Image(systemName: page.icon).frame(width: 20)
-                    .foregroundStyle(selected ? AuroraTheme.violetInk : .secondary)
+                    .foregroundStyle(selected ? AuroraTheme.violetInk : AuroraTheme.secondaryText)
                 Text(page.rawValue).fontWeight(selected ? .semibold : .regular)
                 Spacer(minLength: 0)
                 if selected { Capsule().fill(AuroraTheme.violetInk).frame(width: 3, height: 15) }
             }
             .font(.system(size: 13)).padding(.horizontal, 12).padding(.vertical, 10)
-            .foregroundStyle(selected ? AuroraTheme.violetInk : .primary)
+            .foregroundStyle(selected ? AuroraTheme.violetInk : AuroraTheme.primaryText)
             .background(selected ? AuroraTheme.softViolet : hovering ? AuroraTheme.surface.opacity(0.65) : .clear,
                         in: RoundedRectangle(cornerRadius: 9))
             .contentShape(RoundedRectangle(cornerRadius: 9))

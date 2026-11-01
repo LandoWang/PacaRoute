@@ -9,9 +9,9 @@ struct AccountView: View {
             Text("账号 → 资源来源 → 模型").font(.headline)
             Spacer()
             Button("添加 GitHub 登录", systemImage: "person.badge.plus") { Task { await store.addGitHubLogin() } }
-                .disabled(store.serviceState != "stopped" || store.signingIn || store.busy != nil || !store.ready)
+                .disabled(store.signingIn || store.busy != nil || !store.ready)
             Button("添加 Azure 账号", systemImage: "plus") { adding = true }
-                .disabled(store.serviceState != "stopped" || store.signingIn || !store.ready)
+                .disabled(store.signingIn || !store.ready)
         }
         Text("可同时保存多个 GitHub 和 Azure 账号。Azure 账号下可添加多个 AOAI 资源，在 Agent 页分别选择来源 × 模型。")
             .font(.callout).foregroundStyle(.secondary)
@@ -30,7 +30,7 @@ struct AccountView: View {
         }
         ForEach(store.accounts) { account in AccountCard(account: account) }
         if store.serviceState != "stopped" {
-            Text("停止 Bridge 后可以添加账号、登录或修改资源。已有来源仍可查看用量。")
+            Text("账号与来源支持热更新，当前请求会继续完成。")
                 .font(.caption).foregroundStyle(.secondary)
         }
         Text("GitHub 凭据按账号加密保存；新增 Azure 账号使用独立 CLI 登录目录；API Key 存在 Keychain。Azure 登录需要本机安装 Azure CLI。")
@@ -46,13 +46,13 @@ struct AccountCard: View {
     @State private var manual = false
     @State private var editing: ModelSource?
     @State private var showQuota = false
-    private var mutable: Bool { store.serviceState == "stopped" && store.busy == nil && !store.signingIn }
+    private var mutable: Bool { store.busy == nil && !store.signingIn }
     var body: some View {
         Card {
             HStack {
                 Label(account.name, systemImage: account.kind == "github" ? "person.crop.circle" : "cloud").font(.title3).bold()
                 Spacer()
-                Text(account.kind == "github" ? "GitHub Copilot" : "Azure OpenAI").font(.caption).foregroundStyle(.secondary)
+                Text(account.kind == "github" ? "GitHub Copilot" : account.kind == "azure" ? "Azure OpenAI" : "API Key").font(.caption).foregroundStyle(.secondary)
             }
             if let login = store.accountStates[account.id]?.login ?? (account.id == "copilot" ? store.login : nil) {
                 Text(login).textSelection(.enabled)
@@ -60,7 +60,7 @@ struct AccountCard: View {
             Text(store.checkingAccounts ? "正在恢复已保存的登录…" : store.accountLoggedIn(account) ? "已保存登录 · 重开应用自动恢复" : account.kind == "azure" ? "刷新可检查登录状态；API Key 来源不需要 CLI 登录。" : "待登录")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
-                if account.id != "azure-local" {
+                if account.id != "azure-local" && account.kind != "api-key" {
                     if !store.accountLoggedIn(account) {
                         Button("登录") { Task { await store.signInAccount(account) } }
                             .auroraProminent().disabled(!mutable || store.checkingAccounts)
@@ -107,7 +107,7 @@ struct AccountCard: View {
                     Button("从 Azure 选择 AOAI 资源", systemImage: "cloud") { importing = true }.disabled(!mutable)
                     Button("手动添加资源 / API Key") { manual = true }.disabled(!mutable)
                 }
-            } else if account.id != "copilot" && store.accountSources(account).isEmpty && store.accountLoggedIn(account) {
+            } else if account.kind == "github" && account.id != "copilot" && store.accountSources(account).isEmpty && store.accountLoggedIn(account) {
                 Button("添加 Copilot 来源") {
                     do { try store.saveSource(ModelSource(id: account.id, name: "Copilot", endpoint: "", deployments: [], accountId: account.id, kind: "copilot"), key: "") }
                     catch { store.showError(error) }

@@ -13,7 +13,7 @@ struct SourceProxyPicker: View {
             }
             .labelsHidden().pickerStyle(.menu).controlSize(.small)
             .frame(width: 190).help(store.proxyName(for: sourceID))
-            .disabled(store.serviceState != "stopped" || store.signingIn || store.busy != nil)
+            .disabled(store.signingIn || store.busy != nil)
             Spacer(minLength: 0)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -61,13 +61,13 @@ struct ProxyView: View {
             Text("用于 device login、账号额度和 Azure 资源发现。模型查询、请求和令牌刷新遵循各来源的 Proxy。跟随系统会使用启动应用时的网络环境；直连会绕过代理。")
                 .font(.caption).foregroundStyle(.secondary)
         }
-        if locked { Text("请先停止 Bridge 并等待账号操作完成，再修改 Proxy。").font(.caption).foregroundStyle(.secondary) }
+        if locked { Text("请等待账号操作完成，再修改 Proxy。").font(.caption).foregroundStyle(.secondary) }
         Text("HTTP、HTTPS、SOCKS5 地址不包含用户名、密码或路径。此设置只影响 AgentLink，不修改 macOS 系统代理。")
             .font(.caption).foregroundStyle(.secondary)
             .sheet(isPresented: $adding) { ProxyEditor(original: nil).environmentObject(store) }
             .sheet(item: $editing) { ProxyEditor(original: $0).environmentObject(store) }
     }
-    private var locked: Bool { store.serviceState != "stopped" || store.signingIn || store.busy != nil }
+    private var locked: Bool { store.signingIn || store.busy != nil }
 }
 
 struct ProxyEditor: View {

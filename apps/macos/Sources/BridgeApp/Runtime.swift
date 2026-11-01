@@ -25,22 +25,22 @@ final class Runtime {
                               appropriateFor: nil, create: true).appendingPathComponent("Copilot Bridge")
         }
         directory = root.appendingPathComponent("runtime")
-        executable = directory.appendingPathComponent("copilot-bridge")
+        executable = directory.appendingPathComponent("pacaroute")
         try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         lockFD = Darwin.open(root.appendingPathComponent("app.lock").path, O_CREAT | O_RDWR, 0o600)
         guard lockFD >= 0, flock(lockFD, LOCK_EX | LOCK_NB) == 0 else {
-            throw AppFailure(message: "AgentLink 已在运行。请从 Dock 或菜单栏打开已有窗口。")
+            throw AppFailure(message: "PacaRoute 已在运行。请从 Dock 或菜单栏打开已有窗口。")
         }
         guard let resources = explicitResources ?? Bundle.main.resourceURL else { throw AppFailure(message: "应用资源不可用。") }
         let source = resources.appendingPathComponent("bridge")
-        let sourceBinary = source.appendingPathComponent("copilot-bridge")
+        let sourceBinary = source.appendingPathComponent("pacaroute")
         guard fm.isExecutableFile(atPath: sourceBinary.path) else {
             throw AppFailure(message: "缺少内置 bridge。请运行 scripts/build-macos-app.sh 构建完整应用。")
         }
         let digest = SHA256.hash(data: try Data(contentsOf: sourceBinary)).map { String(format: "%02x", $0) }.joined()
-        let marker = directory.appendingPathComponent("app-build")
+        let marker = directory.appendingPathComponent("pacaroute-build")
         if (try? String(contentsOf: marker, encoding: .utf8)) != digest || !fm.fileExists(atPath: executable.path) {
-            for name in ["copilot-bridge", "copilot-updater"] {
+            for name in ["pacaroute"] {
                 let bytes = try Data(contentsOf: source.appendingPathComponent(name))
                 let target = directory.appendingPathComponent(name)
                 try bytes.write(to: target, options: .atomic)
@@ -48,16 +48,32 @@ final class Runtime {
             }
             try digest.write(to: marker, atomically: true, encoding: .utf8)
         }
-        // Desktop owns this isolated runtime config; never copy a user's credential files.
-        let settings = try Data(contentsOf: source.appendingPathComponent("appsettings.json"))
-        try settings.write(to: directory.appendingPathComponent("appsettings.json"), options: .atomic)
+        // The Go gateway reads the shared metadata; existing credentials remain at their original authority.
+
     }
 
     deinit { if lockFD >= 0 { flock(lockFD, LOCK_UN); Darwin.close(lockFD) } }
 
+    func saveMetadata(_ kind: String, data: Data) throws {
+        let process = Process(), input = Pipe(), output = Pipe()
+        process.executableURL = executable
+        process.arguments = ["metadata", "--kind", kind]
+        process.environment = environment(mode: .system, proxy: "")
+        process.standardInput = input; process.standardOutput = output; process.standardError = FileHandle.nullDevice
+        try process.run()
+        try input.fileHandleForWriting.write(contentsOf: data)
+        try input.fileHandleForWriting.close()
+        let result = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw AppFailure(message: (try? Reply.decode(result))?.error ?? "配置保存失败，请刷新后重试。")
+        }
+    }
+
     func environment(mode: ProxyMode, proxy: String) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["COPILOT_BRIDGE_DESKTOP"] = "1"
+        env["PACAROUTE_HOME"] = root.path
         env["COPILOT_BRIDGE_ACCOUNTS_FILE"] = root.appendingPathComponent("accounts.json").path
         env["COPILOT_BRIDGE_POOLS_FILE"] = root.appendingPathComponent("source-pools.json").path
         let sourceFile = root.appendingPathComponent("sources.json")
@@ -114,6 +130,7 @@ final class BridgeProcess: @unchecked Sendable {
     func start(executable: URL, directory: URL, arguments: [String], environment: [String: String], timeout: TimeInterval?, inputData: Data? = nil,
                onReply: @escaping (Reply) -> Void = { _ in }, onText: @escaping (String) -> Void = { _ in },
                completion: @escaping (Result<Reply?, Error>) -> Void) throws {
+        let keepInputOpen = timeout == nil && inputData != nil
         self.onReply = onReply; self.onText = onText; self.completion = completion
         process.executableURL = executable
         process.arguments = arguments
@@ -142,7 +159,7 @@ final class BridgeProcess: @unchecked Sendable {
         if let inputData, let input {
             DispatchQueue.global(qos: .utility).async {
                 try? input.fileHandleForWriting.write(contentsOf: inputData)
-                try? input.fileHandleForWriting.close()
+                if !keepInputOpen { try? input.fileHandleForWriting.close() }
             }
         }
         for (handle, isOutput) in [(output.fileHandleForReading, true), (errors.fileHandleForReading, false)] {
@@ -183,6 +200,11 @@ final class BridgeProcess: @unchecked Sendable {
             if let reply = try? Reply.decode(line) { lastReply = reply; onReply?(reply) }
             else { onText?(String(decoding: line, as: UTF8.self)) }
         }
+    }
+
+    func sendInput(_ data: Data) {
+        guard let input else { return }
+        queue.async { try? input.fileHandleForWriting.write(contentsOf: data) }
     }
 
     func stop() {

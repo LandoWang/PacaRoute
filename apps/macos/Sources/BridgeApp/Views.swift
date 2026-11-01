@@ -12,10 +12,10 @@ struct RootView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     Image(nsImage: AgentLinkMark.image(size: 34, colored: true)).renderingMode(.original)
-                        .accessibilityLabel("AgentLink")
+                        .accessibilityLabel("PacaRoute")
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("AgentLink").font(.headline)
-                        Text("一个入口，连接你的工具").font(.caption2).foregroundStyle(.secondary)
+                        Text("PacaRoute").font(.headline)
+                        Text("一个入口，连接你的工具").font(.caption2).foregroundStyle(AuroraTheme.secondaryText)
                     }
                     Spacer()
                 }.padding(.horizontal, 18).padding(.vertical, 24)
@@ -32,11 +32,11 @@ struct RootView: View {
                         .font(.title2).foregroundStyle(store.loggedIn ? accent : .secondary)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("账号与模型来源").font(.caption).fontWeight(.medium)
-                        Text("本地运行 · macOS").font(.caption2).foregroundStyle(.secondary)
+                        Text("本地运行 · macOS").font(.caption2).foregroundStyle(AuroraTheme.secondaryText)
                     }
                     Spacer()
                 }.padding(18)
-            }.background(AuroraTheme.sidebar).navigationSplitViewColumnWidth(min: 205, ideal: 220, max: 250)
+            }.foregroundStyle(AuroraTheme.primaryText).background(AuroraTheme.sidebar).navigationSplitViewColumnWidth(min: 205, ideal: 220, max: 250)
         } detail: {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -55,6 +55,7 @@ struct RootView: View {
                     case .overview: OverviewView()
                     case .account: AccountView()
                     case .clients: ClientsView()
+                    case .routing: GatewayAdminView()
                     case .sessions: SessionsView(store: sessions)
                     case .usage: UsageView()
                     case .errors: ErrorsView()
@@ -75,7 +76,7 @@ struct RootView: View {
             }
             ToolbarItem(placement: .automatic) {
                 Button { store.page = .network } label: { Label("服务配置", systemImage: "slider.horizontal.3").labelStyle(.titleAndIcon) }
-                    .help("Bridge 服务配置：端口与服务启停")
+                    .help("PacaRoute 服务配置：端口与服务启停")
             }
             ToolbarItem(placement: .automatic) {
                 Button { Task { await store.refresh() } } label: { Image(systemName: "arrow.clockwise") }
@@ -83,7 +84,7 @@ struct RootView: View {
             }
         }
         .sheet(item: $store.preview) { preview in ConfigurationSheet(plan: preview).environmentObject(store) }
-        .alert("AgentLink", isPresented: Binding(get: { store.notice != nil }, set: { if !$0 { store.notice = nil } })) {
+        .alert("PacaRoute", isPresented: Binding(get: { store.notice != nil }, set: { if !$0 { store.notice = nil } })) {
             Button("好", role: .cancel) { store.notice = nil }
         } message: { Text(store.notice ?? "") }
         .task { await store.refresh() }
@@ -96,6 +97,7 @@ struct RootView: View {
         case .overview: return "将模型来源连接到你的开发工具。"
         case .account: return "通过 device login 连接 GitHub、Azure，并管理账号下的资源。"
         case .clients: return "每个 Agent 独立选择来源和默认模型。"
+        case .routing: return "为每个调用方分配密钥、来源与模型路由。"
         case .sessions: return "浏览本地历史，理解任务进展、工具结果与未完成事项。"
         case .usage: return "了解本机请求、token 消耗与账号剩余额度。"
         case .errors: return "集中查看失败请求与应用操作错误。"

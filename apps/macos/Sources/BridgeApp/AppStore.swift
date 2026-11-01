@@ -4,7 +4,7 @@ import BridgeCore
 import Darwin
 
 enum Page: String, CaseIterable, Identifiable {
-    case overview = "导览", account = "账号", sources = "来源", clients = "Agent", sessions = "会话", usage = "用量", proxies = "Proxy", network = "Bridge 服务配置", errors = "错误"
+    case overview = "导览", account = "账号", sources = "来源", clients = "Agent", routing = "Client 路由", sessions = "会话", usage = "用量", proxies = "Proxy", network = "PacaRoute 服务配置", errors = "错误"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -13,6 +13,7 @@ enum Page: String, CaseIterable, Identifiable {
         case .overview: return "square.grid.2x2"
         case .account: return "person.crop.circle"
         case .clients: return "slider.horizontal.3"
+        case .routing: return "arrow.triangle.branch"
         case .sessions: return "bubble.left.and.bubble.right"
         case .usage: return "chart.bar.xaxis"
         case .errors: return "exclamationmark.bubble"
@@ -49,6 +50,7 @@ struct LocalIssue: Identifiable {
     @Published var sourceModels: [String: [BridgeModel]] = [:]
     @Published var signingInAccount: String?
     @Published var sources: [ModelSource] = []
+    @Published var pausedSourceIDs: Set<String> = []
     @Published var sourcePools: [SourcePool] = []
     @Published var poolError: String?
     @Published var proxies = ProxyConfiguration()
@@ -95,13 +97,15 @@ struct LocalIssue: Identifiable {
         self.credentials = credentials
         let mode = ProxyMode(rawValue: defaults.string(forKey: "proxyMode") ?? "system") ?? .system
         let address = defaults.string(forKey: "proxyAddress") ?? "http://127.0.0.1:7890"
-        let port = defaults.integer(forKey: "port")
-        appliedPort = (1024...65535).contains(port) ? port : 8765
+        let oldDefaults = UserDefaults(suiteName: "com.landowang.CopilotBridge")
+        let port = defaults.object(forKey: "port") != nil ? defaults.integer(forKey: "port") : (oldDefaults?.integer(forKey: "port") ?? 0)
+        appliedPort = (1024...65535).contains(port) ? port : 8766
         portText = String(appliedPort)
         do {
             runtime = try makeRuntime()
             if let file = runtime?.root.appendingPathComponent("accounts.json"), FileManager.default.fileExists(atPath: file.path) {
-                let saved = try JSONDecoder().decode([AccountProfile].self, from: Data(contentsOf: file)).map { try $0.validated() }
+                let accountDecoder = JSONDecoder(); accountDecoder.keyDecodingStrategy = .convertFromSnakeCase
+                let saved = try accountDecoder.decode([AccountProfile].self, from: Data(contentsOf: file)).map { try $0.validated() }
                 accounts += saved
                 guard Set(accounts.map(\.id)).count == accounts.count else { throw SourceFailure.invalid }
             }
@@ -135,7 +139,7 @@ struct LocalIssue: Identifiable {
             return accountLoggedIn(account)
         }
     }
-    var canStart: Bool { hasSource }
+    var canStart: Bool { ready }
     var running: Bool { serviceState == "running" }
     var serviceLabel: String {
         switch serviceState { case "starting": return "正在启动"; case "running": return "运行中"; case "stopping": return "正在停止"; default: return "已停止" }
@@ -169,6 +173,7 @@ struct LocalIssue: Identifiable {
 
     func refresh() async {
         guard ready, busy == nil else { return }
+        reloadMetadata()
         checkingAccounts = true
         busy = "正在刷新"
         do { try await refreshStatus() } catch { showError(error) }
@@ -259,13 +264,15 @@ struct LocalIssue: Identifiable {
     private func launchService() {
         guard let runtime, ready, canStart, !signingIn, serviceState == "stopped" else { return }
         guard Self.portAvailable(appliedPort) else {
-            showError(AppFailure(message: "端口 \(appliedPort) 已被占用。请在 Bridge 服务配置中选择其他端口，再更新客户端配置。")); return
+            showError(AppFailure(message: "端口 \(appliedPort) 已被占用。请在 PacaRoute 服务配置中选择其他端口，再更新客户端配置。")); return
         }
         let child = BridgeProcess()
         service = child; serviceState = "starting"
         do {
             var keys: [String: String] = [:]
-            for source in sources where source.kind == "azure-openai" && source.authMode == "api-key" { keys[source.id] = try credentials.read(source.id) }
+            for source in sources where source.kind == "azure-openai" && source.authMode == "api-key" {
+                if let key = try? credentials.read(source.id) { keys[source.id] = key }
+            }
             var envelope = try JSONEncoder().encode(keys); envelope.append(10)
             var environment = runtime.environment(mode: .system, proxy: "")
             environment["COPILOT_BRIDGE_SECRETS_STDIN"] = "1"
@@ -366,7 +373,7 @@ struct LocalIssue: Identifiable {
     }
 
     func saveSource(_ candidate: ModelSource, key: String) throws {
-        guard let runtime, serviceState == "stopped" else { throw AppFailure(message: "请先停止 Bridge，再修改来源。") }
+        guard let runtime else { throw AppFailure(message: "应用尚未准备好。") }
         let source = try candidate.validated()
         let proposed = sources.filter { $0.id != source.id } + [source]
         for pool in sourcePools { _ = try pool.validated(sources: proposed) }
@@ -379,26 +386,69 @@ struct LocalIssue: Identifiable {
             } else { _ = try credentials.read(source.id) }
         }
         var next = sources.filter { $0.id != source.id }; next.append(source)
-        try ModelSource.encode(next).write(to: runtime.root.appendingPathComponent("sources.json"), options: .atomic)
+        try runtime.saveMetadata("sources", data: ModelSource.encode(next))
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: runtime.root.appendingPathComponent("sources.json").path)
         if sources.first(where: { $0.id == source.id })?.accountId != source.accountId { invalidateModelCatalog(source.id) }
         sources = next
+        updateServiceKeys()
     }
 
     func removeSource(_ source: ModelSource) throws {
         if let pool = sourcePools.first(where: { $0.members.contains(where: { $0.sourceId == source.id }) }) {
             throw AppFailure(message: "此来源被来源池「\(pool.name)」引用，请先编辑该来源池。")
         }
-        guard let runtime, serviceState == "stopped" else { throw AppFailure(message: "请先停止 Bridge。") }
+        guard let runtime else { throw AppFailure(message: "应用尚未准备好。") }
         guard !clients.contains(where: { $0.connected && $0.source == source.id }) else {
             throw AppFailure(message: "此来源仍被 Agent 使用，请先为它选择其他来源并应用配置。")
         }
         let next = sources.filter { $0.id != source.id }
-        try ModelSource.encode(next).write(to: runtime.root.appendingPathComponent("sources.json"), options: .atomic)
+        try runtime.saveMetadata("sources", data: ModelSource.encode(next))
         sources = next
         var bindings = proxies; bindings.bindings.removeValue(forKey: source.id); try saveProxies(bindings)
         try credentials.delete(source.id)
+        service?.sendInput(try JSONEncoder().encode([source.id: ""]) + Data([10]))
         invalidateModelCatalog(source.id)
+    }
+
+    func reloadMetadata() {
+        guard let runtime else { return }
+        do {
+            let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let accountFile = runtime.root.appendingPathComponent("accounts.json")
+            if FileManager.default.fileExists(atPath: accountFile.path) {
+                accounts = [.copilot, .localAzure] + (try decoder.decode([AccountProfile].self, from: Data(contentsOf: accountFile)))
+            }
+            let sourceFile = runtime.root.appendingPathComponent("sources.json")
+            if FileManager.default.fileExists(atPath: sourceFile.path) { sources = try ModelSource.decode(Data(contentsOf: sourceFile)) }
+            let proxyFile = runtime.root.appendingPathComponent("proxies.json")
+            if FileManager.default.fileExists(atPath: proxyFile.path) { proxies = try ProxyConfiguration.decode(Data(contentsOf: proxyFile)) }
+            let stateFile = runtime.root.appendingPathComponent("source-state.json")
+            if let data = try? Data(contentsOf: stateFile), let value = try? JSONDecoder().decode([String: [String]].self, from: data) {
+                pausedSourceIDs = Set(value["paused"] ?? [])
+            }
+            reloadPools()
+        } catch { showError(error) }
+    }
+
+    func toggleSourcePause(_ id: String) {
+        guard let runtime else { return }
+        do {
+            var next = pausedSourceIDs
+            if next.contains(id) { next.remove(id) } else { next.insert(id) }
+            try runtime.saveMetadata("source-state", data: JSONEncoder().encode(["paused": Array(next).sorted()]))
+            pausedSourceIDs = next
+        } catch { showError(error) }
+    }
+
+    private func updateServiceKeys() {
+        guard service != nil else { return }
+        do {
+            var keys: [String: String] = [:]
+            for source in sources where source.kind == "azure-openai" && source.authMode == "api-key" {
+                if let key = try? credentials.read(source.id) { keys[source.id] = key }
+            }
+            service?.sendInput(try JSONEncoder().encode(keys) + Data([10]))
+        } catch { showError(error) }
     }
 
     func shutdown() { refreshTimer?.invalidate(); stopService(); jobs.values.forEach { $0.stop() }; credentials.clear() }

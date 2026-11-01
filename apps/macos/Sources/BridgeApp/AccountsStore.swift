@@ -3,6 +3,11 @@ import Foundation
 import BridgeCore
 
 extension AppStore {
+    private func accountData(_ accounts: [AccountProfile]) throws -> Data {
+        let encoder = JSONEncoder(); encoder.keyEncodingStrategy = .convertToSnakeCase
+        return try encoder.encode(accounts)
+    }
+
     func isCopilot(_ source: String) -> Bool {
         source == "copilot" || sources.first { $0.id == source }?.kind == "copilot"
     }
@@ -57,7 +62,7 @@ extension AppStore {
     }
 
     func signInAccount(_ account: AccountProfile, reauthorize: Bool = false) async {
-        guard !signingIn, busy == nil, serviceState == "stopped" else { return }
+        guard !signingIn, busy == nil else { return }
         signingIn = true; signingInAccount = account.id; deviceCode = nil; deviceURL = nil
         defer { signingIn = false; signingInAccount = nil; deviceCode = nil; deviceURL = nil; deviceExpires = nil }
         do {
@@ -83,7 +88,7 @@ extension AppStore {
                 if let username = details?.login, !account.builtin, let runtime {
                     var next = accounts
                     if let index = next.firstIndex(where: { $0.id == account.id }) { next[index].name = username }
-                    try JSONEncoder().encode(next.filter { !$0.builtin }).write(to: runtime.root.appendingPathComponent("accounts.json"), options: .atomic)
+                    try runtime.saveMetadata("accounts", data: accountData(next.filter { !$0.builtin }))
                     accounts = next
                 }
             }
@@ -99,7 +104,7 @@ extension AppStore {
     }
 
     func signOutAccount(_ account: AccountProfile) async {
-        guard serviceState == "stopped", busy == nil, !signingIn else { return }
+        guard busy == nil, !signingIn else { return }
         busy = "正在退出此账号"
         defer { busy = nil }
         do {
@@ -111,24 +116,24 @@ extension AppStore {
     }
 
     func saveAccount(_ candidate: AccountProfile) throws {
-        guard let runtime, serviceState == "stopped", !signingIn else { throw AppFailure(message: "请先停止 Bridge。") }
+        guard let runtime, !signingIn else { throw AppFailure(message: "请等待当前操作完成。") }
         let account = try candidate.validated()
         guard !accounts.contains(where: { $0.id == account.id }) else { throw SourceFailure.invalid }
         let next = accounts + [account]
         let file = runtime.root.appendingPathComponent("accounts.json")
-        try JSONEncoder().encode(next.filter { !$0.builtin }).write(to: file, options: .atomic)
+        try runtime.saveMetadata("accounts", data: accountData(next.filter { !$0.builtin }))
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         accounts = next
     }
 
     func removeAccount(_ account: AccountProfile) throws {
-        guard let runtime, !account.builtin, serviceState == "stopped", !signingIn, busy == nil else {
-            throw AppFailure(message: "停止 Bridge 并退出登录后才能移除账号。")
+        guard let runtime, !account.builtin, !signingIn, busy == nil else {
+            throw AppFailure(message: "请等待账号操作完成后再移除账号。")
         }
         guard !accountLoggedIn(account) else { throw AppFailure(message: "请先退出此账号。") }
         guard accountSources(account).isEmpty else { throw AppFailure(message: "请先移除账号下的来源；Agent 使用中的来源需要先切换。") }
         let next = accounts.filter { $0.id != account.id }
-        try JSONEncoder().encode(next.filter { !$0.builtin }).write(to: runtime.root.appendingPathComponent("accounts.json"), options: .atomic)
+        try runtime.saveMetadata("accounts", data: accountData(next.filter { !$0.builtin }))
         accounts = next; accountStates[account.id] = nil
     }
 }

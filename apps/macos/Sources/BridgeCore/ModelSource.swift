@@ -26,15 +26,16 @@ public struct ModelSource: Codable, Identifiable, Equatable {
         }
         guard id.range(of: "^[a-z][a-z0-9-]{0,62}$", options: .regularExpression) != nil, id != "copilot",
               !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name.count <= 100,
-              kind == "azure-openai", ["azure-cli", "api-key"].contains(authMode),
+              ["azure-openai", "openai", "anthropic"].contains(kind), ["azure-cli", "api-key"].contains(authMode),
               let url = URLComponents(string: endpoint), url.scheme == "https", url.host?.isEmpty == false,
               url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
-              url.port == nil || url.port == 443, ["", "/", "/openai/v1", "/openai/v1/"].contains(url.path),
+              kind != "azure-openai" || ((url.port == nil || url.port == 443) && ["", "/", "/openai/v1", "/openai/v1/"].contains(url.path)),
               !deployments.isEmpty, Set(deployments).count == deployments.count,
               deployments.allSatisfy({ $0.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$", options: .regularExpression) != nil }),
               subscriptionId == nil || subscriptionId == "" || UUID(uuidString: subscriptionId!) != nil else {
             throw SourceFailure.invalid
         }
+        if kind != "azure-openai" { return self }
         var result = self
         var base = url; base.path = "/openai/v1"; base.port = nil
         result.endpoint = base.string!

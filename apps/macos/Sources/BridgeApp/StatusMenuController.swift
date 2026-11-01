@@ -13,12 +13,12 @@ import BridgeCore
         self.store = store; self.showWindow = showWindow
         super.init()
         item.button?.image = AgentLinkMark.image(size: 18)
-        item.button?.toolTip = "AgentLink · 左键或右键打开快捷菜单"
+        item.button?.toolTip = "PacaRoute · 左键或右键打开快捷菜单"
         item.button?.target = self; item.button?.action = #selector(openMenu)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         menu.delegate = self
         observer = store.$serviceState.sink { [weak self] state in
-            self?.item.button?.toolTip = "AgentLink · " + (state == "running" ? "运行中" : "已停止 / 正在切换")
+            self?.item.button?.toolTip = "PacaRoute · " + (state == "running" ? "运行中" : "已停止 / 正在切换")
         }
     }
     @objc private func openMenu() {
@@ -27,7 +27,7 @@ import BridgeCore
     }
     func menuWillOpen(_ menu: NSMenu) {
         menu.removeAllItems()
-        add("AgentLink · \(store.serviceLabel) · :\(store.appliedPort)", action: nil)
+        add("PacaRoute · \(store.serviceLabel) · :\(store.appliedPort)", action: nil)
         let today = UsageTotals(store.activity.filter { Calendar.current.isDateInToday($0.timestamp) })
         add("今天：\(today.requests) 次 · \((today.input + today.output).formatted()) token", action: nil)
         menu.addItem(.separator())
@@ -36,11 +36,11 @@ import BridgeCore
         add("刷新状态与用量", action: #selector(refresh), enabled: store.ready && store.busy == nil)
         menu.addItem(.separator())
         for page in Page.allCases {
-            let title = page == .overview ? "打开 AgentLink" : page.rawValue
+            let title = page == .overview ? "打开 PacaRoute" : page.rawValue
             let row = add(title, action: #selector(navigate)); row.representedObject = page.rawValue
         }
         menu.addItem(.separator())
-        add("退出 AgentLink", action: #selector(quit))
+        add("退出 PacaRoute", action: #selector(quit))
     }
     @discardableResult private func add(_ title: String, action: Selector?, enabled: Bool = true) -> NSMenuItem {
         let row = NSMenuItem(title: title, action: action, keyEquivalent: "")

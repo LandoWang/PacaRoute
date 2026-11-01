@@ -38,12 +38,20 @@ import BridgeCore
         controller.menu.performActionForItem(at: controller.menu.items.firstIndex { $0.title == "启动服务" }!)
         for _ in 0..<150 where !store.running || store.busy != nil { try await Task.sleep(nanoseconds: 100_000_000) }
         precondition(store.running && store.busy == nil, "Menu start must work with the main window closed")
+        store.toggleSourcePause("fixture")
+        precondition(store.pausedSourceIDs.contains("fixture"), "Pause must save while running")
+        try store.saveSource(ModelSource(id: "fixture", name: "Hot updated", endpoint: "https://example.openai.azure.com", deployments: ["fixture"]), key: "")
+        precondition(store.running && store.sources.first?.name == "Hot updated", "Source edit must not stop service")
+        try store.removeSource(store.sources.first!)
+        precondition(store.running && store.sources.isEmpty, "Paused source removal must not stop service")
+        let (health, response) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(store.appliedPort)/health")!)
+        precondition((response as? HTTPURLResponse)?.statusCode == 200 && String(decoding: health, as: UTF8.self).contains("PacaRoute"))
         controller.menuWillOpen(controller.menu)
         controller.menu.performActionForItem(at: controller.menu.items.firstIndex { $0.title == "停止服务" }!)
         for _ in 0..<100 where store.hasRunningChildren { try await Task.sleep(nanoseconds: 100_000_000) }
         precondition(!store.hasRunningChildren, "Menu stop must end the owned child")
         store.shutdown()
         NSStatusBar.system.removeStatusItem(controller.item)
-        print("PASS: native left/right mouse masks, persistent status item, usage shortcut, real AOT start/stop with main window closed")
+        print("PASS: native left/right mouse masks, persistent status item, usage shortcut, Go start/stop, hot edit/pause/removal, and health with main window closed")
     }
 }

@@ -2572,6 +2572,17 @@ unchanged snapshot does not publish a UI update. Initial history loading is line
 in log size; subsequent polling reads only appended bytes plus a bounded tail
 check, while request/token totals and unknown-usage semantics stay unchanged.
 
+## PacaRoute Go gateway
+
+The Go gateway exposes independent inference and authenticated management surfaces.
+CLI and UI share the management operations. Client identity comes from an API key,
+not a caller-supplied identity header; routes select protocol, source and model.
+Immutable validated configuration snapshots apply to future requests without
+restarting the listener. Existing streams retain their transport and credential
+lease. Pool affinity keys include Client, Agent, pool and session. Pausing removes
+a source from future admission while allowing in-flight responses to finish.
+Raw prompts and credentials are excluded from normal telemetry.
+
 ## Session source pools
 
 Source pools live in `source-pools.json`, independently of source credentials and

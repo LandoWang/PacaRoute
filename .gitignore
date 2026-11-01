@@ -133,3 +133,15 @@ docs/scratch/
 apps/macos/.build/
 apps/macos/.swiftpm/
 desktop-activity/
+
+# PacaRoute runtime data and local builds.
+/pacaroute
+admin.key
+admin.key.lock
+pacaroute-exchange.dat
+affinity-v2.jsonl
+config.transaction.json
+pacaroute-service.lock
+
+# Python actuator bytecode
+__pycache__/

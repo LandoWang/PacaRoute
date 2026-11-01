@@ -12,6 +12,7 @@ struct SourcesView: View {
                 Label("GitHub Copilot", systemImage: "person.crop.circle").font(.headline)
                 Spacer()
                 Text(store.checkingAccounts ? "正在恢复登录…" : store.loggedIn ? "已保存登录" : "待登录").foregroundStyle(.secondary)
+                Button(store.pausedSourceIDs.contains("copilot") ? "恢复" : "暂停") { store.toggleSourcePause("copilot") }
                 Button("管理登录") { store.page = .account }
             }
             VStack(alignment: .leading, spacing: 10) {
@@ -26,10 +27,11 @@ struct SourcesView: View {
                     Label(source.name, systemImage: "cloud").font(.headline)
                     Spacer()
                     Text(source.kind == "copilot" ? "GitHub Copilot" : "Azure OpenAI").font(.caption).foregroundStyle(.secondary)
+                    Button(store.pausedSourceIDs.contains(source.id) ? "恢复" : "暂停") { store.toggleSourcePause(source.id) }
                     if source.kind == "azure-openai" {
-                        Button("编辑") { editing = source }.disabled(store.serviceState != "stopped")
+                        Button("编辑") { editing = source }.disabled(store.busy != nil || store.signingIn)
                     } else {
-                        Button("移除来源", role: .destructive) { do { try store.removeSource(source) } catch { store.showError(error) } }.disabled(store.serviceState != "stopped")
+                        Button("移除来源", role: .destructive) { do { try store.removeSource(source) } catch { store.showError(error) } }.disabled(store.busy != nil || store.signingIn)
                     }
                 }
                 Text(store.sourceName(source.id)).font(.caption).foregroundStyle(.secondary)
@@ -44,9 +46,9 @@ struct SourcesView: View {
             }
         }
         Button("管理账号与资源", systemImage: "person.crop.circle.badge.plus") { store.page = .account }
-            .disabled(store.serviceState != "stopped" || !store.ready)
+            .disabled(!store.ready)
         if store.serviceState != "stopped" {
-            Text("停止 Bridge 后可以编辑来源；已有请求使用启动时的来源配置。").font(.caption).foregroundStyle(.secondary)
+            Text("来源修改立即用于新请求；暂停不会中断正在生成的响应。").font(.caption).foregroundStyle(.secondary)
         }
         Text("来源管理凭据、endpoint 与模型部署；在 Agent 页为 Codex、Claude Code 分别选择来源。Azure 展示本机用量，账单与配额请以 Azure 为准。")
             .font(.caption).foregroundStyle(.secondary)
