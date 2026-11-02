@@ -154,19 +154,25 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  fixedHeight = false,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  fixedHeight?: boolean;
 }) {
   return (
     <DialogPrimitive.Root open onOpenChange={(v) => !v && onClose()}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="modal-overlay" />
         <DialogPrimitive.Content
-          className={cn("modal", wide && "modal-wide")}
+          className={cn(
+            "modal",
+            wide && "modal-wide",
+            fixedHeight && "modal-fixed-height",
+          )}
           onInteractOutside={(e) => e.preventDefault()}
           {...(description ? {} : { "aria-describedby": undefined })}
         >
@@ -198,6 +204,7 @@ export function Editor({
   onClose,
   onSave,
   wide = false,
+  fixedHeight = false,
   saveLabel = "保存",
 }: {
   title: string;
@@ -206,6 +213,7 @@ export function Editor({
   onClose: () => void;
   onSave: () => Promise<void>;
   wide?: boolean;
+  fixedHeight?: boolean;
   saveLabel?: string;
 }) {
   const [busy, setBusy] = useState(false),
@@ -228,6 +236,7 @@ export function Editor({
       title={title}
       description={description}
       wide={wide}
+      fixedHeight={fixedHeight}
       onClose={() => !busy && onClose()}
     >
       <form onSubmit={submit}>

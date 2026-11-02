@@ -293,6 +293,7 @@ export function SourceEditor({
   return (
     <Editor
       title={original ? "编辑来源" : "添加来源"}
+      fixedHeight
       description={
         v.kind === "copilot"
           ? "连接这个 GitHub 账号的 Copilot，模型列表自动同步。"

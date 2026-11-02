@@ -416,6 +416,7 @@ function AddSource({ onClose }: { onClose: () => void }) {
     <Modal
       title="添加来源"
       description="选择账号，再选择它的资源和模型。"
+      fixedHeight
       onClose={onClose}
     >
       <div className="form-body account-choices">
@@ -544,6 +545,8 @@ function AzurePicker({
   return (
     <Editor
       title="添加 Azure 来源"
+      description="选择这个账号下需要使用的资源和模型。"
+      fixedHeight
       saveLabel="添加来源"
       onClose={onClose}
       onSave={async () => {

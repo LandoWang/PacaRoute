@@ -1151,6 +1151,14 @@ tr:last-child td {
 .modal-wide {
   width: min(800px, calc(100vw - 32px));
 }
+.modal-fixed-height {
+  height: min(720px, calc(100dvh - 56px));
+}
+.modal-fixed-height > form,
+.modal-fixed-height > .form-body,
+.modal-fixed-height .modal-scroll {
+  flex: 1;
+}
 .modal > form {
   display: flex;
   flex-direction: column;

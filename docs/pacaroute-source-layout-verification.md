@@ -46,3 +46,27 @@ this check verifies error layout, not successful discovery on that source.
 No protocol/routing behavior changed, and live Codex/Claude inference was not
 rerun for this UI patch. Physical Intel/Windows execution, Safari and browser
 zoom beyond the checked viewport sizes were not verified in this run.
+
+## 0.8.2: stable source dialog dimensions
+
+Follow-up feedback identified inconsistent outer dialog sizes. At 1424 x 798,
+the account picker was 560 x 689 while the GitHub source form collapsed to
+560 x 308.5; their vertical positions changed from 54.5px to 244.75px.
+
+Source account selection, Azure discovery and source add/edit now opt into a
+shared 560 x 720 dialog, bounded by the existing viewport margins. The body
+fills the available space and scrolls, keeping the footer in place. Azure
+discovery also has a description so its heading matches the other source steps.
+
+Verified in Edge at 1424 x 798: account picker, GitHub collapsed/expanded, Azure
+loading/loaded (189 resource options), and Azure edit collapsed/expanded all
+measure 560 x 720 with a 39px top position. Editor footer tops remain at 683px.
+GitHub advanced inputs and selects all measure 510 x 40. Repeated the edit check
+against the packaged preview, which reports 0.8.2. The browser viewport override
+did not apply during this follow-up, so new narrow-window measurements are not
+claimed. The 0.8.1 checks above remain evidence for that earlier build only.
+
+Production build/embed, macOS arm64/amd64, Windows desktop and five CLI target
+builds passed. Packages are in `artifacts/pacaroute-0.8.2-release/`. The verified
+task-owned preview was restarted on port 63652 with an identical config snapshot.
+Local screenshot: `artifacts/source-layout-qa/consistent-size.png`.
