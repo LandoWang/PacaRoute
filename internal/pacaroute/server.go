@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const Version = "0.8.3"
+const Version = "0.8.4"
 
 type Server struct {
 	Store           *ConfigStore

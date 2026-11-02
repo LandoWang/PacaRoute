@@ -150,8 +150,7 @@ See [0.8 release verification](pacaroute-router-workspace-verification.md) for e
 Local usage records only requests received by the running service's address and
 data root. Agents connected to another bridge port or directly to a provider do
 not appear here. Empty results show the current gateway address and a link to
-Client setup. Copilot account quota is shown separately in Usage and account
-details; it is fetched on opening and explicitly refreshed, not on the usage
-polling interval. Unlimited quotas are not shown as zero, and token-billed quota
+Client setup. Copilot account quota is shown only in Accounts → account details;
+it is fetched on opening and explicitly refreshed, not on the usage polling interval. Unlimited quotas are not shown as zero, and token-billed quota
 credits are not labeled as inference tokens. Pool percentages exclude paused
 sources while retaining configured weights for future re-enablement.

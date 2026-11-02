@@ -1754,10 +1754,6 @@ tr:last-child td {
   max-width: 180px;
 }
 
-.quota-body {
-  display: grid;
-  gap: 16px;
-}
 .quota-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

@@ -1,8 +1,4 @@
-import {
-  CopilotQuota,
-  CopilotQuotaDetails,
-  type CopilotInfo,
-} from "./copilot-quota";
+import { CopilotQuotaDetails, type CopilotInfo } from "./copilot-quota";
 import { BrandIcon } from "./components/brand-icon";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import {
@@ -408,6 +404,17 @@ function AccountDetail({
                   2,
                 )}
               </pre>
+            )}
+            {account.kind === "github" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={result.loading}
+                onClick={result.refresh}
+              >
+                <RefreshCw size={14} />
+                刷新额度
+              </Button>
             )}
             <p className="muted">
               账号额度来自上游；本机请求与 token 统计在「用量」中查看。
@@ -1637,9 +1644,6 @@ export function UsagePage() {
           </div>
         </div>
       )}
-      <CopilotQuota
-        accounts={accounts(config).filter((a) => a.kind === "github")}
-      />
       {!!result.data?.total.missing_usage && (
         <p className="text-warning">
           {result.data.total.missing_usage} 次请求缺少完整 token
