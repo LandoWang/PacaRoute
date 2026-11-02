@@ -28,19 +28,13 @@ import {
   Errors,
 } from "./pages";
 import { Settings } from "./local-pages";
-import { Clients, Routes } from "./routing-pages";
+import { Clients } from "./routing-pages";
 const pages = [
   ["overview", "导览", LayoutDashboard, "你的模型网络，一目了然。"],
   ["accounts", "账号", Users, "连接身份，管理授权。"],
   ["sources", "来源", Server, "组合账号、模型和网络。"],
   ["pools", "来源池", Layers, "按比例分配会话，按需切换来源。"],
-  ["clients", "Client", Users, "管理调用方，生成 Agent 接入脚本。"],
-  [
-    "routes",
-    "路由",
-    ArrowLeftRight,
-    "为每个 Client 的 Agent 分配来源或来源池。",
-  ],
+  ["clients", "Client", Users, "管理调用方，为 Agent 分配来源并生成接入脚本。"],
   ["usage", "用量", ChartNoAxesCombined, "从整体到来源，查看每一次调用。"],
   ["proxies", "Proxy", Network, "独立配置网络，按来源复用。"],
   ["settings", "服务配置", Settings2, "管理 PacaRoute 的运行方式。"],
@@ -48,6 +42,14 @@ const pages = [
 ] as const;
 const initialPage = () => {
   const id = location.hash.replace("#/", "").split("?")[0];
+  if (id === "routes") {
+    history.replaceState(
+      null,
+      "",
+      location.href.replace("#/routes", "#/clients"),
+    );
+    return "clients";
+  }
   return pages.some((p) => p[0] === id) ? id : "overview";
 };
 let bootstrap: Promise<void> | undefined;
@@ -160,7 +162,6 @@ export function App() {
     sources: <Sources />,
     pools: <Pools />,
     clients: <Clients />,
-    routes: <Routes />,
     usage: <UsagePage />,
     proxies: <Proxies />,
     settings: <Settings />,

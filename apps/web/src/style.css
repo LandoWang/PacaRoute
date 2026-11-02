@@ -1715,22 +1715,22 @@ tr:last-child td {
   overflow-wrap: anywhere;
 }
 
-.client-agent-list {
+.client-routes {
   display: grid;
-  gap: 12px;
+  gap: 18px;
 }
-.client-agent-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
+.client-routes > .panel {
+  background: #0c1420;
+  border-radius: 10px;
+  padding: 20px;
 }
-.client-agent-row small {
-  display: block;
-  color: var(--muted-foreground);
-  margin-top: 5px;
+.client-connection-actions {
+  border-top: 1px solid var(--border);
+  margin-top: 18px;
+  padding-top: 16px;
+}
+.client-connection-actions small {
+  overflow-wrap: anywhere;
 }
 .script-preview {
   max-height: 340px;
@@ -1738,12 +1738,6 @@ tr:last-child td {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 12px;
-}
-@media (max-width: 700px) {
-  .client-agent-row {
-    align-items: flex-start;
-    flex-direction: column;
-  }
 }
 
 .source-proxy {
@@ -1758,4 +1752,25 @@ tr:last-child td {
   padding: 2px 24px 2px 8px;
   width: auto;
   max-width: 180px;
+}
+
+.quota-body {
+  display: grid;
+  gap: 16px;
+}
+.quota-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+.quota-item {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.quota-item strong {
+  font-size: 24px;
+  color: var(--mint);
 }

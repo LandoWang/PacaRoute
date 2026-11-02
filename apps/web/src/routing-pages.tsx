@@ -1,13 +1,5 @@
-import { useState } from "react";
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  ArrowRight,
-  Terminal,
-  Download,
-  Copy,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Pencil, Trash2, Terminal, Download, Copy } from "lucide-react";
 import {
   api,
   type Client,
@@ -67,7 +59,7 @@ function ClientEditor({
   return (
     <Editor
       title={original ? "编辑 Client" : "添加 Client"}
-      description="一个 Client 对应一个调用方。先启用 Agent，再到路由页分配来源。"
+      description="一个 Client 对应一个调用方。启用 Agent 后，在此 Client 下选择来源或来源池。"
       onClose={onClose}
       onSave={async () => {
         if (original) {
@@ -111,14 +103,18 @@ function ClientEditor({
       <p className="muted">
         {v.local
           ? "default 仅供本机使用，不需要密钥。删除它可关闭本机免密接入。"
-          : "保存后生成专属密钥，仅展示一次。停用 Agent 会立即拒绝它的新请求。"}
+          : "保存后生成专属密钥，接入脚本会自动包含它。停用 Agent 会立即拒绝它的新请求。"}
       </p>
     </Editor>
   );
 }
 export function Clients() {
-  const { config, status, save, show, close, reload, navigate } = useApp();
-  const [search, setSearch] = useState("");
+  const { config, status, save, show, close, reload } = useApp();
+  const [search, setSearch] = useState(
+    () =>
+      new URLSearchParams(location.hash.split("?")[1] || "").get("client") ||
+      "",
+  );
   const key = (value: string, id: string) => {
     show(<Secret value={value} id={id} onClose={close} />);
     void reload();
@@ -146,9 +142,10 @@ export function Clients() {
       <div className="connection-strip">
         <Terminal size={20} />
         <div>
-          <strong>Client × Agent，一份接入脚本。</strong>
+          <strong>每个 Client，在这里配好来源和接入。</strong>
           <p>
-            先配置路由，再生成脚本交给调用方执行。后续切换来源无需重配客户端。
+            为每种 Agent
+            选择来源或来源池，保存后生成接入脚本。后续切换来源无需重配客户端。
           </p>
         </div>
       </div>
@@ -188,7 +185,7 @@ export function Clients() {
           >
             {c.legacy_direct && (
               <p className="text-warning">
-                正在沿用旧版直连配置。请在路由页为 default 设置固定路由。
+                正在沿用旧版直连配置。请在下方为 default 选择来源和模型。
               </p>
             )}
             {c.local && !status.local_access && (
@@ -196,64 +193,14 @@ export function Clients() {
                 服务未开启本机免密接入；请使用桌面模式或 --allow-local。
               </p>
             )}
-            <div className="client-agent-list">
-              {enabledAgents(c).map((agent) => {
-                const route = c.routes.find((r) => r.agent === agent);
-                return (
-                  <div className="client-agent-row" key={agent}>
-                    <div>
-                      <strong>{agentNames[agent]}</strong>
-                      <small>
-                        {route
-                          ? sourceName(config, route.source_id) +
-                            " · " +
-                            route.model
-                          : "尚未分配路由"}
-                      </small>
-                    </div>
-                    <div className="actions">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={
-                          c.disabled ||
-                          !route ||
-                          (!!c.local && !status.local_access)
-                        }
-                        onClick={() =>
-                          show(
-                            <ConnectionScript
-                              client={c}
-                              agent={agent}
-                              onClose={close}
-                            />,
-                          )
-                        }
-                      >
-                        <Terminal size={14} />
-                        接入脚本
-                      </Button>
-                      {c.local && status.local_management && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            show(
-                              <BackupPicker
-                                agent={agent}
-                                onClose={close}
-                                onApplied={() => {}}
-                              />,
-                            )
-                          }
-                        >
-                          恢复配置
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="client-routes">
+              {enabledAgents(c).map((agent) => (
+                <RouteCard
+                  key={c.id + agent + config.revision}
+                  client={c}
+                  agent={agent}
+                />
+              ))}
             </div>
             {enabledAgents(c).length === 0 && (
               <p className="muted">没有启用的 Agent；所有请求都会被拒绝。</p>
@@ -262,13 +209,18 @@ export function Clients() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  navigate("routes");
-                  location.hash = "/routes?client=" + encodeURIComponent(c.id);
-                }}
+                onClick={() =>
+                  show(
+                    <AdvancedRoutesEditor
+                      config={config}
+                      save={save}
+                      close={close}
+                      original={c}
+                    />,
+                  )
+                }
               >
-                配置路由
-                <ArrowRight size={14} />
+                高级模型规则
               </Button>
               <div className="actions">
                 <Button
@@ -373,15 +325,56 @@ function ConnectionScript({
     [address, setAddress] = useState(status.gateway_url || location.origin),
     [copied, setCopied] = useState(false),
     [copyError, setCopyError] = useState("");
+  const [apiKey, setApiKey] = useState(""),
+    [keyLoading, setKeyLoading] = useState(!client.local),
+    [keyError, setKeyError] = useState(""),
+    [importKey, setImportKey] = useState("");
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    if (!client.local) {
+      api<{ api_key: string }>(`clients/${client.id}/key`)
+        .then((v) => {
+          if (active.current) setApiKey(v.api_key);
+        })
+        .catch((e) => {
+          if (active.current) setKeyError(e.message);
+        })
+        .finally(() => {
+          if (active.current) setKeyLoading(false);
+        });
+    }
+    return () => {
+      active.current = false;
+    };
+  }, [client.id, client.local]);
   const matches = client.routes.filter((r) => r.agent === agent),
     [routeID, setRouteID] = useState(matches[0]?.id || "");
   const route = matches.find((r) => r.id === routeID);
   const model =
     route?.match_model === "*" ? route.model : route?.match_model || "";
   let script = "",
+    preview = "",
     error = "";
   try {
-    script = connectionScript(client, agent, address, model, platform);
+    if (client.local || apiKey) {
+      script = connectionScript(
+        client,
+        agent,
+        address,
+        model,
+        platform,
+        apiKey,
+      );
+      preview = connectionScript(
+        client,
+        agent,
+        address,
+        model,
+        platform,
+        "<Client Key 已隐藏>",
+      );
+    }
   } catch (e) {
     error = (e as Error).message;
   }
@@ -395,8 +388,10 @@ function ConnectionScript({
       <div className="form-body">
         <p>
           在调用方电脑执行。需要 PacaRoute CLI
-          0.8+；不需要启动本地服务。脚本会备份并修改 Agent
-          配置，密钥仅在执行时输入。
+          0.8+；不需要启动本地服务。脚本会备份并修改 Agent 配置。
+          {client.local
+            ? "本机 default 无需 Key。"
+            : "脚本自动包含此 Client 的 Key，预览已隐藏；请只交给对应调用方。"}
         </p>
         <div className="form-grid">
           <Field label="系统">
@@ -437,9 +432,48 @@ function ConnectionScript({
             </Select>
           </Field>
         )}
+        {keyLoading && <p className="muted">正在加载 Client Key…</p>}
+        {keyError && <ErrorNote>{keyError}</ErrorNote>}
+        {!client.local && !keyLoading && !apiKey && (
+          <div className="form-body">
+            <p className="muted">
+              旧 Client 只保存了 Key 的摘要。粘贴现有 Key
+              一次，以后脚本会自动包含它；如果已经遗失，可关闭此窗口，在 Client
+              下轮换密钥。
+            </p>
+            <Field label="现有 Client Key">
+              <Input
+                type="password"
+                autoComplete="off"
+                value={importKey}
+                onChange={(e) => setImportKey(e.target.value)}
+              />
+            </Field>
+            <Button
+              disabled={!importKey}
+              variant="secondary"
+              onClick={async () => {
+                setKeyError("");
+                try {
+                  await api(`clients/${client.id}/key`, "PUT", {
+                    key: importKey,
+                  });
+                  if (active.current) {
+                    setApiKey(importKey);
+                    setImportKey("");
+                  }
+                } catch (e) {
+                  if (active.current) setKeyError((e as Error).message);
+                }
+              }}
+            >
+              验证并保存 Key
+            </Button>
+          </div>
+        )}
         {error && <ErrorNote>{error}</ErrorNote>}
         {copyError && <ErrorNote>{copyError}</ErrorNote>}
-        <pre className="script-preview">{script}</pre>
+        {preview && <pre className="script-preview">{preview}</pre>}
         <div className="actions">
           <Button
             disabled={!script}
@@ -485,90 +519,8 @@ function ConnectionScript({
     </Modal>
   );
 }
-export function Routes() {
-  const { config, save, show, close } = useApp();
-  const requested = new URLSearchParams(location.hash.split("?")[1] || "").get(
-    "client",
-  );
-  const [selected, setSelected] = useState(
-    requested || config.clients[0]?.id || "",
-  );
-  const client =
-    config.clients.find((c) => c.id === selected) || config.clients[0];
-  return (
-    <>
-      <div className="page-toolbar">
-        <p>每个 Client 的每种 Agent，连接一个来源或来源池。</p>
-        {client && (
-          <Select
-            aria-label="选择 Client"
-            value={client.id}
-            onChange={(e) => setSelected(e.target.value)}
-          >
-            {config.clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} · {c.id}
-              </option>
-            ))}
-          </Select>
-        )}
-      </div>
-      {!client ? (
-        <Panel>
-          <Empty title="先添加 Client">
-            Client 决定谁能访问，以及可以使用哪些 Agent。
-          </Empty>
-        </Panel>
-      ) : (
-        <>
-          {client.disabled && (
-            <p className="text-warning">
-              此 Client 已停用，路由保存后仍不会接受请求。
-            </p>
-          )}
-          {client.legacy_direct && (
-            <Panel title="旧版本机接入">
-              <p>
-                目前沿用旧配置中的来源和模型。保存路由后只允许这里配置的目标；请重新生成接入脚本。
-              </p>
-            </Panel>
-          )}
-          {enabledAgents(client).map((agent) => (
-            <RouteCard
-              key={client.id + agent + config.revision}
-              client={client}
-              agent={agent}
-            />
-          ))}
-          {enabledAgents(client).length === 0 && (
-            <Panel>
-              <Empty title="没有启用的 Agent">
-                请到 Client 页面选择 Codex 或 Claude Code。
-              </Empty>
-            </Panel>
-          )}
-          <Button
-            variant="ghost"
-            onClick={() =>
-              show(
-                <AdvancedRoutesEditor
-                  config={config}
-                  save={save}
-                  close={close}
-                  original={client}
-                />,
-              )
-            }
-          >
-            高级：按请求模型匹配多个规则
-          </Button>
-        </>
-      )}
-    </>
-  );
-}
 function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
-  const { config, save } = useApp();
+  const { config, status, save, show, close } = useApp();
   const existing = client.routes.filter((r) => r.agent === agent);
   const [route, setRoute] = useState<Route>(
     existing[0] || {
@@ -678,6 +630,47 @@ function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
           </div>
         </>
       )}
+      <div className="client-connection-actions actions">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={
+            client.disabled ||
+            !existing.length ||
+            (!!client.local && !status.local_access)
+          }
+          onClick={() =>
+            show(
+              <ConnectionScript
+                client={client}
+                agent={agent}
+                onClose={close}
+              />,
+            )
+          }
+        >
+          <Terminal size={14} />
+          接入脚本
+        </Button>
+        {client.local && status.local_management && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              show(
+                <BackupPicker
+                  agent={agent}
+                  onClose={close}
+                  onApplied={() => {}}
+                />,
+              )
+            }
+          >
+            恢复配置
+          </Button>
+        )}
+        <small>脚本使用已保存的配置</small>
+      </div>
       {error && <ErrorNote>{error}</ErrorNote>}
     </Panel>
   );

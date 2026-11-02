@@ -77,6 +77,7 @@ func decodeRequest(w http.ResponseWriter, r *http.Request, v any) error {
 	return nil
 }
 func (s *Server) management(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	path := strings.TrimPrefix(r.URL.Path, "/api/")
 	if path == "login/ticket" && r.Method == "POST" {
 		s.ticketLogin(w, r)
@@ -146,6 +147,16 @@ func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 		}
 		c := cloneConfig(s.Store.Snapshot())
 		c.Clients = append(c.Clients, v)
+		if e := c.Validate(); e != nil {
+			problem(w, 409, e.Error())
+			return
+		}
+		if !v.Local {
+			if e := s.Auth.SaveClientKey(r.Context(), v, key); e != nil {
+				problem(w, 500, "cannot save Client credential")
+				return
+			}
+		}
 		if e := s.Store.Save(c, c.Revision); e != nil {
 			problem(w, 409, e.Error())
 			return
@@ -166,11 +177,44 @@ func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 			problem(w, 404, "Client not found")
 			return
 		}
+		client, _ := c.Client(id)
+		if e := s.Auth.SaveClientKey(r.Context(), *client, key); e != nil {
+			problem(w, 500, "cannot save Client credential")
+			return
+		}
 		if e := s.Store.Save(c, c.Revision); e != nil {
 			problem(w, 409, e.Error())
 			return
 		}
 		writeJSON(w, 200, map[string]string{"api_key": key})
+	case strings.HasPrefix(path, "clients/") && strings.HasSuffix(path, "/key") && (r.Method == "GET" || r.Method == "PUT"):
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "clients/"), "/key")
+		client, ok := s.Store.Snapshot().Client(id)
+		if !ok {
+			problem(w, 404, "Client not found")
+			return
+		}
+		if r.Method == "PUT" {
+			var v struct {
+				Key string `json:"key"`
+			}
+			if decodeRequest(w, r, &v) != nil {
+				problem(w, 400, "invalid Client credential")
+				return
+			}
+			if e := s.Auth.SaveClientKey(r.Context(), *client, v.Key); e != nil {
+				problem(w, 400, e.Error())
+				return
+			}
+			writeJSON(w, 200, map[string]bool{"ok": true})
+			return
+		}
+		key, e := s.Auth.ClientKey(*client)
+		if e != nil {
+			problem(w, 500, e.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"api_key": key, "available": key != ""})
 	case strings.HasPrefix(path, "sources/") && strings.HasSuffix(path, "/pause") && r.Method == "POST":
 		id := strings.TrimSuffix(strings.TrimPrefix(path, "sources/"), "/pause")
 		var v struct {

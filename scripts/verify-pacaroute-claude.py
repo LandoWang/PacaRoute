@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real Claude actuator; inspect its complete answer and tool_use/tool_result pairs."""
 import pathlib,subprocess,os,json,socket,time,signal,sys,argparse,shutil
-parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--claude",default=shutil.which("claude"));parser.add_argument("--mode",choices=["native","cross"],default="native");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");options=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--claude",default=shutil.which("claude"));parser.add_argument("--mode",choices=["native","cross"],default="native");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");parser.add_argument("--connection-script",action="store_true");options=parser.parse_args()
 assert options.claude,"Set --claude or install Claude Code"
 R=pathlib.Path.cwd();kind=options.mode;Q=R/'artifacts/pacaroute-verification'/('live-claude-'+kind+'-'+time.strftime('%Y%m%d-%H%M%S')+'-'+__import__('uuid').uuid4().hex[:6]);Q.mkdir(parents=True,exist_ok=True)
 exe=pathlib.Path(options.binary).resolve();credential_root=pathlib.Path(options.credential_root).resolve()
@@ -15,7 +15,7 @@ if options.source_id!='copilot':
  if options.azure_cli:
   selected=dict(selected,auth_mode='azure-cli');source_account=dict(source_account,login_mode='azure-cli')
  (Q/'sources.json').write_text(json.dumps([selected]));(Q/'accounts.json').write_text(json.dumps([source_account]));clients[0]['routes'][0]['source_id']=selected['id']
-(Q/'clients.json').write_text(json.dumps(clients))
+(Q/'clients.json').write_text(json.dumps([] if options.connection_script else clients))
 env=dict(os.environ)
 for k in list(env):
  if k.startswith(('ANTHROPIC_','CLAUDE_','CODEX_','COPILOT_BRIDGE_','PACAROUTE_')) or k=='CLAUDECODE':env.pop(k,None)
@@ -32,14 +32,18 @@ try:
  else:raise TimeoutError('QA startup')
  print('PacaRoute Claude',kind,'pid',bridge.pid,'port',port,flush=True)
  work=Q/'workspace';work.mkdir(exist_ok=True);(work/'numbers.json').write_text('[9, 2, 9, 5, 2, 11]');home=Q/'claude-home';home.mkdir(exist_ok=True)
- setup=subprocess.run([str(exe),'connect','--agent','claude-code','--url',f'http://127.0.0.1:{port}','--model','claude-opus-5.5','--apply'],input=b'qa-client-synthetic-key',env=dict(env,CLAUDE_CONFIG_DIR=str(home)),capture_output=True,check=True)
+ if options.connection_script:
+  from verify_connection_setup import configure
+  setup=configure(exe,Q,port,clients[0],'claude-code','claude-opus-5.5',dict(env,CLAUDE_CONFIG_DIR=str(home)))
+ else:
+  setup=subprocess.run([str(exe),'connect','--agent','claude-code','--url',f'http://127.0.0.1:{port}','--model','claude-opus-5.5','--apply'],input=b'qa-client-synthetic-key',env=dict(env,CLAUDE_CONFIG_DIR=str(home)),capture_output=True,check=True)
  (Q/'connect-result.json').write_bytes(setup.stdout)
  ce=dict(env,CLAUDE_CONFIG_DIR=str(home),CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1')
  prompt='Work only here. Read numbers.json with Read. Write analyze.py with Write; it must compute a frequency map and the sum of unique numbers into result.json. Run it using Bash, then read result.json in a separate Read tool call. Verify the result and finish PACAROUTE_CLAUDE_OK with the computed values. Do not use subagents or network.'
  started=time.time()
  with (Q/'claude.stdout').open('wb') as out,(Q/'claude.stderr').open('wb') as err:
   result=subprocess.run([options.claude,'--settings',str(home/'settings.json'),'--setting-sources','user','--print','--output-format','stream-json','--verbose','--dangerously-skip-permissions','--model','claude-opus-5.5','--tools','Read,Write,Edit,Bash','--',prompt],cwd=work,env=ce,stdout=out,stderr=err,timeout=300)
- (Q/'manifest.json').write_text(json.dumps({'start':started,'end':time.time(),'exit_code':result.returncode,'upstream_model':model,'stdoutPath':str(Q/'claude.stdout'),'source_id':options.source_id,'azure_cli':options.azure_cli,'binaryPath':str(exe),'binarySHA256':__import__('hashlib').sha256(exe.read_bytes()).hexdigest()}))
+ (Q/'manifest.json').write_text(json.dumps({'start':started,'end':time.time(),'exit_code':result.returncode,'upstream_model':model,'stdoutPath':str(Q/'claude.stdout'),'source_id':options.source_id,'azure_cli':options.azure_cli,'connection_script':options.connection_script,'binaryPath':str(exe),'binarySHA256':__import__('hashlib').sha256(exe.read_bytes()).hexdigest()}))
  print('Claude',kind,'exit',result.returncode,'duration',round(time.time()-started),flush=True)
  assert result.returncode==0,'Claude failed; inspect transcript'
  print('Manifest:',Q/'manifest.json',flush=True)

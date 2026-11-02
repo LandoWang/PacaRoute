@@ -1,3 +1,8 @@
+import {
+  CopilotQuota,
+  CopilotQuotaDetails,
+  type CopilotInfo,
+} from "./copilot-quota";
 import { BrandIcon } from "./components/brand-icon";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import {
@@ -117,7 +122,7 @@ export function Secret({
   return (
     <Modal
       title="保存 Client 密钥"
-      description="这个密钥只显示一次。请交给对应的调用方，并保存在安全的位置。"
+      description="密钥已加密保存，接入脚本会自动包含它。请只交给对应调用方。"
       onClose={onClose}
     >
       <div className="form-body">
@@ -172,8 +177,7 @@ export function Overview() {
   const steps = [
     ["账号", "连接 GitHub 或 Azure", "accounts"],
     ["来源", "选择资源、模型与网络", "sources"],
-    ["Client", "选择 Agent，生成接入脚本", "clients"],
-    ["路由", "分配来源或来源池", "routes"],
+    ["Client", "为 Agent 分配来源，生成接入脚本", "clients"],
   ];
   return (
     <>
@@ -187,8 +191,8 @@ export function Overview() {
           </h2>
           <p>账号、模型来源与请求路由，在一个地方管理。</p>
           <div className="actions">
-            <Button onClick={() => navigate("routes")}>
-              配置路由
+            <Button onClick={() => navigate("clients")}>
+              配置 Client
               <ArrowRight size={16} />
             </Button>
             <Button variant="secondary" onClick={() => navigate("sources")}>
@@ -394,13 +398,17 @@ function AccountDetail({
         {result.data && (
           <>
             <p>{String(result.data.login || "")}</p>
-            <pre>
-              {JSON.stringify(
-                result.data.quota || result.data.subscriptions || result.data,
-                null,
-                2,
-              )}
-            </pre>
+            {account.kind === "github" ? (
+              <CopilotQuotaDetails info={result.data as CopilotInfo} />
+            ) : (
+              <pre>
+                {JSON.stringify(
+                  result.data.subscriptions || result.data,
+                  null,
+                  2,
+                )}
+              </pre>
+            )}
             <p className="muted">
               账号额度来自上游；本机请求与 token 统计在「用量」中查看。
             </p>
@@ -1300,10 +1308,27 @@ export function Pools() {
                   <div key={m.id}>
                     <div>
                       <strong>{sourceName(config, m.source_id)}</strong>
-                      <small>{m.model}</small>
+                      <small>
+                        {m.model}
+                        {config.source_state.paused.includes(m.source_id)
+                          ? " · 已暂停"
+                          : ""}
+                      </small>
                     </div>
                     <span className="weight">
-                      {share(m.weight, p.members)}
+                      {share(
+                        config.source_state.paused.includes(m.source_id)
+                          ? 0
+                          : m.weight,
+                        p.members.map((member) => ({
+                          ...member,
+                          weight: config.source_state.paused.includes(
+                            member.source_id,
+                          )
+                            ? 0
+                            : member.weight,
+                        })),
+                      )}
                       <small>%</small>
                     </span>
                   </div>
@@ -1491,7 +1516,7 @@ function AccountProxy({
   );
 }
 export function UsagePage() {
-  const { config } = useApp();
+  const { config, status, navigate } = useApp();
   const [range, setRange] = useState("24"),
     [source, setSource] = useState(""),
     [client, setClient] = useState(""),
@@ -1593,6 +1618,28 @@ export function UsagePage() {
       </div>
       <Loading loading={result.loading} error={result.error} />
       <Stats total={result.data?.total} />
+      {result.data?.total.requests === 0 && (
+        <div className="connection-strip">
+          <ActivityIcon size={20} />
+          <div>
+            <strong>这个范围内还没有请求经过当前服务</strong>
+            <p>
+              只统计发送到 {status.gateway_url || location.origin}{" "}
+              的请求。直连来源或其他端口的调用不会记在这里。
+            </p>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => navigate("clients")}
+            >
+              到 Client 获取接入脚本 <ArrowRight size={14} />
+            </Button>
+          </div>
+        </div>
+      )}
+      <CopilotQuota
+        accounts={accounts(config).filter((a) => a.kind === "github")}
+      />
       {!!result.data?.total.missing_usage && (
         <p className="text-warning">
           {result.data.total.missing_usage} 次请求缺少完整 token

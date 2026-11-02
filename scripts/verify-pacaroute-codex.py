@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real Codex actuator. Verdict requires client dispatch logs and matching wire tool results."""
 import pathlib,subprocess,os,json,socket,time,signal,threading,queue,sys,argparse,shutil
-parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--codex",default=shutil.which("codex"));parser.add_argument("--upstream-model",default="gpt-6-astra");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");options=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--codex",default=shutil.which("codex"));parser.add_argument("--upstream-model",default="gpt-6-astra");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");parser.add_argument("--connection-script",action="store_true");options=parser.parse_args()
 assert options.codex,"Set --codex or install Codex CLI"
 R=pathlib.Path.cwd();Q=R/('artifacts/pacaroute-verification/live-appserver-'+time.strftime('%Y%m%d-%H%M%S')+'-'+__import__('uuid').uuid4().hex[:6]);Q.mkdir(parents=True,exist_ok=True)
 exe=pathlib.Path(options.binary).resolve()
@@ -17,7 +17,7 @@ if options.source_id!='copilot':
  if options.azure_cli:
   selected=dict(selected,auth_mode='azure-cli');source_account=dict(source_account,login_mode='azure-cli')
  sources.append(selected);accounts.append(source_account);pools[0]['members'][1]['source_id']=selected['id']
-for name,value in [('clients',clients),('accounts',accounts),('sources',sources),('source-pools',pools)]: (Q/(name+'.json')).write_text(json.dumps(value))
+for name,value in [('clients',clients),('accounts',accounts),('sources',sources),('source-pools',pools)]: (Q/(name+'.json')).write_text(json.dumps([] if name=='clients' and options.connection_script else value))
 env=dict(os.environ)
 for k in list(env):
  if k.startswith(('ANTHROPIC_','CLAUDE_','CODEX_','COPILOT_BRIDGE_','PACAROUTE_')) or k=='CLAUDECODE':env.pop(k,None)
@@ -49,7 +49,11 @@ try:
  home=Q/'codex-home';home.mkdir(exist_ok=True);db=Q/'codex-sqlite';db.mkdir(exist_ok=True)
  work=Q/'workspace';work.mkdir(exist_ok=True);(work/'numbers.json').write_text('[9, 2, 9, 5, 2, 11]')
  (home/'config.toml').write_text('web_search = "disabled"\n[features]\nmulti_agent = false\nplugins = false\nremote_plugin = false\n')
- setup=subprocess.run([str(exe),'connect','--agent','codex','--url',f'http://127.0.0.1:{port}','--model','gpt-6-astra','--apply'],input=b'qa-client-synthetic-key',env=dict(env,CODEX_HOME=str(home)),capture_output=True,check=True)
+ if options.connection_script:
+  from verify_connection_setup import configure
+  setup=configure(exe,Q,port,clients[0],'codex','gpt-6-astra',dict(env,CODEX_HOME=str(home)))
+ else:
+  setup=subprocess.run([str(exe),'connect','--agent','codex','--url',f'http://127.0.0.1:{port}','--model','gpt-6-astra','--apply'],input=b'qa-client-synthetic-key',env=dict(env,CODEX_HOME=str(home)),capture_output=True,check=True)
  (Q/'connect-result.json').write_bytes(setup.stdout)
  ce=dict(env,CODEX_HOME=str(home),CODEX_SQLITE_HOME=str(db),RUST_LOG='warn',BRIDGE_DUMMY_KEY='pacaroute-local')
  ce['PATH']=str(pathlib.Path(options.codex).parent)+os.pathsep+ce['PATH']
@@ -96,7 +100,7 @@ try:
   assert (Q/'affinity-v2.jsonl').read_bytes()==before,'Sticky binding changed after restart'
   send('thread/delete',{'threadId':thread},1000000);until(lambda m:m.get('id')==1000000)
   client.stdin.close();client.wait(timeout=20);assert client.returncode==0
-  (Q/'appserver.manifest.json').write_text(json.dumps({'start':int(started)-2,'end':int(time.time())+2,'dispatchLogPath':str(db/'logs_2.sqlite'),'stdoutPath':str(Q/'appserver.stdout'),'upstream_model':options.upstream_model,'source_id':options.source_id,'azure_cli':options.azure_cli,'binaryPath':str(exe),'binarySHA256':__import__('hashlib').sha256(exe.read_bytes()).hexdigest()}))
+  (Q/'appserver.manifest.json').write_text(json.dumps({'start':int(started)-2,'end':int(time.time())+2,'dispatchLogPath':str(db/'logs_2.sqlite'),'stdoutPath':str(Q/'appserver.stdout'),'upstream_model':options.upstream_model,'source_id':options.source_id,'azure_cli':options.azure_cli,'connection_script':options.connection_script,'binaryPath':str(exe),'binarySHA256':__import__('hashlib').sha256(exe.read_bytes()).hexdigest()}))
   print('Manifest:',Q/'appserver.manifest.json',flush=True)
  finally:
   if client.poll() is None:client.terminate();client.wait(timeout=10)

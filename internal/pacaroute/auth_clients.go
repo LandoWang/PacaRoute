@@ -1,0 +1,57 @@
+package pacaroute
+
+import (
+	"context"
+	"encoding/hex"
+	"errors"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+// Credentials are versioned by the committed hash. Failed config commits and
+// concurrent rotations cannot overwrite the key for the active snapshot.
+func (a *Auth) clientKeyPath(c Client) (string, error) {
+	h, err := hex.DecodeString(c.KeyHash)
+	if !validID(c.ID) || c.Local || err != nil || len(h) != 32 {
+		return "", errors.New("invalid network Client credential")
+	}
+	return filepath.Join(a.vault.root, "client-keys", c.ID, c.KeyHash+".dat"), nil
+}
+
+func (a *Auth) SaveClientKey(ctx context.Context, c Client, key string) error {
+	path, err := a.clientKeyPath(c)
+	if err != nil {
+		return err
+	}
+	if key == "" || !validSecret(key) || !constantEqual([]byte(keyHash(key)), []byte(c.KeyHash)) {
+		return errors.New("key does not match this Client")
+	}
+	unlock, err := fileLock(ctx, path+".lock", 10*time.Second)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return a.vault.write(path, map[string]string{"key": key})
+}
+
+func (a *Auth) ClientKey(c Client) (string, error) {
+	if c.Local {
+		return "", nil
+	}
+	path, err := a.clientKeyPath(c)
+	if err != nil {
+		return "", err
+	}
+	var record map[string]string
+	if err = a.vault.read(path, &record); os.IsNotExist(err) {
+		return "", nil // Legacy Clients only stored a one-way hash.
+	} else if err != nil {
+		return "", errors.New("cannot read Client credential")
+	}
+	key := record["key"]
+	if key == "" || !validSecret(key) || !constantEqual([]byte(keyHash(key)), []byte(c.KeyHash)) {
+		return "", errors.New("stored key does not match this Client")
+	}
+	return key, nil
+}

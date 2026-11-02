@@ -8,6 +8,7 @@ export function connectionScript(
   address: string,
   model: string,
   platform: ScriptPlatform,
+  apiKey = "",
 ): string {
   if (client.disabled || !enabledAgents(client).includes(agent))
     throw Error("这个 Client 尚未启用此 Agent。");
@@ -26,11 +27,17 @@ export function connectionScript(
   )
     throw Error("本机 default Client 只能连接本机地址。");
   if (!model || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/.test(model))
-    throw Error("先在路由页为这个 Agent 配置模型。");
+    throw Error("先为这个 Client 的 Agent 配置模型。");
+  if (
+    !client.local &&
+    (!apiKey || apiKey.length > 16384 || /[\r\n\x00]/.test(apiKey))
+  )
+    throw Error("请先保存这个 Client 的 Key，再生成接入脚本。");
   const q = platform === "shell" ? shellQuote : psQuote;
   const command = `connect --agent ${q(agent)} --url ${q(address.replace(/\/$/, ""))} --model ${q(model)}${client.local ? " --local" : ""} --apply`;
   if (platform === "shell")
     return `#!/usr/bin/env bash
+set +x
 set -euo pipefail
 # Requires PacaRoute CLI 0.8+ on PATH. The CLI backs up the existing config.
 # Client: ${client.id}; Agent: ${agent}. Run on the caller's computer.
@@ -40,8 +47,8 @@ if [[ -z "$paca_bin" && -x /Applications/PacaRoute.app/Contents/MacOS/pacaroute 
 ${
   client.local
     ? `"$paca_bin" ${command}`
-    : `read -r -s -p 'Client API key: ' pacaroute_key
-printf '\\n'
+    : `# This script includes this Client's API key. Share only with its caller.
+pacaroute_key=${shellQuote(apiKey)}
 trap 'unset pacaroute_key' EXIT
 printf '%s' "$pacaroute_key" | "$paca_bin" ${command}`
 }
@@ -55,14 +62,14 @@ if (-not (Test-Path $pacaBinary)) { throw 'Put this script beside pacaroute-cli.
 ${
   client.local
     ? `& $pacaBinary ${command}\nif ($LASTEXITCODE -ne 0) { throw 'PacaRoute configuration failed.' }`
-    : `$pacaSecret = Read-Host 'Client API key' -AsSecureString
-$pacaPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($pacaSecret)
+    : `# This script includes this Client's API key. Share only with its caller.
+Set-PSDebug -Off
+$pacaKey = ${psQuote(apiKey)}
 try {
-  [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pacaPointer) | & $pacaBinary ${command}
+  $pacaKey | & $pacaBinary ${command}
   if ($LASTEXITCODE -ne 0) { throw 'PacaRoute configuration failed.' }
 } finally {
-  [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pacaPointer)
-  $pacaSecret.Dispose()
+  Remove-Variable pacaKey -ErrorAction SilentlyContinue
 }`
 }
 `;

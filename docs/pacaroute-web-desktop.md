@@ -34,13 +34,13 @@ Azure Accounts exposes subscription discovery, resource discovery and deployment
 
 ## Clients, routes and configuration
 
-Navigation is Overview, Accounts, Sources, Pools, Clients, Routes, Usage, Proxy,
+Navigation is Overview, Accounts, Sources, Pools, Clients, Usage, Proxy,
 Service settings and Errors. There is no separate Agent or session-history page.
 Session affinity remains a router capability; no local chat history is read.
 
 Fresh installations contain a local-only `default` Client with Codex and Claude
-Code enabled and no routes. Choose a target per enabled Agent in Routes, then
-open its connection script in Clients. Remote Clients receive their own keys.
+Code enabled and no routes. Choose a target per enabled Agent directly in its Client card, then
+open the adjacent connection script. Remote Clients receive their own keys.
 An explicit empty `enabled_agents` list denies all Agent access; omitted legacy
 lists enable both. The gateway checks this before model listing and route lookup.
 Deleting `default` permanently removes loopback keyless access, including across
@@ -52,9 +52,12 @@ installed `/Applications/PacaRoute.app`; Windows scripts find `pacaroute-cli.exe
 beside the script or on PATH. The CLI 0.8+ needs no running local service. It reads
 the Client key from stdin, creates an exact backup, safely edits TOML/JSON and
 preserves unrelated settings. The caller's config stores its Client key with
-private file permissions; generated scripts and previews contain no key. Restore
+private file permissions. Downloaded/copied scripts include the Client key; previews
+redact it. New and rotated Client keys are encrypted behind Auth in a separate
+hash-versioned namespace. Administrators can import a legacy key after its hash is
+validated; missing keys are never silently rotated. Restore
 is available on the local default card or through the CLI. Source changes later
-happen solely in Routes; advanced ordered model-alias rules remain supported.
+happen solely in Clients; advanced ordered model-alias rules remain supported.
 
 Router configuration lives in `<home>/pacaroute.sqlite`: a schema-versioned,
 revisioned document preserves atomic cross-entity invariants. Writes validate
@@ -104,8 +107,9 @@ For independently hosted static files, serve `dist` and proxy `/api` plus gatewa
 | POST | `/api/login` / `/api/logout` | Browser management session |
 | GET | `/api/status` | Version, capabilities, gateway address and lifecycle |
 | GET / PUT | `/api/config` | Read or atomically replace metadata |
-| POST | `/api/clients` | Create Client and display its key once |
+| POST | `/api/clients` | Create Client and persist its encrypted key |
 | POST | `/api/clients/{id}/rotate` | Rotate Client key |
+| GET / PUT | `/api/clients/{id}/key` | Recover current key / import a matching legacy key (admin only, no-store) |
 | POST | `/api/sources/{id}/pause` | Hot pause/resume |
 | PUT | `/api/accounts/{id}/key` | Save provider account key |
 | PUT | `/api/keys/{source}` | Save source credential override |
@@ -140,3 +144,14 @@ npm --prefix apps/web test
 macOS bundles are ad-hoc signed, not notarized. Windows portable binaries are unsigned. Cross-compilation is not evidence of physical Intel or Windows tray behavior; record those separately. `.github/workflows/pacaroute.yml` supplies native Windows/macOS/Linux checks and a Windows installer build when run on the private repository.
 
 See [0.8 release verification](pacaroute-router-workspace-verification.md) for exact client evidence and platform limits. The [0.7 report](pacaroute-web-desktop-verification.md) remains historical evidence.
+
+### Usage and upstream quota
+
+Local usage records only requests received by the running service's address and
+data root. Agents connected to another bridge port or directly to a provider do
+not appear here. Empty results show the current gateway address and a link to
+Client setup. Copilot account quota is shown separately in Usage and account
+details; it is fetched on opening and explicitly refreshed, not on the usage
+polling interval. Unlimited quotas are not shown as zero, and token-billed quota
+credits are not labeled as inference tokens. Pool percentages exclude paused
+sources while retaining configured weights for future re-enablement.
