@@ -446,7 +446,7 @@ internal sealed class CodexConfigurator : IClientConfigurator
     /// <summary>
     /// Resolve <c>$CODEX_HOME/config.toml</c>, falling back to <c>~/.codex/config.toml</c>.
     /// </summary>
-    private static string ResolvePath()
+    internal static string ResolvePath()
     {
         var home = Environment.GetEnvironmentVariable("CODEX_HOME");
         if (string.IsNullOrWhiteSpace(home))

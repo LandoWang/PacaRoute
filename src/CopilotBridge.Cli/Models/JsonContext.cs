@@ -37,6 +37,7 @@ namespace CopilotBridge.Cli.Models;
 [JsonSerializable(typeof(CopilotBridge.Cli.Auth.AccountProfile[]))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(DesktopReply))]
+[JsonSerializable(typeof(DesktopConfigBackup))]
 [JsonSerializable(typeof(DesktopActivity))]
 [JsonSerializable(typeof(CopilotAccountUsage))]
 // Public GitHub Releases REST surface — read anonymously by the startup

@@ -2526,6 +2526,19 @@ UI. Client configuration reuses the existing JSON/TOML merge, with explicit mode
 selection, a content fingerprint checked before applying a preview, and private
 timestamped backups. Merely launching the app does not change client files.
 
+The Agent page can list, preview and restore each client's private sibling
+backups through `desktop config-backups` and `desktop restore-config`. A restore
+replaces the whole configuration with the exact selected bytes, or removes only
+the configuration file when an explicit snapshot records that it did not exist.
+The preview exposes backup dates and connection state, never configuration bytes
+or credentials. Applying verifies both the current file and selected snapshot
+against the preview fingerprint under the same configuration lock, snapshots the
+current state, then atomically replaces the file. Invalid snapshots, symlink files
+and backup IDs outside the selected client's sibling namespace are rejected.
+Restoration works offline without a model source or login. Existing sessions keep
+their loaded settings; users start a new session after restoration.
+
+
 The app installs its bundled runtime in its own Application Support directory and
 only manages the child process it started. Desktop mode disables interactive
 self-updates; app updates replace both packaged executables together. Explicit

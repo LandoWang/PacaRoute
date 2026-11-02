@@ -84,12 +84,8 @@ internal static partial class DesktopClientConfiguration
         if (Fingerprint(current) != expected || current != plan.OriginalContent)
             throw new InvalidOperationException("Configuration changed since preview. Refresh and preview again.");
         if (plan.IsNoOp) return null;
-        string? backup = null;
-        if (current is not null)
-        {
-            backup = plan.TargetPath + $".bridge-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.bak";
-            WritePrivate(backup, File.ReadAllBytes(plan.TargetPath));
-        }
+        var backup = DesktopConfigurationRestore.Snapshot(plan.TargetPath,
+            current is null ? null : File.ReadAllBytes(plan.TargetPath));
         var temporary = plan.TargetPath + $".{Guid.NewGuid():N}.tmp";
         try
         {
@@ -103,7 +99,7 @@ internal static partial class DesktopClientConfiguration
     private static void WritePrivate(string path, string content)
         => WritePrivate(path, Encoding.UTF8.GetBytes(content));
 
-    private static void WritePrivate(string path, byte[] content)
+    internal static void WritePrivate(string path, byte[] content)
     {
         var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
         if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;

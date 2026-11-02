@@ -287,7 +287,7 @@ internal sealed class ClaudeCodeConfigurator : IClientConfigurator
     }
 
     /// <summary>Resolve the target settings file for a scope.</summary>
-    private static string ResolvePath(ConfigScope scope)
+    internal static string ResolvePath(ConfigScope scope)
     {
 #if DEBUG
         if (scope == ConfigScope.Global

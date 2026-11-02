@@ -17,6 +17,7 @@ public struct Reply: Decodable {
     public let fingerprint: String?
     public let changes: [String]?
     public let backupPath: String?
+    public let backups: [ConfigurationBackup]?
     public let subscriptions: [AzureSubscription]?
     public let resources: [AzureResource]?
 
@@ -25,6 +26,14 @@ public struct Reply: Decodable {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(Reply.self, from: data)
     }
+}
+
+public struct ConfigurationBackup: Decodable, Identifiable {
+    public let id: String
+    public let createdAt: String
+    public let missingFile: Bool
+    public let bridgeConfigured: Bool
+    public let valid: Bool
 }
 
 public struct ClientState: Decodable, Identifiable {

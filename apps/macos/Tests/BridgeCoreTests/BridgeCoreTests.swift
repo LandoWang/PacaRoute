@@ -49,6 +49,18 @@ final class BridgeCoreTests {
         expectNil(reply.quota?.quotaSnapshots?["premium_interactions"]?.percentRemaining)
     }
 
+    func testBackupRecoveryReplyDecodesWithoutConfigurationContents() throws {
+        let reply = try Reply.decode(Data(#"{"ok":true,"event":"result","path":"/tmp/config.toml","backups":[{"id":"config.toml.bridge-20261028-080000-0123456789abcdef0123456789abcdef.absent","created_at":"2026-10-28T08:00:00Z","missing_file":true,"bridge_configured":false,"valid":true}]}"#.utf8))
+        expectEqual(reply.backups?.count, 1)
+        expectEqual(reply.backups?.first?.missingFile, true)
+        expectEqual(reply.backups?.first?.bridgeConfigured, false)
+        expectEqual(reply.backups?.first?.valid, true)
+        expectNil(reply.fingerprint)
+        let preview = try Reply.decode(Data(#"{"ok":true,"event":"result","fingerprint":"snapshot-bound","changes":["Restore the selected snapshot"]}"#.utf8))
+        expectEqual(preview.fingerprint, "snapshot-bound")
+        expectNil(preview.backups)
+    }
+
     func testEstimatesAndErrorsDoNotInflateUsageOrDoubleCountCache() {
         let json = """
         {"id":"a","timestamp":"2026-10-28T10:00:00.1234567+00:00","kind":"request","input_tokens":100,"output_tokens":20,"cache_read_tokens":80,"status":200}
@@ -97,10 +109,11 @@ func expectNil<T>(_ value: T?, file: StaticString = #file, line: UInt = #line) {
         let tests = BridgeCoreTests()
         try tests.testSplitUTF8AndPartialJSONAreNotLost()
         try tests.testQuotaMissingIsUnknownNotZero()
+        try tests.testBackupRecoveryReplyDecodesWithoutConfigurationContents()
         tests.testEstimatesAndErrorsDoNotInflateUsageOrDoubleCountCache()
         tests.testProxyValidationRefusesCredentialsAndInvalidDestinations()
         try tests.testSourceCatalogHasNoCredentialsAndRejectsCredentialURLs()
         try tests.testAccountOwnershipSurvivesSourceRoundtrip()
-        print("Passed 6 Swift contract checks")
+        print("Passed 7 Swift contract checks")
     }
 }

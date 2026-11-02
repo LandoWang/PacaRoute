@@ -15,7 +15,7 @@ internal static class DesktopCommand
 {
     public static Command Build()
     {
-        var action = new Argument<string>("action") { Description = "status, account, models, login, reauthorize, logout, configure" };
+        var action = new Argument<string>("action") { Description = "status, account, models, login, reauthorize, logout, configure, config-backups, restore-config" };
         var client = new Option<string?>("--client");
         var source = new Option<string>("--source") { DefaultValueFactory = _ => "copilot" };
         var account = new Option<string?>("--account");
@@ -25,6 +25,7 @@ internal static class DesktopCommand
         var port = new Option<int>("--port") { DefaultValueFactory = _ => 8765 };
         var apply = new Option<bool>("--apply");
         var fingerprint = new Option<string?>("--fingerprint");
+        var backupId = new Option<string?>("--backup");
         var command = new Command("desktop", "JSON-lines control interface for the native macOS app");
         command.Arguments.Add(action);
         command.Options.Add(client);
@@ -36,13 +37,14 @@ internal static class DesktopCommand
         command.Options.Add(port);
         command.Options.Add(apply);
         command.Options.Add(fingerprint);
+        command.Options.Add(backupId);
         command.SetAction(async (args, ct) =>
         {
             try
             {
                 var reply = await RunAsync(args.GetValue(action)!, args.GetValue(client),
                     args.GetValue(model), args.GetValue(port), args.GetValue(apply),
-                    args.GetValue(fingerprint), args.GetValue(source)!, args.GetValue(account), args.GetValue(subscription), args.GetValue(resource), ct);
+                    args.GetValue(fingerprint), args.GetValue(source)!, args.GetValue(account), args.GetValue(subscription), args.GetValue(resource), args.GetValue(backupId), ct);
                 Write(reply);
                 return reply.Ok ? 0 : 1;
             }
@@ -56,8 +58,20 @@ internal static class DesktopCommand
     }
 
     private static async Task<DesktopReply> RunAsync(string action, string? client, string? model,
-        int port, bool apply, string? fingerprint, string sourceId, string? accountId, string? subscription, string? resource, CancellationToken ct)
+        int port, bool apply, string? fingerprint, string sourceId, string? accountId, string? subscription, string? resource, string? backupId, CancellationToken ct)
     {
+        // Recovery must remain usable with broken source metadata and without credentials.
+        if (action is "config-backups" or "restore-config")
+        {
+            var target = DesktopConfigurationRestore.Target(client ?? "");
+            if (action == "config-backups")
+                return new DesktopReply { Path = target, Backups = DesktopConfigurationRestore.List(client!, target) };
+            var plan = DesktopConfigurationRestore.Plan(client!, target,
+                backupId ?? throw new ArgumentException("请选择要还原的备份。"));
+            var undo = apply ? DesktopConfigurationRestore.Apply(plan,
+                fingerprint ?? throw new ArgumentException("请先预览还原内容。")) : null;
+            return new DesktopReply { Path = target, Fingerprint = plan.Fingerprint, Changes = plan.Summary, BackupPath = undo };
+        }
         if (port is < 1024 or > 65535) throw new ArgumentException("Port must be between 1024 and 65535.");
         var sources = Sources.SourceRegistry.Load();
         var pools = new Sources.SourcePoolRegistry(sources, Sources.SourcePoolRegistry.ConfigurationPath);

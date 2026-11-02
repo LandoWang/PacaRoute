@@ -302,6 +302,7 @@ struct ClientCard: View {
                 if let path = state?.path, !path.isEmpty {
                     Button("在 Finder 中查看") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }.buttonStyle(.borderless)
                 }
+                RestoreConfigurationButton(clientID: clientID)
                 Button("预览并应用") { Task { await store.prepareConfig(clientID) } }
                     .auroraProminent().disabled(store.busy != nil || !store.ready || store.signingIn
                         || (selection.wrappedValue.isEmpty && store.loadingModelSources.contains(sourceSelection.wrappedValue)))
