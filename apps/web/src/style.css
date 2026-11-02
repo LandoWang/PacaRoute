@@ -365,6 +365,8 @@ main {
 .input {
   display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 40px;
   padding: 9px 12px;
   border: 1px solid #2b3a4e;
@@ -373,6 +375,14 @@ main {
   color: #e4eaf3;
   font-size: 13px;
   line-height: 1.4;
+}
+input.input,
+select.input {
+  height: 40px;
+}
+select.input {
+  text-overflow: ellipsis;
+  padding-right: 28px;
 }
 .input::placeholder {
   color: #566a85;
@@ -391,23 +401,35 @@ main {
 }
 .field {
   display: grid;
+  align-content: start;
   gap: 8px;
   color: #bdc9da;
   font-size: 12px;
   min-width: 0;
 }
+.field > .button-ghost {
+  justify-self: start;
+}
 .field small {
+  overflow-wrap: anywhere;
   color: #73859e;
   font-size: 11px;
   line-height: 1.6;
 }
 .form-grid {
   display: grid;
+  align-items: start;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
+.form-grid + .actions {
+  margin-top: 20px;
+}
 .form-body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  min-width: 0;
   gap: 20px;
   border: 0;
   margin: 0;
@@ -549,6 +571,10 @@ main {
   justify-content: space-between;
   gap: 16px;
   align-items: center;
+}
+.page-toolbar > select.input {
+  width: 320px;
+  flex-shrink: 0;
 }
 .page-toolbar p {
   color: var(--muted);
@@ -951,7 +977,8 @@ main {
 }
 .member-fields {
   display: grid;
-  grid-template-columns: 1fr 1.2fr 90px;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 90px;
   gap: 14px;
 }
 .tags {
@@ -1092,9 +1119,11 @@ tr:last-child td {
   display: flex;
   align-items: center;
   gap: 10px;
+  overflow-wrap: anywhere;
 }
 .checkbox-list input {
   accent-color: var(--mint);
+  flex-shrink: 0;
 }
 .modal-overlay {
   position: fixed;
@@ -1104,6 +1133,8 @@ tr:last-child td {
   z-index: 50;
 }
 .modal {
+  display: flex;
+  flex-direction: column;
   position: fixed;
   left: 50%;
   top: 50%;
@@ -1111,7 +1142,7 @@ tr:last-child td {
   z-index: 51;
   width: min(560px, calc(100vw - 32px));
   max-height: calc(100dvh - 56px);
-  overflow-y: auto;
+  overflow: hidden;
   background: #141e2b;
   border: 1px solid #3a4960;
   border-radius: 16px;
@@ -1120,15 +1151,29 @@ tr:last-child td {
 .modal-wide {
   width: min(800px, calc(100vw - 32px));
 }
+.modal > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.modal-scroll,
+.modal > .form-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.modal .form-body {
+  overflow-wrap: anywhere;
+}
 .modal-heading {
   display: flex;
+  flex-shrink: 0;
   align-items: start;
   justify-content: space-between;
   gap: 15px;
   padding: 23px 24px 19px;
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
   background: #141e2bf8;
   backdrop-filter: blur(10px);
   z-index: 1;
@@ -1145,17 +1190,22 @@ tr:last-child td {
 }
 .modal-footer {
   display: flex;
+  flex-shrink: 0;
   justify-content: flex-end;
   gap: 10px;
   padding: 18px 24px;
   border-top: 1px solid var(--border);
-  position: sticky;
-  bottom: 0;
   background: #141e2bf5;
   backdrop-filter: blur(10px);
 }
 .modal .error-note {
   margin: 0 24px 20px;
+}
+.modal > form > .error-note {
+  flex-shrink: 0;
+  max-height: 25dvh;
+  overflow: auto;
+  overflow-wrap: anywhere;
 }
 .modal pre {
   margin: 0;
@@ -1652,6 +1702,9 @@ tr:last-child td {
 }
 .account-choices > button > span {
   flex: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .client-agent-list {
@@ -1692,6 +1745,7 @@ tr:last-child td {
 }
 .source-proxy select {
   font-size: 12px;
+  height: 28px;
   min-height: 28px;
   padding: 2px 24px 2px 8px;
   width: auto;

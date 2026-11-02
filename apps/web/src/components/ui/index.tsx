@@ -231,9 +231,11 @@ export function Editor({
       onClose={() => !busy && onClose()}
     >
       <form onSubmit={submit}>
-        <fieldset disabled={busy} className="form-body">
-          {children}
-        </fieldset>
+        <div className="modal-scroll">
+          <fieldset disabled={busy} className="form-body">
+            {children}
+          </fieldset>
+        </div>
         {error && <ErrorNote>{error}</ErrorNote>}
         <div className="modal-footer">
           <Button
