@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -15,20 +14,20 @@ func (a *Auth) AzureAction(ctx context.Context, id, action, subscription, resour
 	c := a.store.Snapshot()
 	p, _ := c.Proxy(c.Proxies.AccountProxyID)
 	env := a.azureEnv(id, p)
-	args := []string{"account", "list", "-o", "json"}
+	args := []string{"account", "list", "--query", "[].{id:id,name:name,state:state,isDefault:isDefault,user:{name:user.name}}", "-o", "json"}
 	switch action {
 	case "account", "account-status", "azure-subscriptions":
 	case "azure-resources":
 		if subscription == "" {
 			return nil, errors.New("select an Azure subscription")
 		}
-		args = []string{"cognitiveservices", "account", "list", "--subscription", subscription, "-o", "json"}
+		args = []string{"cognitiveservices", "account", "list", "--subscription", subscription, "--query", "[?kind=='OpenAI'||kind=='AIServices'].{id:id,name:name,kind:kind,properties:{endpoint:properties.endpoint}}", "-o", "json"}
 	case "azure-deployments":
 		parts := strings.Split(resource, "/")
 		if len(parts) != 9 || parts[2] != subscription || !strings.EqualFold(parts[6], "Microsoft.CognitiveServices") {
 			return nil, errors.New("select a resource in this subscription")
 		}
-		args = []string{"cognitiveservices", "account", "deployment", "list", "--subscription", subscription, "--resource-group", parts[4], "--name", parts[8], "-o", "json"}
+		args = []string{"cognitiveservices", "account", "deployment", "list", "--subscription", subscription, "--resource-group", parts[4], "--name", parts[8], "--query", "[].{name:name,properties:{model:properties.model}}", "-o", "json"}
 	default:
 		return nil, errors.New("unsupported Azure action")
 	}
@@ -46,7 +45,7 @@ func (a *Auth) AzureAction(ctx context.Context, id, action, subscription, resour
 				continue
 			}
 			login := rawString(obj(v["user"])["name"])
-			list = append(list, map[string]string{"id": rawString(v["id"]), "name": rawString(v["name"]), "login": login})
+			list = append(list, map[string]any{"id": rawString(v["id"]), "name": rawString(v["name"]), "login": login, "is_default": string(v["isDefault"]) == "true"})
 			if out["login"] == nil {
 				out["login"] = login
 			}
@@ -87,7 +86,7 @@ func (a *Auth) AzureLogin(ctx context.Context, id string, logout bool, emit func
 	if logout {
 		args = []string{"logout"}
 	}
-	cmd := exec.CommandContext(ctx, azureCLI(), args...)
+	cmd := azureCommand(ctx, args...)
 	cmd.Env = append(a.azureEnv(id, p), "AZURE_CORE_LOGIN_EXPERIENCE_V2=off")
 	stderr, e := cmd.StderrPipe()
 	if e != nil {

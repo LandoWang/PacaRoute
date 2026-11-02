@@ -27,7 +27,7 @@ type arguments struct {
 
 func parseArgs(args []string) (arguments, error) {
 	v := arguments{flags: map[string]string{}}
-	bools := map[string]bool{"apply": true, "allow-local": true, "json": true}
+	bools := map[string]bool{"apply": true, "allow-local": true, "local-management": true, "json": true, "no-open": true}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if !strings.HasPrefix(arg, "--") {
@@ -79,12 +79,21 @@ func defaultRoot() string {
 		}
 		return filepath.Join(base, "PacaRoute")
 	}
+	if runtime.GOOS == "windows" {
+		if v := os.Getenv("LOCALAPPDATA"); v != "" {
+			return filepath.Join(v, "PacaRoute")
+		}
+		return filepath.Join(home, "AppData", "Local", "PacaRoute")
+	}
 	if v := os.Getenv("XDG_DATA_HOME"); v != "" {
 		return filepath.Join(v, "pacaroute")
 	}
 	return filepath.Join(home, ".local", "share", "pacaroute")
 }
 func Run(args []string, in io.Reader, out, stderr io.Writer) int {
+	if len(args) == 0 && desktopEnabled {
+		args = []string{"desktop"}
+	}
 	a, e := parseArgs(args)
 	if e != nil {
 		fmt.Fprintln(stderr, e)
@@ -95,7 +104,9 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 
 pacaroute serve [--bind 127.0.0.1] [--port 8766] [--allow-local]
            [--public-url https://gateway.example]  Origin behind a TLS proxy
-pacaroute ui                       Show UI URL and management key location
+pacaroute desktop [--port 8766]    Native tray and local service (desktop build)
+pacaroute ui [--port 8766]         Open a running local service in your browser
+serve --local-management          Enable loopback-only Agent config and sessions
 pacaroute auth login --account ID  Device login (GitHub or isolated Azure)
 pacaroute auth status|logout --account ID
 pacaroute accounts|sources|pools|proxies|clients list
@@ -104,7 +115,8 @@ pacaroute accounts|sources|pools|proxies|clients remove --id ID
 pacaroute sources pause|resume --id ID
 pacaroute clients add              JSON Client and routes on stdin; emits key once
 pacaroute clients rotate --id ID
-pacaroute key set --source ID      API key on stdin (never argv)
+pacaroute key set --source ID      Resource API key on stdin (never argv)
+pacaroute key set --account ID     OpenAI/Anthropic account API key on stdin
 pacaroute config show|apply        Full config with revision; JSON on stdin
 pacaroute configure --client codex|claude-code --source ID --model MODEL
                    [--port PORT] [--apply --fingerprint HASH]
@@ -131,6 +143,7 @@ Web management uses <home>/admin.key. Network clients always use their own keys.
 		return fail(e)
 	}
 	auth := NewAuth(s, a.get("credential-root", ""))
+	auth.systemKeys = desktopEnabled && runtime.GOOS == "darwin"
 	port, e := strconv.Atoi(a.get("port", "8766"))
 	if e != nil || port < 1 || port > 65535 {
 		return fail(errors.New("port must be 1–65535"))
@@ -144,14 +157,15 @@ Web management uses <home>/admin.key. Network clients always use their own keys.
 	case "serve":
 		return serve(ctx, a, s, auth, port, in, emit, fail)
 	case "ui":
-		server, e := NewServer(s, auth)
-		if e != nil {
+		if e := openManagement(root, port); e != nil {
 			return fail(e)
 		}
-		_ = server
-		emit(map[string]any{"url": fmt.Sprintf("http://127.0.0.1:%d", port), "management_key_file": filepath.Join(root, "admin.key"), "note": "Open URL, then paste the key from the protected local file"})
+		emit(map[string]any{"url": fmt.Sprintf("http://127.0.0.1:%d", port)})
 		return 0
 	case "desktop":
+		if action == "" {
+			return runDesktop(ctx, a, s, auth, port, emit, fail)
+		}
 		v, e := desktop(ctx, a, s, auth, action, port, emit)
 		if e != nil {
 			return fail(e)
@@ -196,7 +210,12 @@ Web management uses <home>/admin.key. Network clients always use their own keys.
 		if e != nil {
 			return fail(e)
 		}
-		if e = auth.SaveKey(ctx, a.get("source", ""), strings.TrimSpace(string(b))); e != nil {
+		if account := a.get("account", ""); account != "" {
+			e = auth.SaveAccountKey(ctx, account, strings.TrimSpace(string(b)))
+		} else {
+			e = auth.SaveKey(ctx, a.get("source", ""), strings.TrimSpace(string(b)))
+		}
+		if e != nil {
 			return fail(e)
 		}
 		emit(map[string]bool{"ok": true})
@@ -280,6 +299,11 @@ func serve(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, port in
 	}
 	server.AllowLocal = a.get("allow-local", "") == "true" || os.Getenv("COPILOT_BRIDGE_DESKTOP") == "1"
 	server.TraceDir = a.get("trace-dir", "")
+	server.LocalManagement = a.get("local-management", "") == "true"
+	server.Port = port
+	if server.LocalManagement && a.get("bind", "127.0.0.1") != "127.0.0.1" && a.get("bind", "") != "::1" {
+		return fail(errors.New("local-management requires a loopback listener"))
+	}
 	if public := a.get("public-url", ""); public != "" {
 		u, err := url.Parse(public)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
@@ -381,6 +405,9 @@ func desktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, actio
 	account, ok := s.Snapshot().Account(accountID)
 	if !ok {
 		return nil, errors.New("account not found")
+	}
+	if accountUsesAPIKey(account.Kind) {
+		return map[string]any{"has_key": auth.HasAccountKey(accountID), "kind": account.Kind}, nil
 	}
 	if account.Kind == "azure" {
 		if action == "login" || action == "logout" {

@@ -1,5 +1,7 @@
 # PacaRoute 0.6.0 verification
 
+For the newer shared Web UI/native tray distribution, see [0.7 verification](pacaroute-web-desktop-verification.md).
+
 Verified on 2026-11-01. Native macOS build 17; Go 1.26.1. Release applications
 were built from an isolated index export that excludes unrelated configuration-restore
 and legacy .NET working changes. Existing installed services and Agent settings were preserved.

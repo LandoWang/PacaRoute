@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -30,8 +32,7 @@ func (s *Server) web(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	types := map[string]string{"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "app.css": "text/css; charset=utf-8", "mark.svg": "image/svg+xml"}
-	w.Header().Set("Content-Type", types[name])
+	w.Header().Set("Content-Type", mime.TypeByExtension(path.Ext(name)))
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(b)
@@ -77,6 +78,10 @@ func decodeRequest(w http.ResponseWriter, r *http.Request, v any) error {
 }
 func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/")
+	if path == "login/ticket" && r.Method == "POST" {
+		s.ticketLogin(w, r)
+		return
+	}
 	if path == "login" && r.Method == "POST" {
 		if r.Header.Get("Origin") != "" && !s.sameOrigin(r) {
 			problem(w, 403, "same origin required")
@@ -102,11 +107,13 @@ func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case strings.HasPrefix(path, "local/"):
+		s.localAPI(w, r, strings.TrimPrefix(path, "local/"))
 	case path == "logout" && r.Method == "POST":
 		http.SetCookie(w, &http.Cookie{Name: "pacaroute_admin", Value: "", Path: "/api", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	case path == "status" && r.Method == "GET":
-		writeJSON(w, 200, map[string]any{"name": "PacaRoute", "version": Version, "uptime_seconds": int(time.Since(s.started).Seconds()), "config_error": s.Store.Error(), "local_access": s.AllowLocal})
+		writeJSON(w, 200, map[string]any{"name": "PacaRoute", "version": Version, "uptime_seconds": int(time.Since(s.started).Seconds()), "config_error": s.Store.Error(), "local_access": s.AllowLocal, "local_management": s.localAllowed(r), "desktop": s.Desktop != nil && s.localAllowed(r), "port": s.Port, "api_version": 1, "gateway_url": s.requestOrigin(r), "startup": s.Desktop != nil && startupEnabled()})
 	case path == "config" && r.Method == "GET":
 		writeJSON(w, 200, s.Store.Snapshot())
 	case path == "config" && r.Method == "PUT":
@@ -202,6 +209,55 @@ func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, 200, map[string]bool{"ok": true})
+	case strings.HasPrefix(path, "sources/") && strings.HasSuffix(path, "/discover-models") && r.Method == "GET":
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "sources/"), "/discover-models")
+		source, ok := s.Store.Snapshot().Source(id)
+		if !ok {
+			problem(w, 404, "source not found")
+			return
+		}
+		result, e := s.Auth.DiscoverModels(r.Context(), s.Store.Snapshot(), source)
+		if e != nil {
+			problem(w, 502, e.Error())
+			return
+		}
+		writeJSON(w, 200, result)
+	case path == "model-discovery" && r.Method == "POST":
+		var input struct {
+			Source
+			ProxyID string `json:"proxy_id"`
+		}
+		if decodeRequest(w, r, &input) != nil {
+			problem(w, 400, "invalid source")
+			return
+		}
+		source := input.Source
+		draft := cloneConfig(s.Store.Snapshot())
+		if !validID(source.ID) || source.ID == "copilot" {
+			source.ID = "discovery-" + newID()[:8]
+		}
+		source.Name = "Model discovery"
+		source.Deployments = []string{"discovery"}
+		// Validate the draft independently of saved routes. Keep its source ID so
+		// an existing resource-specific credential can override the account key.
+		draft.Sources = []Source{source}
+		draft.Pools = nil
+		draft.Clients = nil
+		draft.SourceState.Paused = nil
+		if input.ProxyID != "" {
+			draft.Proxies.Bindings[source.ID] = input.ProxyID
+		}
+		if e := draft.Validate(); e != nil {
+			problem(w, 400, e.Error())
+			return
+		}
+		source = draft.Sources[len(draft.Sources)-1]
+		result, e := s.Auth.DiscoverModels(r.Context(), &draft, source)
+		if e != nil {
+			problem(w, 502, e.Error())
+			return
+		}
+		writeJSON(w, 200, result)
 	case path == "models" && r.Method == "GET":
 		models, e := s.Auth.Models(r.Context(), r.URL.Query().Get("source"))
 		if e != nil {
@@ -294,8 +350,26 @@ func (s *Server) accountAPI(w http.ResponseWriter, r *http.Request, path string)
 		}
 		return
 	}
-	if account.Kind == "api-key" {
-		writeJSON(w, 200, map[string]any{"message": "Configure API keys on this account's sources"})
+	if accountUsesAPIKey(account.Kind) {
+		switch {
+		case action == "key" && r.Method == "PUT":
+			var v struct {
+				Key string `json:"key"`
+			}
+			if decodeRequest(w, r, &v) != nil {
+				problem(w, 400, "invalid API key")
+				return
+			}
+			if e := s.Auth.SaveAccountKey(r.Context(), id, v.Key); e != nil {
+				problem(w, 400, e.Error())
+				return
+			}
+			writeJSON(w, 200, map[string]bool{"ok": true})
+		case (action == "status" || action == "info") && r.Method == "GET":
+			writeJSON(w, 200, map[string]any{"kind": account.Kind, "has_key": s.Auth.HasAccountKey(id), "message": "Sources inherit the account API key unless a resource-specific key is configured"})
+		default:
+			problem(w, 404, "API accounts use a key instead of device login")
+		}
 		return
 	}
 
@@ -478,4 +552,15 @@ func (s *Server) startAccountLogin(w http.ResponseWriter, r *http.Request, accou
 		cancel()
 		problem(w, 504, "Azure CLI did not produce a device code")
 	}
+}
+
+func (s *Server) requestOrigin(r *http.Request) string {
+	if s.PublicURL != "" {
+		return s.PublicURL
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
 }

@@ -1,0 +1,57 @@
+name: PacaRoute web and Go
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'codex/**']
+    paths: ['apps/web/**', 'cmd/**', 'internal/**', 'go.mod', 'go.sum', 'scripts/build-pacaroute*', '.github/workflows/pacaroute.yml']
+  pull_request:
+    paths: ['apps/web/**', 'cmd/**', 'internal/**', 'go.mod', 'go.sum', '.github/workflows/pacaroute.yml']
+permissions:
+  contents: read
+jobs:
+  contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci --prefix apps/web
+      - run: npm run test --prefix apps/web
+      - run: npm run build --prefix apps/web
+      - run: npm run embed --prefix apps/web
+      - run: go test -race ./...
+      - run: go vet ./...
+      - name: Desktop build
+        if: runner.os != 'Linux'
+        run: go build -tags desktop ./cmd/pacaroute
+      - name: Build Windows distribution
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          PACAROUTE_WEB_READY: '1'
+        run: bash scripts/build-pacaroute-desktop.sh artifacts/pacaroute-desktop-release windows
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (!(Test-Path $compiler)) { choco install innosetup -y --no-progress }
+          & $compiler scripts/pacaroute-windows.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: PacaRoute-Windows-x64
+          path: |
+            artifacts/pacaroute-desktop-release/PacaRoute-Windows-x64.zip
+            scripts/Output/PacaRoute-Windows-x64-Setup.exe

@@ -1,10 +1,12 @@
 # PacaRoute
 
 PacaRoute is a Go request gateway for Codex and Claude Code. The same executable
-provides the CLI, authenticated management API and embedded browser UI. The macOS
-application combines the existing SwiftUI interface, menu-bar alpaca, local session
-reader and activity index with the Go executable. No .NET runtime, bridge binary
-or separate updater is required by the new distribution.
+provides the CLI, authenticated management API and embedded React browser UI.
+Version 0.7 adds a lightweight macOS/Windows system tray in the same Go process.
+No Node, .NET runtime, separate bridge or embedded browser is needed at runtime.
+See [web and desktop architecture](pacaroute-web-desktop.md) for current builds,
+account setup, separate frontend development and distribution instructions.
+Historical SwiftUI packaging instructions below apply to the 0.6 compatibility app.
 
 ## Run
 
@@ -18,7 +20,7 @@ go build -o pacaroute ./cmd/pacaroute
 ```
 
 Open the printed URL and use the protected `admin.key` file in the data directory
-to sign in to management. `ui` displays the key's location, never its value. The
+to sign in to management. `ui` opens the management page; desktop/local-management mode uses a one-use browser login ticket. The
 admin cookie is HttpOnly and SameSite Strict; cross-origin management writes are
 rejected. The browser does not store the key in localStorage. For a private local
 Agent setup, `serve --allow-local` permits loopback Agent requests without a Client

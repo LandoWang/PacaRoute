@@ -1,0 +1,10 @@
+- [x] Build the typed React frontend with visual Client, source and pool editors.
+- [x] Serve compiled assets and document the independent API/development contract.
+- [x] Add authenticated, opt-in local Agent configuration and session endpoints.
+- [x] Add Go desktop tray, safe browser login handoff, service ownership and startup integration.
+- [x] Add Windows locking, credential protection and release builds.
+- [x] Separate GitHub/OpenAI/Anthropic/Azure accounts from their resource sources; discover Azure models.
+- [x] Generate IDs/names, use default provider endpoints, and reduce default forms to login/key and resource/model selection.
+- [x] Identify account providers and source products using their respective brand icons.
+- [x] Verify API contracts, browser flows, live Azure discovery, packaged client compatibility and cross-platform builds.
+- [ ] Verify physical Windows/Intel hardware and native tray menu clicks (documented release limits).

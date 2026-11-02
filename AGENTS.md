@@ -3,20 +3,22 @@
 ## Project and build
 
 PacaRoute is a Go 1.26 agent request gateway with a CLI, authenticated management
-API, embedded browser UI and native SwiftUI macOS application. The release runtime
+API, shared React web UI and optional Go macOS/Windows system tray. The release runtime
 is Go. Historical .NET sources under `src/` and their tests remain reference
 material; .NET/AOT/source-generation rules apply only when editing that legacy code.
 
 - `go build ./cmd/pacaroute`
 - `go test -race ./...`
 - `go vet ./...`
-- `swift build --package-path apps/macos`
-- `bash scripts/build-macos-app.sh artifacts/pacaroute-release split`
+- `npm --prefix apps/web ci && npm --prefix apps/web test`
+- `bash scripts/build-web.sh`
+- `bash scripts/build-pacaroute-desktop.sh`
 - `bash scripts/build-pacaroute.sh artifacts/pacaroute-cli`
 
 Go code is in `internal/pacaroute`; `cmd/pacaroute` is the thin CLI entry point.
-The browser UI is embedded from `internal/pacaroute/web`. macOS UI/session/index
-code is in `apps/macos`. Architecture is documented in `docs/pipeline-design.md`
+The React UI is in `apps/web`, compiled independently and embedded from
+`internal/pacaroute/web`. Local management/session code and the desktop tray are in
+`internal/pacaroute`. Historical SwiftUI sources remain in `apps/macos`. Architecture is documented in `docs/pipeline-design.md`
 and operational behavior in `docs/pacaroute.md`. Track changes with OpenSpec under
 `openspec/changes/`; keep progress out of this file.
 

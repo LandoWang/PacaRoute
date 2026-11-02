@@ -145,3 +145,10 @@ pacaroute-service.lock
 
 # Python actuator bytecode
 __pycache__/
+
+# PacaRoute frontend source manifests are project files.
+!apps/web/package.json
+!apps/web/package-lock.json
+apps/web/*.tsbuildinfo
+apps/web/test-results/
+apps/web/dist/

@@ -14,22 +14,29 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
-const Version = "0.6.0"
+const Version = "0.7.0"
 
 type Server struct {
-	Store      *ConfigStore
-	Auth       *Auth
-	Router     *Router
-	Activity   *ActivityStore
-	AllowLocal bool
-	AdminKey   string
-	PublicURL  string
-	TraceDir   string
-	started    time.Time
-	loginJobs  *loginJobs
+	Store           *ConfigStore
+	Auth            *Auth
+	Router          *Router
+	Activity        *ActivityStore
+	AllowLocal      bool
+	LocalManagement bool
+	Port            int
+	Desktop         *desktopControl
+	sessions        *sessionIndex
+	sessionsOnce    sync.Once
+	tickets         browserTickets
+	AdminKey        string
+	PublicURL       string
+	TraceDir        string
+	started         time.Time
+	loginJobs       *loginJobs
 }
 
 func NewServer(store *ConfigStore, auth *Auth) (*Server, error) {
@@ -81,7 +88,7 @@ func (s *Server) Handler() http.Handler {
 			s.management(w, r)
 			return
 		}
-		if r.URL.Path == "/" || r.URL.Path == "/app.js" || r.URL.Path == "/app.css" || r.URL.Path == "/mark.svg" {
+		if r.URL.Path == "/" || r.URL.Path == "/index.html" || r.URL.Path == "/mark.svg" || strings.HasPrefix(r.URL.Path, "/assets/") {
 			s.web(w, r)
 			return
 		}

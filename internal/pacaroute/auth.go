@@ -48,6 +48,7 @@ type exchangeCache struct {
 // Auth is the only runtime owner of credential records, persistence and rotation.
 type Auth struct {
 	store                    *ConfigStore
+	systemKeys               bool
 	vault                    vault
 	http                     transports
 	mu                       sync.Mutex
@@ -93,7 +94,17 @@ func (a *Auth) SaveKey(ctx context.Context, id, key string) error {
 		return e
 	}
 	defer unlock()
-	if e = a.vault.write(a.vault.secretPath(id), map[string]string{"key": key}); e != nil {
+	if a.systemKeys {
+		if e = saveSystemSourceKey(id, key); e != nil {
+			return e
+		}
+		if e = os.Remove(a.vault.secretPath(id)); e != nil && !os.IsNotExist(e) {
+			return e
+		}
+		if e = atomicWrite(a.vault.secretPath(id)+".revision", []byte(newID()), 0600); e != nil {
+			return e
+		}
+	} else if e = a.vault.write(a.vault.secretPath(id), map[string]string{"key": key}); e != nil {
 		return e
 	}
 	a.mu.Lock()
@@ -126,7 +137,7 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 	if s.Kind == "copilot" {
 		stamp = statStamp(a.vault.githubPath(s.AccountID))
 	} else if s.AuthMode == "api-key" {
-		stamp = statStamp(a.vault.secretPath(s.ID))
+		stamp = statStamp(a.vault.secretPath(s.ID)) + statStamp(a.vault.accountKeyPath(s.AccountID)) + statStamp(a.vault.secretPath(s.ID)+".revision") + statStamp(a.vault.accountKeyPath(s.AccountID)+".revision")
 	} else {
 		dir := filepath.Join(a.vault.root, "accounts", s.AccountID)
 		if s.AccountID == "azure-local" || s.AccountID == "" {
@@ -156,6 +167,24 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 			var record map[string]string
 			if e = a.vault.read(a.vault.secretPath(s.ID), &record); e == nil {
 				secret = record["key"]
+			} else if !os.IsNotExist(e) {
+				return l, e
+			}
+		}
+		if secret == "" && a.systemKeys {
+			secret, e = systemSourceKey(s.ID)
+			if e != nil && !os.IsNotExist(e) {
+				return l, e
+			}
+			e = nil
+		}
+		if secret == "" {
+			if account, ok := c.Account(s.AccountID); ok && accountUsesAPIKey(account.Kind) {
+				secret, e = a.accountKey(s.AccountID)
+				if e != nil && !os.IsNotExist(e) {
+					return l, e
+				}
+				e = nil
 			}
 		}
 		if secret == "" {
@@ -533,4 +562,53 @@ func (a *Auth) AccountInfo(ctx context.Context, id string) (map[string]any, erro
 		res.Body.Close()
 	}
 	return out, nil
+}
+
+func (a *Auth) accountKey(id string) (string, error) {
+	var record map[string]string
+	e := a.vault.read(a.vault.accountKeyPath(id), &record)
+	if e == nil {
+		return record["key"], nil
+	}
+	if !os.IsNotExist(e) {
+		return "", e
+	}
+	if a.systemKeys {
+		return systemSourceKey("account." + id)
+	}
+	return "", e
+}
+func (a *Auth) HasAccountKey(id string) bool {
+	key, e := a.accountKey(id)
+	return e == nil && key != ""
+}
+func (a *Auth) SaveAccountKey(ctx context.Context, id, key string) error {
+	account, ok := a.store.Snapshot().Account(id)
+	if !ok || !accountUsesAPIKey(account.Kind) || key == "" || !validSecret(key) {
+		return errors.New("select an OpenAI or Anthropic account and a valid API key")
+	}
+	path := a.vault.accountKeyPath(id)
+	unlock, e := fileLock(ctx, path+".lock", 10*time.Second)
+	if e != nil {
+		return e
+	}
+	defer unlock()
+	if a.systemKeys {
+		if e = saveSystemSourceKey("account."+id, key); e != nil {
+			return e
+		}
+		if e = os.Remove(path); e != nil && !os.IsNotExist(e) {
+			return e
+		}
+		if e = atomicWrite(path+".revision", []byte(newID()), 0600); e != nil {
+			return e
+		}
+	} else if e = a.vault.write(path, map[string]string{"key": key}); e != nil {
+		return e
+	}
+	a.mu.Lock()
+	a.leases = map[string]cachedLease{}
+	a.keyEpoch++
+	a.mu.Unlock()
+	return nil
 }

@@ -90,6 +90,9 @@ func deriveKeys(ikm []byte) ([]byte, []byte) {
 	return e, m
 }
 func (v *vault) seal(b []byte) ([]byte, error) {
+	if out, handled, err := platformSeal(b); handled {
+		return out, err
+	}
 	v.init()
 	if v.err != nil {
 		return nil, v.err
@@ -112,6 +115,9 @@ func (v *vault) seal(b []byte) ([]byte, error) {
 	return out, nil
 }
 func (v *vault) open(b []byte) ([]byte, error) {
+	if out, handled, err := platformOpen(b); handled {
+		return out, err
+	}
 	v.init()
 	if v.err != nil {
 		return nil, v.err
@@ -184,4 +190,8 @@ func newKey() string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
 	return "pr_" + hex.EncodeToString(b)
+}
+
+func (v *vault) accountKeyPath(id string) string {
+	return filepath.Join(v.root, "accounts", id, "api_key.dat")
 }

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -83,7 +82,7 @@ func readJSONBody(r io.Reader, out any) error {
 func commandJSON(ctx context.Context, env []string, args ...string) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, azureCLI(), args...)
+	cmd := azureCommand(ctx, args...)
 	cmd.Env = env
 	b, e := cmd.Output()
 	if e != nil {

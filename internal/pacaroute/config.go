@@ -30,6 +30,7 @@ type Source struct {
 	AuthMode       string   `json:"auth_mode"`
 	AccountID      string   `json:"account_id,omitempty"`
 	SubscriptionID string   `json:"subscription_id,omitempty"`
+	ResourceID     string   `json:"resource_id,omitempty"`
 	Deployments    []string `json:"deployments"`
 }
 type Proxy struct {
@@ -169,7 +170,7 @@ func (c *Config) Validate() error {
 
 	seen := map[string]bool{"copilot": true, "azure-local": true}
 	for _, a := range c.Accounts {
-		if !validID(a.ID) || seen[a.ID] || strings.TrimSpace(a.Name) == "" || (a.Kind != "github" && a.Kind != "azure" && a.Kind != "api-key") {
+		if !validID(a.ID) || seen[a.ID] || strings.TrimSpace(a.Name) == "" || (a.Kind != "github" && a.Kind != "azure" && !accountUsesAPIKey(a.Kind)) {
 			return fmt.Errorf("invalid or duplicate account %q", a.ID)
 		}
 		seen[a.ID] = true
@@ -211,7 +212,7 @@ func (c *Config) Validate() error {
 		if s.Kind != "azure-openai" && s.Kind != "openai" && s.Kind != "anthropic" {
 			return fmt.Errorf("unsupported source kind %q", s.Kind)
 		}
-		if (s.Kind == "openai" || s.Kind == "anthropic") && (s.AuthMode != "api-key" || a.Kind != "api-key") {
+		if (s.Kind == "openai" || s.Kind == "anthropic") && (s.AuthMode != "api-key" || !sourceAcceptsAccount(s.Kind, a.Kind)) {
 			return errors.New("API source requires API-key account and authentication")
 		}
 		if s.Deployments == nil {
@@ -523,4 +524,19 @@ func cloneConfig(c *Config) Config {
 	var v Config
 	_ = json.Unmarshal(b, &v)
 	return v
+}
+
+func accountUsesAPIKey(kind string) bool {
+	return kind == "openai" || kind == "anthropic" || kind == "api-key"
+}
+func sourceAcceptsAccount(source, account string) bool {
+	switch source {
+	case "copilot":
+		return account == "github"
+	case "azure-openai":
+		return account == "azure"
+	case "openai", "anthropic":
+		return account == source || account == "api-key"
+	}
+	return false
 }
