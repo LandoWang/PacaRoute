@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real Codex actuator. Verdict requires client dispatch logs and matching wire tool results."""
 import pathlib,subprocess,os,json,socket,time,signal,threading,queue,sys,argparse,shutil
-parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--codex",default=shutil.which("codex"));parser.add_argument("--upstream-model",default="gpt-6-astra");options=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--codex",default=shutil.which("codex"));parser.add_argument("--upstream-model",default="gpt-6-astra");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");options=parser.parse_args()
 assert options.codex,"Set --codex or install Codex CLI"
 R=pathlib.Path.cwd();Q=R/('artifacts/pacaroute-verification/live-appserver-'+time.strftime('%Y%m%d-%H%M%S')+'-'+__import__('uuid').uuid4().hex[:6]);Q.mkdir(parents=True,exist_ok=True)
 exe=pathlib.Path(options.binary).resolve()
@@ -9,7 +9,15 @@ credential_root=pathlib.Path(options.credential_root).resolve()
 accounts=[{'id':'qa-api','name':'QA API','kind':'api-key'}]
 sources=[{'id':'qa-unavailable','name':'Unavailable QA source','kind':'openai','endpoint':'https://127.0.0.1:1','account_id':'qa-api','auth_mode':'api-key','deployments':['gpt-6-astra']}]
 pools=[{'id':'qa-codex','name':'QA Codex','agent':'codex','model':'gpt-6-astra','failover':True,'members':[{'id':'bad','source_id':'qa-unavailable','model':'gpt-6-astra','weight':1000000},{'id':'good','source_id':'copilot','model':options.upstream_model,'weight':1}]}]
-for name,value in [('accounts',accounts),('sources',sources),('source-pools',pools)]: (Q/(name+'.json')).write_text(json.dumps(value))
+clients=[{'id':'qa-codex','name':'QA Codex','enabled_agents':['codex'],'key_hash':__import__('hashlib').sha256(b'qa-client-synthetic-key').hexdigest(),'routes':[{'id':'coding','agent':'codex','match_model':'gpt-6-astra','source_id':'pool:qa-codex','model':'gpt-6-astra'}]}]
+if options.source_id!='copilot':
+ source_root=pathlib.Path(options.source_config_root)
+ selected=next(v for v in json.loads((source_root/'sources.json').read_text()) if v['id']==options.source_id)
+ source_account=next(v for v in json.loads((source_root/'accounts.json').read_text()) if v['id']==selected['account_id'])
+ if options.azure_cli:
+  selected=dict(selected,auth_mode='azure-cli');source_account=dict(source_account,login_mode='azure-cli')
+ sources.append(selected);accounts.append(source_account);pools[0]['members'][1]['source_id']=selected['id']
+for name,value in [('clients',clients),('accounts',accounts),('sources',sources),('source-pools',pools)]: (Q/(name+'.json')).write_text(json.dumps(value))
 env=dict(os.environ)
 for k in list(env):
  if k.startswith(('ANTHROPIC_','CLAUDE_','CODEX_','COPILOT_BRIDGE_','PACAROUTE_')) or k=='CLAUDECODE':env.pop(k,None)
@@ -40,18 +48,9 @@ try:
  import queue
  home=Q/'codex-home';home.mkdir(exist_ok=True);db=Q/'codex-sqlite';db.mkdir(exist_ok=True)
  work=Q/'workspace';work.mkdir(exist_ok=True);(work/'numbers.json').write_text('[9, 2, 9, 5, 2, 11]')
- (home/'config.toml').write_text(f'''model_provider = "poolqa"
-web_search = "disabled"
-[features]
-multi_agent = false
-plugins = false
-remote_plugin = false
-[model_providers.poolqa]
-name = "PacaRoute QA"
-base_url = "http://127.0.0.1:{port}/pools/qa-codex/codex"
-wire_api = "responses"
-env_key = "BRIDGE_DUMMY_KEY"
-''')
+ (home/'config.toml').write_text('web_search = "disabled"\n[features]\nmulti_agent = false\nplugins = false\nremote_plugin = false\n')
+ setup=subprocess.run([str(exe),'connect','--agent','codex','--url',f'http://127.0.0.1:{port}','--model','gpt-6-astra','--apply'],input=b'qa-client-synthetic-key',env=dict(env,CODEX_HOME=str(home)),capture_output=True,check=True)
+ (Q/'connect-result.json').write_bytes(setup.stdout)
  ce=dict(env,CODEX_HOME=str(home),CODEX_SQLITE_HOME=str(db),RUST_LOG='warn',BRIDGE_DUMMY_KEY='pacaroute-local')
  ce['PATH']=str(pathlib.Path(options.codex).parent)+os.pathsep+ce['PATH']
  err=(Q/'appserver.stderr').open('w');out=(Q/'appserver.stdout').open('w');started=time.time()
@@ -78,7 +77,7 @@ env_key = "BRIDGE_DUMMY_KEY"
   raise TimeoutError('app-server response')
  try:
   send('initialize',{'clientInfo':{'name':'codex_app_server_daemon','title':'PacaRoute Go Verification','version':'1.0.0'}},1);until(lambda m:m.get('id')==1);send('initialized')
-  send('thread/start',{'model':'gpt-6-astra','modelProvider':'poolqa','cwd':str(work),'approvalPolicy':'never','sandbox':'danger-full-access','config':{'model_reasoning_effort':'low'}},2)
+  send('thread/start',{'model':'gpt-6-astra','modelProvider':'pacaroute','cwd':str(work),'approvalPolicy':'never','sandbox':'danger-full-access','config':{'model_reasoning_effort':'low'}},2)
   thread=until(lambda m:m.get('id')==2)['result']['thread']['id']
   def turn(id,prompt):
    send('turn/start',{'threadId':thread,'input':[{'type':'text','text':prompt}]},id);until(lambda m:m.get('id')==id)
@@ -87,13 +86,17 @@ env_key = "BRIDGE_DUMMY_KEY"
    print('App-server turn completed',id,flush=True)
   turn(3,'Work only here. Read numbers.json. Write analyze.py that writes result.json with the sorted unique values and their sum. Execute it. Read result.json in a separate tool call and verify it. Finish PACAROUTE_APPSERVER_OK with the values. Do not use subagents or network.')
   rows=[json.loads(l) for l in (Q/'affinity-v2.jsonl').read_text().splitlines()];assert len(rows)==1 and rows[0]['member']=='good',rows
-  pools[0]['members'][0]['weight']=1;pools[0]['members'][1]['weight']=0;(Q/'source-pools.json').write_text(json.dumps(pools));before=(Q/'affinity-v2.jsonl').read_bytes()
+  pools[0]['members'][0]['weight']=1;pools[0]['members'][1]['weight']=0
+  # Exercise the revisioned SQLite writer rather than the one-time JSON import.
+  cfg=json.loads(subprocess.check_output([str(exe),'config','show','--home',str(Q)],env=env));cfg['pools']=pools
+  subprocess.run([str(exe),'config','apply','--home',str(Q)],input=json.dumps(cfg).encode(),env=env,capture_output=True,check=True)
+  before=(Q/'affinity-v2.jsonl').read_bytes()
   stop_bridge();start_bridge('bridge-restarted')
   turn(4,'Continue. Read analyze.py, extend its output with the original input count, execute it, then read result.json in a separate tool call. Finish PACAROUTE_APPSERVER_RESUME_OK and the count.')
   assert (Q/'affinity-v2.jsonl').read_bytes()==before,'Sticky binding changed after restart'
   send('thread/delete',{'threadId':thread},1000000);until(lambda m:m.get('id')==1000000)
   client.stdin.close();client.wait(timeout=20);assert client.returncode==0
-  (Q/'appserver.manifest.json').write_text(json.dumps({'start':int(started)-2,'end':int(time.time())+2,'dispatchLogPath':str(db/'logs_2.sqlite'),'stdoutPath':str(Q/'appserver.stdout'),'upstream_model':options.upstream_model,'binaryPath':str(exe),'binarySHA256':__import__('hashlib').sha256(exe.read_bytes()).hexdigest()}))
+  (Q/'appserver.manifest.json').write_text(json.dumps({'start':int(started)-2,'end':int(time.time())+2,'dispatchLogPath':str(db/'logs_2.sqlite'),'stdoutPath':str(Q/'appserver.stdout'),'upstream_model':options.upstream_model,'source_id':options.source_id,'azure_cli':options.azure_cli,'binaryPath':str(exe),'binarySHA256':__import__('hashlib').sha256(exe.read_bytes()).hexdigest()}))
   print('Manifest:',Q/'appserver.manifest.json',flush=True)
  finally:
   if client.poll() is None:client.terminate();client.wait(timeout=10)

@@ -58,6 +58,9 @@ type configPlan struct {
 }
 
 func planClient(client, source, model string, port int) (configPlan, error) {
+	return planConnection(client, baseURL(port, source, client), model, "pacaroute-local")
+}
+func planConnection(client, base, model, key string) (configPlan, error) {
 	path, e := clientPath(client)
 	if e != nil {
 		return configPlan{}, e
@@ -70,25 +73,37 @@ func planClient(client, source, model string, port int) (configPlan, error) {
 	if e != nil && !missing {
 		return configPlan{}, e
 	}
+	if missing {
+		e = nil
+	}
 	if len(old) > 4<<20 {
 		return configPlan{}, errors.New("client configuration too large")
 	}
-	base := baseURL(port, source, client)
 	var next []byte
 	if client == "codex" {
-		next, e = configureTOML(old, base, model)
+		next, e = configureTOML(old, base, model, key)
 	} else {
 		m := map[string]any{}
 		if len(old) > 0 {
 			e = json.Unmarshal(old, &m)
 		}
+		if e == nil && m == nil {
+			e = errors.New("Claude settings must be a JSON object")
+		}
 		if e == nil {
-			env, _ := m["env"].(map[string]any)
+			env, valid := m["env"].(map[string]any)
+			if _, exists := m["env"]; exists && !valid {
+				return configPlan{}, errors.New("Claude env must be an object; original file preserved")
+			}
 			if env == nil {
 				env = map[string]any{}
 			}
 			env["ANTHROPIC_BASE_URL"] = base
-			env["ANTHROPIC_AUTH_TOKEN"] = "pacaroute-local"
+			env["ANTHROPIC_AUTH_TOKEN"] = key
+			delete(env, "ANTHROPIC_API_KEY")
+			for _, k := range []string{"ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"} {
+				delete(env, k)
+			}
 			if model != "" {
 				env["ANTHROPIC_MODEL"] = model
 			}
@@ -101,9 +116,9 @@ func planClient(client, source, model string, port int) (configPlan, error) {
 		return configPlan{}, e
 	}
 	fingerprint := keyHash(string(old) + "\x00" + string(next) + fmt.Sprint(missing))
-	return configPlan{path, old, next, missing, fingerprint, []string{"Agent: " + client, "Source: " + source, "Model: " + model, "Base URL: " + base, "Save a backup before applying"}}, nil
+	return configPlan{path, old, next, missing, fingerprint, []string{"Agent: " + client, "Model: " + model, "Base URL: " + base, "Save a backup before applying"}}, nil
 }
-func configureTOML(old []byte, base, model string) ([]byte, error) {
+func configureTOML(old []byte, base, model, key string) ([]byte, error) {
 	before := map[string]any{}
 	if e := toml.Unmarshal(old, &before); e != nil {
 		return nil, errors.New("invalid Codex TOML; original file preserved")
@@ -134,6 +149,9 @@ func configureTOML(old []byte, base, model string) ([]byte, error) {
 		head += "model = " + fmt.Sprintf("%q", prev) + "\n"
 	}
 	provider := fmt.Sprintf("\n[model_providers.pacaroute]\nname = \"PacaRoute\"\nbase_url = %q\nwire_api = \"responses\"\nrequires_openai_auth = false\n", base)
+	if key != "" {
+		provider += fmt.Sprintf("http_headers = { Authorization = %q }\n", "Bearer "+key)
+	}
 	next := []byte(head + strings.Join(out, "\n") + provider)
 	after := map[string]any{}
 	if e := toml.Unmarshal(next, &after); e != nil {

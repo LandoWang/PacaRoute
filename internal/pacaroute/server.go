@@ -9,16 +9,14 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
-const Version = "0.7.0"
+const Version = "0.8.0"
 
 type Server struct {
 	Store           *ConfigStore
@@ -29,8 +27,6 @@ type Server struct {
 	LocalManagement bool
 	Port            int
 	Desktop         *desktopControl
-	sessions        *sessionIndex
-	sessionsOnce    sync.Once
 	tickets         browserTickets
 	AdminKey        string
 	PublicURL       string
@@ -131,7 +127,7 @@ func parseGatewayPath(path string) (agent, explicit, operation string) {
 func (s *Server) authenticate(r *http.Request, c *Config) (*Client, bool) {
 	key := bearer(r)
 	for _, v := range c.Clients {
-		if key != "" && keyEqual(v.KeyHash, key) {
+		if !v.Local && key != "" && keyEqual(v.KeyHash, key) {
 			if v.Disabled {
 				return nil, false
 			}
@@ -139,10 +135,10 @@ func (s *Server) authenticate(r *http.Request, c *Config) (*Client, bool) {
 			return &copy, true
 		}
 	}
-	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	ip := net.ParseIP(host)
-	if s.AllowLocal && ip != nil && ip.IsLoopback() && (key == "" || key == "dummy" || key == "pacaroute-local") {
-		return nil, true
+	if s.AllowLocal && s.PublicURL == "" && loopbackRequest(r) && r.Header.Get("Forwarded") == "" && r.Header.Get("X-Forwarded-For") == "" && r.Header.Get("X-Forwarded-Host") == "" && (key == "" || key == "dummy" || key == "pacaroute-local") {
+		if local, exists := c.Client("default"); exists && local.Local && !local.Disabled {
+			return local, true
+		}
 	}
 	return nil, false
 }
@@ -158,12 +154,20 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	agent, explicit, operation := parseGatewayPath(r.URL.Path)
+	if !client.AgentEnabled(agent) {
+		problem(w, 403, "Agent is not enabled for this Client")
+		return
+	}
 	if operation == "models" && r.Method == "GET" {
-		if client != nil {
+		if !client.LegacyDirect {
 			models := []map[string]string{}
 			for _, route := range client.Routes {
-				if route.Agent == agent && route.MatchModel != "*" {
-					models = append(models, map[string]string{"id": route.MatchModel, "object": "model"})
+				if route.Agent == agent && (explicit == "" || explicit == route.SourceID) {
+					alias := route.MatchModel
+					if alias == "*" {
+						alias = route.Model
+					}
+					models = append(models, map[string]string{"id": alias, "object": "model"})
 				}
 			}
 			writeJSON(w, 200, map[string]any{"object": "list", "data": models})
@@ -207,7 +211,7 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 		clientID = client.ID
 	}
 	session := sessionID(agent, r.Header, body)
-	targets, e := s.Router.Targets(c, clientID, agent, id, model, session, hasContinuation(body))
+	targets, e := s.Router.Targets(c, affinityClient(client), agent, id, model, session, hasContinuation(body))
 	if e != nil {
 		status := 503
 		if hasContinuation(body) {
@@ -446,4 +450,15 @@ func (s *Server) trace(id, name string, b []byte) {
 	if os.MkdirAll(dir, 0700) == nil {
 		_ = atomicWrite(filepath.Join(dir, name), b, 0600)
 	}
+}
+
+// Keep imported local affinity stable without merging any network Client scope.
+func affinityClient(client *Client) string {
+	if client.Local && client.ID == "default" {
+		return "local"
+	}
+	if client.ID == "local" {
+		return "client:local"
+	}
+	return client.ID
 }

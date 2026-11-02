@@ -23,6 +23,7 @@ func storeForTest(t *testing.T) *ConfigStore {
 	if e != nil {
 		t.Fatal(e)
 	}
+	t.Cleanup(func() { s.Close() })
 	return s
 }
 func saveTest(t *testing.T, s *ConfigStore, c Config) {
@@ -45,19 +46,22 @@ func TestConfigurationHotReloadAndStaleWriter(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	defer other.Close()
 	stale := cloneConfig(other.Snapshot())
 	c = cloneConfig(s.Snapshot())
 	c.SourceState.Paused = []string{"copilot"}
 	saveTest(t, s, c)
+	other.Reload()
 	if !other.Snapshot().Paused("copilot") {
 		t.Fatal("pause not observed")
 	}
 	if other.Save(stale, stale.Revision) == nil {
 		t.Fatal("stale writer accepted")
 	}
-	if e = os.WriteFile(filepath.Join(s.Root, "sources.json"), []byte(`broken`), 0600); e != nil {
+	if _, e = s.db.Exec(`UPDATE configuration SET revision=revision+1,document='broken'`); e != nil {
 		t.Fatal(e)
 	}
+	other.Reload()
 	if !other.Snapshot().Paused("copilot") || other.Error() == "" {
 		t.Fatal("invalid edit replaced valid routing")
 	}
@@ -76,20 +80,21 @@ func TestConfigurationRejectsReferenceAndNestedPool(t *testing.T) {
 	}
 }
 func TestConfigurationCrashTransactionRollsForward(t *testing.T) {
-	s := storeForTest(t)
+	root := t.TempDir()
 	c := fixtureConfig()
-	if e := atomicWrite(filepath.Join(s.Root, "config.transaction.json"), jsonBytes(c), 0600); e != nil {
+	if e := atomicWrite(filepath.Join(root, "config.transaction.json"), jsonBytes(c), 0600); e != nil {
 		t.Fatal(e)
 	}
-	reopened, e := NewConfigStore(s.Root)
+	reopened, e := NewConfigStore(root)
 	if e != nil {
 		t.Fatal(e)
 	}
+	defer reopened.Close()
 	if len(reopened.Snapshot().Pools) != 1 {
 		t.Fatal("lost committed transaction")
 	}
-	if _, e = os.Stat(filepath.Join(s.Root, "config.transaction.json")); !os.IsNotExist(e) {
-		t.Fatal("transaction left pending")
+	if _, e = os.Stat(filepath.Join(root, "config.transaction.json")); e != nil {
+		t.Fatal("legacy journal must remain available for rollback")
 	}
 }
 

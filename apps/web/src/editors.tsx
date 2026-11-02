@@ -7,6 +7,7 @@ import {
   suggestedName,
   accountProvider,
   deviceAccount,
+  sharedAzure,
   compatibleAccount,
   resourceKind,
   defaultEndpoint,
@@ -86,7 +87,9 @@ export function AccountEditor({
     <Editor
       title="添加账号"
       onClose={close}
-      saveLabel={deviceAccount(v.kind) ? "继续登录" : "添加账号"}
+      saveLabel={
+        deviceAccount(v.kind) && !sharedAzure(v) ? "继续登录" : "添加账号"
+      }
       onSave={async () => {
         if (!created) {
           await save({ ...config, accounts: [...config.accounts, v] });
@@ -97,7 +100,7 @@ export function AccountEditor({
           setKey("");
         }
         close();
-        if (deviceAccount(v.kind)) onConnect(v);
+        if (deviceAccount(v.kind) && !sharedAzure(v)) onConnect(v);
       }}
     >
       <div className="provider-choices" role="group" aria-label="账号类型">
@@ -112,6 +115,13 @@ export function AccountEditor({
               set({
                 ...v,
                 kind,
+                login_mode:
+                  kind === "azure"
+                    ? "azure-cli"
+                    : kind === "github"
+                      ? "device"
+                      : "",
+                oauth_client_id: "",
                 name: suggestedName(accountProvider(kind), accounts(config)),
               });
               setKey("");
@@ -123,7 +133,50 @@ export function AccountEditor({
         ))}
       </div>
       {deviceAccount(v.kind) ? (
-        <p className="muted">接下来通过浏览器授权，无需填写用户名或密码。</p>
+        <>
+          <Field label="登录方式">
+            <Select
+              disabled={created}
+              value={v.login_mode || "device"}
+              onChange={(e) =>
+                set({ ...v, login_mode: e.target.value, oauth_client_id: "" })
+              }
+            >
+              {v.kind === "azure" ? (
+                <>
+                  <option value="azure-cli">
+                    复用这台服务主机的 Azure CLI
+                  </option>
+                  <option value="device">Device Login · 独立账号</option>
+                </>
+              ) : (
+                <>
+                  <option value="device">GitHub Device Login · Copilot</option>
+                  <option value="oauth-app">自定义 OAuth App</option>
+                </>
+              )}
+            </Select>
+          </Field>
+          {v.login_mode === "oauth-app" && (
+            <Field label="OAuth App Client ID">
+              <Input
+                required
+                disabled={created}
+                value={v.oauth_client_id || ""}
+                onChange={(e) => set({ ...v, oauth_client_id: e.target.value })}
+              />
+            </Field>
+          )}
+          <p className="muted">
+            {sharedAzure(v)
+              ? "直接使用已有 az login 身份，由 Azure CLI 管理令牌续期；不会复制登录缓存。"
+              : v.kind === "azure"
+                ? "通过浏览器授权，独立保存此账号的 Azure CLI 登录状态。"
+                : v.login_mode === "oauth-app"
+                  ? "自动使用 GitHub 返回的 refresh token；是否提供由 OAuth App 决定。"
+                  : "设备授权会持久保存，Copilot exchange token 自动续期。"}
+          </p>
+        </>
       ) : (
         <Field
           label="API Key"
@@ -452,6 +505,7 @@ export function TargetPicker({
 }) {
   return (
     <Select value={value} onChange={(e) => onChange(e.target.value)} required>
+      <option value="">选择来源或来源池</option>
       <optgroup label="模型来源">
         {sources(config).map((s) => (
           <option key={s.id} value={s.id}>
@@ -586,13 +640,12 @@ export function ModelInput({
     </>
   );
 }
-export function ClientEditor({
+export function AdvancedRoutesEditor({
   config,
   save,
   close,
   original,
-  onKey,
-}: { original?: Client; onKey: (key: string, id: string) => void } & Common) {
+}: { original: Client } & Common) {
   const [v, set] = useState<Client>(
     original
       ? structuredClone(original)
@@ -622,29 +675,21 @@ export function ClientEditor({
   return (
     <Editor
       wide
-      title={original ? "编辑 Client 路由" : "添加 Client"}
+      title="高级路由规则"
       description="每个 Client 对应一个人或调用方。路由从上到下匹配，首次匹配后停止。"
       onClose={close}
       onSave={async () => {
         if (original) {
           await save({
             ...config,
-            clients: config.clients.map((c) => (c.id === v.id ? v : c)),
+            clients: config.clients.map((c) =>
+              c.id === v.id ? { ...v, legacy_direct: false } : c,
+            ),
           });
           close();
-        } else {
-          const result = await api<{ api_key: string }>("clients", "POST", v);
-          onKey(result.api_key, v.id);
         }
       }}
     >
-      <Identity
-        id={v.id}
-        name={v.name}
-        existing={!!original}
-        onID={(id) => set({ ...v, id })}
-        onName={(name) => set({ ...v, name })}
-      />
       <div className="section-label">
         路由规则 <Badge>{v.routes.length}</Badge>
       </div>
@@ -677,7 +722,6 @@ export function ClientEditor({
                 type="button"
                 variant="ghost"
                 size="icon"
-                disabled={v.routes.length === 1}
                 aria-label={`删除规则 ${i + 1}`}
                 onClick={() =>
                   set({ ...v, routes: v.routes.filter((_, j) => j !== i) })

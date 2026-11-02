@@ -1653,3 +1653,47 @@ tr:last-child td {
 .account-choices > button > span {
   flex: 1;
 }
+
+.client-agent-list {
+  display: grid;
+  gap: 12px;
+}
+.client-agent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.client-agent-row small {
+  display: block;
+  color: var(--muted-foreground);
+  margin-top: 5px;
+}
+.script-preview {
+  max-height: 340px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .client-agent-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.source-proxy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.source-proxy select {
+  font-size: 12px;
+  min-height: 28px;
+  padding: 2px 24px 2px 8px;
+  width: auto;
+  max-width: 180px;
+}

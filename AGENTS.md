@@ -17,7 +17,7 @@ material; .NET/AOT/source-generation rules apply only when editing that legacy c
 
 Go code is in `internal/pacaroute`; `cmd/pacaroute` is the thin CLI entry point.
 The React UI is in `apps/web`, compiled independently and embedded from
-`internal/pacaroute/web`. Local management/session code and the desktop tray are in
+`internal/pacaroute/web`. Local management/configuration code and the desktop tray are in
 `internal/pacaroute`. Historical SwiftUI sources remain in `apps/macos`. Architecture is documented in `docs/pipeline-design.md`
 and operational behavior in `docs/pacaroute.md`. Track changes with OpenSpec under
 `openspec/changes/`; keep progress out of this file.

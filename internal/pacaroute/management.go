@@ -138,7 +138,12 @@ func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		key := newKey()
-		v.KeyHash = keyHash(key)
+		if v.Local {
+			key = ""
+			v.KeyHash = ""
+		} else {
+			v.KeyHash = keyHash(key)
+		}
 		c := cloneConfig(s.Store.Snapshot())
 		c.Clients = append(c.Clients, v)
 		if e := s.Store.Save(c, c.Revision); e != nil {
@@ -152,7 +157,7 @@ func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 		key := newKey()
 		found := false
 		for i := range c.Clients {
-			if c.Clients[i].ID == id {
+			if c.Clients[i].ID == id && !c.Clients[i].Local {
 				c.Clients[i].KeyHash = keyHash(key)
 				found = true
 			}

@@ -4,6 +4,7 @@ export type Account = {
   name: string;
   kind: string;
   oauth_client_id?: string;
+  login_mode?: string;
 };
 export type Source = {
   id: string;
@@ -44,6 +45,9 @@ export type Route = {
   model: string;
 };
 export type Client = {
+  local?: boolean;
+  legacy_direct?: boolean;
+  enabled_agents?: Agent[];
   id: string;
   name: string;
   disabled: boolean;
@@ -236,3 +240,13 @@ export function suggestedName(
   while (names.has(`${label} ${suffix}`)) suffix++;
   return `${label} ${suffix}`;
 }
+
+export const agentNames: Record<Agent, string> = {
+  codex: "Codex",
+  "claude-code": "Claude Code",
+};
+export const enabledAgents = (c: Client): Agent[] =>
+  c.enabled_agents ?? ["codex", "claude-code"];
+export const sharedAzure = (a: Account) =>
+  a.kind === "azure" &&
+  (a.id === "azure-local" || a.login_mode === "azure-cli");

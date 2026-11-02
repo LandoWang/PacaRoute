@@ -24,6 +24,7 @@ import {
   suggestedName,
   accountProvider,
   deviceAccount,
+  sharedAzure,
   type ModelDiscovery,
   accounts,
   sources,
@@ -34,7 +35,6 @@ import {
   type Account,
   type Source,
   type Pool,
-  type Client,
   type Proxy,
   type Usage,
   type Totals,
@@ -58,7 +58,6 @@ import {
   SourceEditor,
   PoolEditor,
   ProxyEditor,
-  ClientEditor,
 } from "./editors";
 export function Loading({
   loading,
@@ -173,7 +172,8 @@ export function Overview() {
   const steps = [
     ["账号", "连接 GitHub 或 Azure", "accounts"],
     ["来源", "选择资源、模型与网络", "sources"],
-    ["Client", "分配密钥与路由", "clients"],
+    ["Client", "选择 Agent，生成接入脚本", "clients"],
+    ["路由", "分配来源或来源池", "routes"],
   ];
   return (
     <>
@@ -187,8 +187,8 @@ export function Overview() {
           </h2>
           <p>账号、模型来源与请求路由，在一个地方管理。</p>
           <div className="actions">
-            <Button onClick={() => navigate("clients")}>
-              配置 Client 路由
+            <Button onClick={() => navigate("routes")}>
+              配置路由
               <ArrowRight size={16} />
             </Button>
             <Button variant="secondary" onClick={() => navigate("sources")}>
@@ -772,7 +772,7 @@ export function Accounts() {
                     variant="secondary"
                     size="sm"
                     onClick={() =>
-                      a.id === "azure-local"
+                      sharedAzure(a)
                         ? notice(
                             "本机共享 Azure 身份请运行 az login；添加独立 Azure 账号可直接使用 Device Login。",
                           )
@@ -780,7 +780,7 @@ export function Accounts() {
                     }
                   >
                     <KeyRound size={14} />
-                    Device Login
+                    {sharedAzure(a) ? "复用 Azure CLI" : "Device Login"}
                   </Button>
                   <Button
                     variant="ghost"
@@ -812,13 +812,15 @@ export function Accounts() {
             <div className="entity-footer">
               <span>
                 {a.kind === "github"
-                  ? "使用设备代码授权，无需填写密码"
-                  : a.id === "azure-local"
+                  ? a.oauth_client_id
+                    ? "自定义 OAuth：自动使用 GitHub 返回的 refresh token"
+                    : "设备授权持久保存，Copilot exchange token 自动续期"
+                  : sharedAzure(a)
                     ? "使用此服务主机上的 Azure CLI 身份"
                     : "来源可以在服务运行期间添加或移除"}
               </span>
               <div className="actions">
-                {deviceAccount(a.kind) && a.id !== "azure-local" && (
+                {deviceAccount(a.kind) && !sharedAzure(a) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1081,15 +1083,8 @@ export function Sources() {
   return (
     <>
       <div className="page-toolbar">
-        <p>模型来源连接账号和资源，来源池分配不同会话的流量。</p>
+        <p>只添加需要的资源和模型，每个来源独立选择 Proxy。</p>
         <div className="actions">
-          <Button
-            variant="secondary"
-            onClick={() => show(<PoolEditor {...common} />)}
-          >
-            <Network size={16} />
-            添加来源池
-          </Button>
           <Button onClick={() => show(<AddSource onClose={close} />)}>
             <Plus size={16} />
             添加来源
@@ -1127,13 +1122,43 @@ export function Sources() {
                     s.account_id}
                 </span>
                 <span>
-                  Proxy ·{" "}
-                  {config.proxies.profiles.find(
-                    (p) => p.id === config.proxies.bindings[s.id],
-                  )?.name ||
-                    (config.proxies.bindings[s.id] === "direct"
-                      ? "直连"
-                      : "系统")}
+                  <label className="source-proxy">
+                    Proxy{" "}
+                    <Select
+                      aria-label={"Proxy · " + s.name}
+                      value={config.proxies.bindings[s.id] || "system"}
+                      disabled={!!busy}
+                      onChange={async (e) => {
+                        const proxy = e.target.value;
+                        setBusy(s.id);
+                        setError("");
+                        try {
+                          await save({
+                            ...config,
+                            proxies: {
+                              ...config.proxies,
+                              bindings: {
+                                ...config.proxies.bindings,
+                                [s.id]: proxy,
+                              },
+                            },
+                          });
+                        } catch (e) {
+                          setError((e as Error).message);
+                        } finally {
+                          setBusy("");
+                        }
+                      }}
+                    >
+                      <option value="system">系统</option>
+                      <option value="direct">直连</option>
+                      {config.proxies.profiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
                 </span>
                 {s.deployments?.length > 0 && (
                   <span>{s.deployments.length} 个模型</span>
@@ -1221,6 +1246,21 @@ export function Sources() {
           </div>
         ))}
       </Panel>
+    </>
+  );
+}
+export function Pools() {
+  const { config, save, show, close } = useApp();
+  const common = { config, save, close };
+  return (
+    <>
+      <div className="page-toolbar">
+        <p>新会话按权重分配，同一会话保持来源固定。</p>
+        <Button onClick={() => show(<PoolEditor {...common} />)}>
+          <Plus size={16} />
+          添加来源池
+        </Button>
+      </div>
       <div className="section-heading">
         <div>
           <h2>来源池</h2>
@@ -1298,207 +1338,6 @@ export function Sources() {
         </div>
       )}
     </>
-  );
-}
-export function Clients() {
-  const { config, status, save, show, close, reload } = useApp(),
-    [search, setSearch] = useState("");
-  const common = { config, save, close };
-  function key(value: string, id: string) {
-    show(<Secret value={value} id={id} onClose={close} />);
-    void reload();
-  }
-  const list = config.clients.filter((c) =>
-    (c.name + " " + c.id).toLowerCase().includes(search.toLowerCase()),
-  );
-  return (
-    <>
-      <div className="page-toolbar">
-        <Input
-          aria-label="搜索 Client"
-          className="search"
-          placeholder="搜索 Client…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <Button onClick={() => show(<ClientEditor {...common} onKey={key} />)}>
-          <Plus size={16} />
-          添加 Client
-        </Button>
-      </div>
-      <div className="connection-strip">
-        <KeyRound size={20} />
-        <div>
-          <strong>每个调用方，独立的密钥与路由。</strong>
-          <p>
-            Codex <code>{status.gateway_url || location.origin}/codex</code>{" "}
-            <span>·</span> Claude Code{" "}
-            <code>{status.gateway_url || location.origin}/cc</code>
-          </p>
-        </div>
-      </div>
-      {list.length === 0 ? (
-        <Panel>
-          <Empty title={search ? "没有匹配的 Client" : "创建第一个 Client"}>
-            为每个人分配密钥，选择他们可以使用的来源与模型。
-          </Empty>
-        </Panel>
-      ) : (
-        list.map((c) => (
-          <Panel
-            key={c.id}
-            className="client-panel"
-            title={
-              <>
-                <Users size={18} />
-                {c.name}
-                <Badge tone={c.disabled ? "amber" : "mint"}>
-                  {c.disabled ? "已停用" : "启用"}
-                </Badge>
-              </>
-            }
-            description={c.id}
-            actions={
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() =>
-                  show(<ClientEditor {...common} original={c} onKey={key} />)
-                }
-              >
-                <Pencil size={14} />
-                编辑路由
-              </Button>
-            }
-          >
-            <div className="route-table">
-              <div className="route-table-head">
-                <span>顺序</span>
-                <span>Agent / 请求模型</span>
-                <span></span>
-                <span>目标来源 / 模型</span>
-              </div>
-              {c.routes.map((r, i) => (
-                <div className="route-table-row" key={r.id}>
-                  <span className="rule-order">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <div>
-                    <strong>
-                      {r.agent === "codex" ? "Codex" : "Claude Code"}
-                    </strong>
-                    <code>
-                      {r.match_model === "*" ? "所有模型 (*)" : r.match_model}
-                    </code>
-                  </div>
-                  <ArrowRight size={18} />
-                  <div>
-                    <strong>{sourceName(config, r.source_id)}</strong>
-                    <code>{r.model}</code>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="entity-footer">
-              <span>密钥识别调用方 · 路由按顺序匹配</span>
-              <div className="actions">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    show(
-                      <Confirm
-                        title={c.disabled ? "启用 Client？" : "停用 Client？"}
-                        description={
-                          c.disabled
-                            ? "恢复这个 Client 的请求权限。"
-                            : "下一次请求起拒绝这个 Client，配置和密钥保留。"
-                        }
-                        onClose={close}
-                        action={() =>
-                          save({
-                            ...config,
-                            clients: config.clients.map((v) =>
-                              v.id === c.id
-                                ? { ...v, disabled: !v.disabled }
-                                : v,
-                            ),
-                          })
-                        }
-                      />,
-                    )
-                  }
-                >
-                  {c.disabled ? "启用" : "停用"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    show(
-                      <RotateClient client={c} onClose={close} onKey={key} />,
-                    )
-                  }
-                >
-                  轮换密钥
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={"删除 " + c.name}
-                  onClick={() =>
-                    show(
-                      <Confirm
-                        title="删除 Client？"
-                        description="该 Client 的密钥将失效，需要重新创建才能恢复访问。"
-                        onClose={close}
-                        action={() =>
-                          save({
-                            ...config,
-                            clients: config.clients.filter(
-                              (v) => v.id !== c.id,
-                            ),
-                          })
-                        }
-                      />,
-                    )
-                  }
-                >
-                  <Trash2 size={15} />
-                </Button>
-              </div>
-            </div>
-          </Panel>
-        ))
-      )}
-    </>
-  );
-}
-function RotateClient({
-  client,
-  onClose,
-  onKey,
-}: {
-  client: Client;
-  onClose: () => void;
-  onKey: (key: string, id: string) => void;
-}) {
-  return (
-    <Editor
-      title="轮换 Client 密钥？"
-      onClose={onClose}
-      onSave={async () => {
-        const v = await api<{ api_key: string }>(
-          `clients/${client.id}/rotate`,
-          "POST",
-          {},
-        );
-        onKey(v.api_key, client.id);
-      }}
-      saveLabel="生成新密钥"
-    >
-      <p>旧密钥会立即失效，请将新密钥交给 {client.name}。</p>
-    </Editor>
   );
 }
 export function Proxies() {

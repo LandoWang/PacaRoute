@@ -5,7 +5,7 @@
 [Setup]
 AppId={{CD276767-FCF8-4744-9C51-4DE22E89ED02}
 AppName=PacaRoute
-AppVersion=0.7.0
+AppVersion=0.8.0
 DefaultDirName={localappdata}\Programs\PacaRoute
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible

@@ -23,8 +23,8 @@ Open the printed URL and use the protected `admin.key` file in the data director
 to sign in to management. `ui` opens the management page; desktop/local-management mode uses a one-use browser login ticket. The
 admin cookie is HttpOnly and SameSite Strict; cross-origin management writes are
 rejected. The browser does not store the key in localStorage. For a private local
-Agent setup, `serve --allow-local` permits loopback Agent requests without a Client
-key. The default CLI server requires Client keys. The Mac application enables this
+Agent setup, `serve --allow-local` permits loopback requests through the enabled
+local `default` Client and its routes. The default CLI server requires Client keys. The Mac application enables this
 local mode, while network callers always need their own Client keys.
 
 `--home PATH` or `PACAROUTE_HOME` chooses the data directory. On macOS an existing
@@ -39,8 +39,8 @@ refresh-bearing credentials for tests.
 
 ## Accounts, sources and proxies
 
-1. Add a GitHub account in Accounts, then use Device Login. Login creates a Copilot
-   source in the browser/Mac UI. The CLI can add it explicitly.
+1. Add a GitHub account in Accounts, then use Device Login. Then explicitly add a Copilot
+   source for that account. The legacy built-in Copilot source remains available.
 2. For Azure OpenAI / Foundry, choose an Azure account, a resource endpoint and GPT
    deployment names. Separate resources can use the same account. Resource endpoints
    are normalized to `/openai/v1`.
@@ -81,7 +81,7 @@ bundle Azure CLI.
 ## Client routing and weighted pools
 
 A Client is a person/caller, not an Agent product. Each Client gets a random API key;
-only its SHA-256 hash is stored in `clients.json`. The key is shown once on creation
+only its SHA-256 hash is stored in `pacaroute.sqlite`. The key is shown once on creation
 or rotation. Disabled/deleted Clients are rejected on their next request.
 
 Routes are evaluated in order, matching Agent (`codex` or `claude-code`) and the
@@ -130,21 +130,24 @@ or full replayable history after such an error.
 
 ## Hot configuration and local Agent configuration
 
-CLI, native UI and management API share split JSON metadata. Writes validate all
-references, use an optimistic revision plus a process lock, and journal a recoverable
-transaction before replacing files. Invalid external edits retain the last valid
-snapshot and surface a management error. Referenced accounts/sources/pools cannot
-be deleted until their routes are updated. No service restart is required for
-accounts, sources, Client routes, pause state, weights, credentials or proxies.
-Listening address/port changes require restarting the listener.
+CLI, web UI and management API share `pacaroute.sqlite`. All references are
+validated before a revision-checked atomic write. Startup imports legacy split
+JSON once and retains the original files. New requests use immutable snapshots;
+external CLI writes appear within one second. Referenced accounts/sources/pools
+cannot be deleted until their routes are updated. No service restart is required
+for accounts, sources, Client routes, pause state, weights, credentials or proxies.
 
-The native Agent pane and `pacaroute configure` preview changes to the local Codex
-TOML or Claude JSON, require the preview fingerprint to apply, and save the original
-bytes first. Unrelated settings are retained; ambiguous TOML edits fail closed.
-Configuration is never changed merely by starting PacaRoute. Backups and restore
-are local CLI/desktop operations, not remote management endpoints.
+Use the Client page to generate a connection script for each enabled Agent. Scripts
+call `pacaroute connect`, which needs no running local gateway, reads a remote
+Client key on stdin, backs up the old TOML/JSON and preserves unrelated settings.
+The script configures generic gateway URLs; target selection belongs to Routes.
+New local `default` Clients must have routes assigned before use. Imported local
+configurations retain visible legacy direct routing until explicitly replaced.
+Deleting `default` permanently disables local keyless access.
 
-## Usage, errors and sessions
+See [the current workspace and migration contract](pacaroute-web-desktop.md#clients-routes-and-configuration).
+
+## Usage and errors
 
 The usage page provides whole-service totals, per-source totals and UTC hourly
 buckets over a chosen time window. The API also supports filtering by Client.
@@ -156,8 +159,8 @@ remain authoritative in Azure.
 Request records include source, model, Client, tokens, duration and status. Prompts
 and credentials are excluded. `--trace-dir PATH` explicitly enables request/response
 body capture for isolated debugging; these files can contain conversation content.
-The native Mac UI retains the existing incremental SQLite activity index and local
-Codex/Claude history reader; session history is not sent to the remote management UI.
+Chat-history browsing and analysis are removed from the Go app. Session identifiers
+are still used for sticky routing; conversation history is not indexed.
 
 ## Deploy and package
 

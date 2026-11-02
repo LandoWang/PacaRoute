@@ -343,7 +343,10 @@ func hasContinuation(body map[string]json.RawMessage) bool {
 func rawString(b json.RawMessage) string { var s string; _ = json.Unmarshal(b, &s); return s }
 func jsonBytes(v any) json.RawMessage    { b, _ := json.Marshal(v); return b }
 func (c *Config) Resolve(client *Client, agent, model, explicit string) (string, string, error) {
-	if client != nil {
+	if !client.AgentEnabled(agent) {
+		return "", "", errors.New("Agent is not enabled for this Client")
+	}
+	if !client.LegacyDirect {
 		for _, r := range client.Routes {
 			if r.Agent == agent && (r.MatchModel == "*" || r.MatchModel == model) {
 				if explicit != "" && explicit != r.SourceID {

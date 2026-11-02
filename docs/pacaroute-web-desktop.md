@@ -1,6 +1,6 @@
 # PacaRoute web and desktop architecture
 
-PacaRoute 0.7 uses one React/TypeScript frontend and a Go management API. The desktop distribution adds a small native system-tray/menu-bar controller to the Go process; it opens the management interface in the default browser. It does not use Wails, Electron or a bundled browser. Closing the browser does not stop the gateway.
+PacaRoute 0.8 uses one React/TypeScript frontend and a Go management API. The desktop distribution adds a small native system-tray/menu-bar controller to the Go process; it opens the management interface in the default browser. It does not use Wails, Electron or a bundled browser. Closing the browser does not stop the gateway.
 
 ## Run and distribute
 
@@ -26,11 +26,56 @@ Account cards use provider marks; source cards use product marks (including GitH
 | Anthropic | Anthropic API | Account API key; optional source override |
 | Azure | Foundry / Azure OpenAI resource | Azure CLI identity or resource API key |
 
-The default account form asks only for a provider and, for OpenAI/Anthropic, an API key. GitHub/Azure proceed directly to device authorization. Names and stable IDs are generated automatically; optional labels and IDs are under Advanced. Add source starts with account selection, then infers the resource type. Azure picks the default subscription when available and discovers resources/deployments. API resources use official endpoints and discover models automatically. Custom endpoints, credentials, Proxy and manual model IDs remain available under Advanced; discovering models never silently rewrites saved routes.
+The default account form asks only for a provider and, for OpenAI/Anthropic, an API key. GitHub offers built-in device authorization or a custom OAuth App client ID. Azure offers shared CLI identity (default) or isolated device authorization. Names and stable IDs are generated automatically; optional labels and IDs are under Advanced. Add source starts with account selection, then infers the resource type. Azure picks the default subscription when available and discovers resources/deployments. API resources use official endpoints and discover models automatically. Custom endpoints, credentials and manual model IDs remain available under Advanced; source rows expose a compact Proxy selector; discovering models never silently rewrites saved routes.
 
 An OpenAI account cannot be attached to an Anthropic source. Legacy `api-key` account records remain compatible but are no longer the default new-account choice. GitHub Device Login authenticates the account; use Add source to connect its Copilot resource. The legacy default Copilot source remains available. OpenAI and Anthropic account keys are set once on the account; their sources inherit that key unless a resource-specific credential overrides it. Key rotation invalidates leases without restarting the service. CLI equivalents are `pacaroute key set --account ACCOUNT` and `pacaroute key set --source SOURCE`, both reading the secret from stdin.
 
 Azure Accounts exposes subscription discovery, resource discovery and deployment selection. The resulting source retains `subscription_id` and `resource_id`. Existing sources can rediscover deployments and explicitly update their configured model list. A source without a resource ID can match its endpoint within its saved subscription. Discovery requires an Azure CLI login with resource read permission; an inference API key alone does not grant management-plane deployment discovery. OpenAI and Anthropic resources can discover the model catalog through their authenticated API. A discovered model ID does not guarantee every Agent/tool capability; only configured selections are exposed for routing.
+
+## Clients, routes and configuration
+
+Navigation is Overview, Accounts, Sources, Pools, Clients, Routes, Usage, Proxy,
+Service settings and Errors. There is no separate Agent or session-history page.
+Session affinity remains a router capability; no local chat history is read.
+
+Fresh installations contain a local-only `default` Client with Codex and Claude
+Code enabled and no routes. Choose a target per enabled Agent in Routes, then
+open its connection script in Clients. Remote Clients receive their own keys.
+An explicit empty `enabled_agents` list denies all Agent access; omitted legacy
+lists enable both. The gateway checks this before model listing and route lookup.
+Deleting `default` permanently removes loopback keyless access, including across
+restart. Public/forwarded requests cannot use that identity.
+
+Client cards generate Bash or PowerShell scripts for `pacaroute connect`. These
+run on the caller's computer, not the service host. macOS scripts also find an
+installed `/Applications/PacaRoute.app`; Windows scripts find `pacaroute-cli.exe`
+beside the script or on PATH. The CLI 0.8+ needs no running local service. It reads
+the Client key from stdin, creates an exact backup, safely edits TOML/JSON and
+preserves unrelated settings. The caller's config stores its Client key with
+private file permissions; generated scripts and previews contain no key. Restore
+is available on the local default card or through the CLI. Source changes later
+happen solely in Routes; advanced ordered model-alias rules remain supported.
+
+Router configuration lives in `<home>/pacaroute.sqlite`: a schema-versioned,
+revisioned document preserves atomic cross-entity invariants. Writes validate
+and compare revisions in one SQLite commit. Requests use immutable memory
+snapshots; other CLI/process writes are detected within one second. Back up the
+DB with SQLite's backup API, or stop the service before copying it and its WAL.
+Do not edit tables directly; use the management API or `config show|apply`.
+
+On first use, split JSON (or a committed old recovery journal) imports once.
+Original files are retained but are no longer live inputs after migration. An
+imported local Client visibly retains legacy direct routing until an explicit
+route edit replaces it; this compatibility mode cannot be re-enabled. If an old
+network Client already owns ID `default`, its identity is preserved and no local
+Client is added. Reverting to an older binary reads only its old JSON state.
+Provider keys, refresh tokens and encrypted credential files remain behind Auth,
+not in SQLite. Service port/startup preferences and usage journals remain separate.
+
+Shared Azure login reads the existing `AZURE_CONFIG_DIR` (or `~/.azure`) without
+copying or logging out that cache. Isolated login uses a separate account folder.
+Built-in GitHub login persists authorization and refreshes Copilot exchange leases;
+custom OAuth login rotates a refresh token only when GitHub issues one.
 
 ## Frontend development and separate hosting
 
@@ -74,8 +119,6 @@ For independently hosted static files, serve `dist` and proxy `/api` plus gatewa
 Local endpoints additionally require explicit local management, a loopback peer and loopback Host, and no public origin. Merely knowing the admin key does not expose host files remotely.
 
 - `/api/local/agents`, `/configure`, `/backups`, `/restore`: local Agent configuration, fingerprinted preview/apply and exact-byte backups.
-- `/api/local/sessions`, `/session`: local Codex/Claude history. Codex reads its existing SQLite indexes read-only; JSONL catalogs cache file metadata and read bounded pieces. History is paginated, directory-contained and read only when requested.
-- `/api/local/analyze`: explicitly sends currently loaded history (bounded to approximately 48,000 characters) to the selected source. Transcript text is treated as untrusted evidence. It is not sent merely by opening history.
 - `/api/local/service`, `/startup`: desktop-only listener/startup preferences.
 - `/api/local/browser-ticket`, `/api/login/ticket`: authenticated desktop/browser handoff; one use and a 60-second lifetime.
 
@@ -96,4 +139,4 @@ npm --prefix apps/web test
 
 macOS bundles are ad-hoc signed, not notarized. Windows portable binaries are unsigned. Cross-compilation is not evidence of physical Intel or Windows tray behavior; record those separately. `.github/workflows/pacaroute.yml` supplies native Windows/macOS/Linux checks and a Windows installer build when run on the private repository.
 
-See [release verification](pacaroute-web-desktop-verification.md) for exact client evidence and platform limits.
+See [0.8 release verification](pacaroute-router-workspace-verification.md) for exact client evidence and platform limits. The [0.7 report](pacaroute-web-desktop-verification.md) remains historical evidence.

@@ -13,7 +13,7 @@ import (
 func (a *Auth) AzureAction(ctx context.Context, id, action, subscription, resource string) (map[string]any, error) {
 	c := a.store.Snapshot()
 	p, _ := c.Proxy(c.Proxies.AccountProxyID)
-	env := a.azureEnv(id, p)
+	env := a.azureEnv(c, id, p)
 	args := []string{"account", "list", "--query", "[].{id:id,name:name,state:state,isDefault:isDefault,user:{name:user.name}}", "-o", "json"}
 	switch action {
 	case "account", "account-status", "azure-subscriptions":
@@ -75,7 +75,7 @@ func (a *Auth) AzureAction(ctx context.Context, id, action, subscription, resour
 	return out, nil
 }
 func (a *Auth) AzureLogin(ctx context.Context, id string, logout bool, emit func(any)) error {
-	if id == "azure-local" {
+	if sharedAzure(a.store.Snapshot(), id) {
 		return errors.New("use az login in your terminal for the shared Azure CLI account, or add an isolated Azure account")
 	}
 	c := a.store.Snapshot()
@@ -87,7 +87,7 @@ func (a *Auth) AzureLogin(ctx context.Context, id string, logout bool, emit func
 		args = []string{"logout"}
 	}
 	cmd := azureCommand(ctx, args...)
-	cmd.Env = append(a.azureEnv(id, p), "AZURE_CORE_LOGIN_EXPERIENCE_V2=off")
+	cmd.Env = append(a.azureEnv(c, id, p), "AZURE_CORE_LOGIN_EXPERIENCE_V2=off")
 	stderr, e := cmd.StderrPipe()
 	if e != nil {
 		return e

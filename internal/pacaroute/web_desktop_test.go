@@ -2,7 +2,6 @@ package pacaroute
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -151,94 +150,6 @@ func TestLocalAgentPreviewApplyAndBackup(t *testing.T) {
 	backup, _ := os.ReadFile(plan["backup_path"].(string))
 	if string(backup) != string(original) {
 		t.Fatal("original config was not backed up exactly")
-	}
-}
-
-// Contract: the shared reader uses Codex's index and history database, including renamed titles.
-func TestSessionDatabaseCatalogAndPagination(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("CODEX_HOME", root)
-	db, e := sql.Open("sqlite", filepath.Join(root, "state_9.sqlite"))
-	if e != nil {
-		t.Fatal(e)
-	}
-	_, e = db.Exec(`CREATE TABLE threads(id TEXT,name TEXT,title TEXT,cwd TEXT,updated_at INTEGER,rollout_path TEXT); INSERT INTO threads VALUES('thread','Renamed session','Original','/work',100,'')`)
-	if e != nil {
-		t.Fatal(e)
-	}
-	db.Close()
-	db, _ = sql.Open("sqlite", filepath.Join(root, "thread_history_2.sqlite"))
-	_, e = db.Exec(`CREATE TABLE thread_items(thread_id TEXT,rollout_ordinal INTEGER,item_json TEXT)`)
-	if e != nil {
-		t.Fatal(e)
-	}
-	for j := 0; j < 125; j++ {
-		_, e = db.Exec(`INSERT INTO thread_items VALUES('thread',?,?)`, j, fmt.Sprintf(`{"type":"agentMessage","id":"m-%d","text":"reply %d"}`, j, j))
-		if e != nil {
-			t.Fatal(e)
-		}
-	}
-	db.Close()
-	s := localTestServer(t)
-	index := s.sessionReader()
-	catalog, e := index.catalog(context.Background(), "codex", "Renamed", 0)
-	if e != nil {
-		t.Fatal(e)
-	}
-	rows := catalog["sessions"].([]localSession)
-	if len(rows) != 1 || rows[0].Title != "Renamed session" {
-		t.Fatal(rows)
-	}
-	page, e := index.page(context.Background(), "codex", "thread", "")
-	if e != nil {
-		t.Fatal(e)
-	}
-	items := page["items"].([]sessionItem)
-	if len(items) != 100 || items[0].ID != "m-25" || items[99].ID != "m-124" {
-		t.Fatal("history order or limit")
-	}
-	page, e = index.page(context.Background(), "codex", "thread", page["older"].(string))
-	if e != nil {
-		t.Fatal(e)
-	}
-	if len(page["items"].([]sessionItem)) != 25 || page["older"] != "" {
-		t.Fatal("cursor skipped history")
-	}
-}
-
-// Contract: file histories skip partial appends, keep tools and never escape the Agent home.
-func TestSessionFileHistoryBoundariesAndContainment(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("CLAUDE_CONFIG_DIR", root)
-	dir := filepath.Join(root, "projects", "work")
-	os.MkdirAll(dir, 0700)
-	path := filepath.Join(dir, "test.jsonl")
-	data := `{"type":"user","uuid":"u1","cwd":"/work","message":{"content":"Question"}}` + "\n" + `{"type":"assistant","uuid":"a1","message":{"content":[{"type":"tool_use","name":"Read","input":{"file":"a.txt"}}]}}` + "\n" + `{"type":"assistant","uuid":"partial"`
-	os.WriteFile(path, []byte(data), 0600)
-	s := localTestServer(t)
-	index := s.sessionReader()
-	catalog, e := index.catalog(context.Background(), "claude-code", "", 0)
-	if e != nil {
-		t.Fatal(e)
-	}
-	rows := catalog["sessions"].([]localSession)
-	if len(rows) != 1 || rows[0].Title != "Question" {
-		t.Fatal(rows)
-	}
-	page, e := index.page(context.Background(), "claude-code", rows[0].ID, "")
-	if e != nil {
-		t.Fatal(e)
-	}
-	items := page["items"].([]sessionItem)
-	if len(items) != 2 || items[1].Kind != "tool" {
-		t.Fatal("tool or partial append handling")
-	}
-	outside := filepath.Join(t.TempDir(), "private.jsonl")
-	os.WriteFile(outside, []byte(data), 0600)
-	session := rows[0]
-	session.File = outside
-	if _, e = fileSessionPage(root, session, "claude-code", ""); e == nil {
-		t.Fatal("external history read allowed")
 	}
 }
 

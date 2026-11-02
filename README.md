@@ -9,7 +9,8 @@ UI, and a native macOS application with the aurora alpaca menu-bar icon.
 - Weighted source pools, persistent session affinity and bounded failover.
 - Live source/account/route changes without restarting the service.
 - Whole-service and per-source usage, time charts, Copilot quotas and errors.
-- Mac local session history, Agent configuration previews and backups.
+- Client-specific Agent connection scripts, configuration backups and restore.
+- SQLite configuration with atomic revisions and one-time legacy JSON migration.
 - Separate Apple Silicon and Intel application packages; standalone Linux/macOS CLI.
 
 ```sh

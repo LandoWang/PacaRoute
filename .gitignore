@@ -152,3 +152,8 @@ __pycache__/
 apps/web/*.tsbuildinfo
 apps/web/test-results/
 apps/web/dist/
+
+# Revisioned router database and SQLite sidecars
+pacaroute.sqlite
+pacaroute.sqlite-wal
+pacaroute.sqlite-shm

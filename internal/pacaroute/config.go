@@ -1,8 +1,6 @@
 package pacaroute
 
 import (
-	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -12,8 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
-	"time"
 )
 
 type Account struct {
@@ -21,6 +17,7 @@ type Account struct {
 	Name          string `json:"name"`
 	Kind          string `json:"kind"`
 	OAuthClientID string `json:"oauth_client_id,omitempty"`
+	LoginMode     string `json:"login_mode,omitempty"`
 }
 type Source struct {
 	ID             string   `json:"id"`
@@ -66,11 +63,14 @@ type Route struct {
 	Model      string `json:"model"`
 }
 type Client struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	Disabled bool    `json:"disabled"`
-	KeyHash  string  `json:"key_hash,omitempty"`
-	Routes   []Route `json:"routes"`
+	Local         bool     `json:"local,omitempty"`
+	LegacyDirect  bool     `json:"legacy_direct,omitempty"`
+	EnabledAgents []string `json:"enabled_agents"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Disabled      bool     `json:"disabled"`
+	KeyHash       string   `json:"key_hash,omitempty"`
+	Routes        []Route  `json:"routes"`
 }
 type SourceState struct {
 	Paused []string `json:"paused"`
@@ -172,6 +172,12 @@ func (c *Config) Validate() error {
 	for _, a := range c.Accounts {
 		if !validID(a.ID) || seen[a.ID] || strings.TrimSpace(a.Name) == "" || (a.Kind != "github" && a.Kind != "azure" && !accountUsesAPIKey(a.Kind)) {
 			return fmt.Errorf("invalid or duplicate account %q", a.ID)
+		}
+		if a.LoginMode != "" && !((a.Kind == "azure" && (a.LoginMode == "azure-cli" || a.LoginMode == "device")) || (a.Kind == "github" && (a.LoginMode == "device" || a.LoginMode == "oauth-app"))) {
+			return errors.New("unsupported account login method")
+		}
+		if a.LoginMode == "oauth-app" && strings.TrimSpace(a.OAuthClientID) == "" {
+			return errors.New("OAuth App client ID required")
 		}
 		seen[a.ID] = true
 	}
@@ -290,13 +296,36 @@ func (c *Config) Validate() error {
 		}
 	}
 	seen = map[string]bool{}
-	for _, v := range c.Clients {
+	for i := range c.Clients {
+		v := &c.Clients[i]
+		if v.EnabledAgents == nil {
+			v.EnabledAgents = []string{"codex", "claude-code"}
+		}
+		if v.Routes == nil {
+			v.Routes = []Route{}
+		}
 		if !validID(v.ID) || seen[v.ID] || v.Name == "" {
 			return errors.New("invalid client")
 		}
 		seen[v.ID] = true
-		if h, e := hex.DecodeString(v.KeyHash); e != nil || len(h) != 32 {
-			return errors.New("client requires a hashed API key")
+		agents := map[string]bool{}
+		for _, agent := range v.EnabledAgents {
+			if !agentValid(agent) || agents[agent] {
+				return errors.New("invalid enabled Agent")
+			}
+			agents[agent] = true
+		}
+		if v.Local {
+			if v.ID != "default" || v.KeyHash != "" {
+				return errors.New("local Client must be default and cannot have an API key")
+			}
+		} else {
+			if h, e := hex.DecodeString(v.KeyHash); e != nil || len(h) != 32 {
+				return errors.New("client requires a hashed API key")
+			}
+		}
+		if v.LegacyDirect && (!v.Local || len(v.Routes) != 0) {
+			return errors.New("legacy local routing cannot coexist with explicit routes")
 		}
 		ids := map[string]bool{}
 		for _, route := range v.Routes {
@@ -343,158 +372,30 @@ func (c *Config) validateTarget(id, model, agent string) error {
 	return nil
 }
 
-type ConfigStore struct {
-	Root      string
-	mu        sync.Mutex
-	current   *Config
-	stamp     string
-	lastError string
+func (c *Config) Client(id string) (*Client, bool) {
+	for _, v := range c.Clients {
+		if v.ID == id {
+			copy := v
+			return &copy, true
+		}
+	}
+	return nil, false
+}
+func (c *Client) AgentEnabled(agent string) bool {
+	if c == nil || c.Disabled {
+		return false
+	}
+	if c.EnabledAgents == nil {
+		return agentValid(agent)
+	}
+	for _, value := range c.EnabledAgents {
+		if value == agent {
+			return true
+		}
+	}
+	return false
 }
 
-var configFiles = []string{"accounts.json", "sources.json", "source-pools.json", "proxies.json", "clients.json", "source-state.json"}
-
-func NewConfigStore(root string) (*ConfigStore, error) {
-	if e := os.MkdirAll(root, 0700); e != nil {
-		return nil, e
-	}
-	s := &ConfigStore{Root: root}
-	_, e := s.Reload()
-	return s, e
-}
-func (s *ConfigStore) fingerprint() string {
-	h := sha256.New()
-	for _, n := range configFiles {
-		f, e := os.Stat(filepath.Join(s.Root, n))
-		if e != nil {
-			fmt.Fprint(h, n, "missing")
-		} else {
-			fmt.Fprint(h, n, f.Size(), f.ModTime().UnixNano())
-		}
-	}
-	return hex.EncodeToString(h.Sum(nil))
-}
-func (s *ConfigStore) Snapshot() *Config {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if e := s.reloadLocked(); e != nil {
-		s.lastError = e.Error()
-	}
-	return s.current
-}
-func (s *ConfigStore) Reload() (*Config, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	e := s.reloadLocked()
-	return s.current, e
-}
-func (s *ConfigStore) reloadLocked() error {
-	unlock, e := fileLock(context.Background(), filepath.Join(s.Root, "config.lock"), 5*time.Second)
-	if e != nil {
-		return e
-	}
-	defer unlock()
-	return s.readLocked()
-}
-func (s *ConfigStore) readLocked() error {
-	if e := s.recoverLocked(); e != nil {
-		return e
-	}
-	stamp := s.fingerprint()
-	if s.current != nil && stamp == s.stamp {
-		return nil
-	}
-	c := &Config{Proxies: Proxies{AccountProxyID: "system", Bindings: map[string]string{}}}
-	parts := []any{&c.Accounts, &c.Sources, &c.Pools, &c.Proxies, &c.Clients, &c.SourceState}
-	for i, n := range configFiles {
-		b, e := os.ReadFile(filepath.Join(s.Root, n))
-		if os.IsNotExist(e) {
-			continue
-		}
-		if e != nil {
-			return e
-		}
-		if len(b) > 4<<20 {
-			return errors.New("configuration file too large")
-		}
-		if e = json.Unmarshal(b, parts[i]); e != nil {
-			s.lastError = "Invalid " + n
-			return errors.New(s.lastError)
-		}
-	}
-	if e := c.Validate(); e != nil {
-		s.lastError = e.Error()
-		return e
-	}
-	if stamp != s.fingerprint() {
-		return errors.New("configuration changed while reading; retry")
-	}
-	c.Revision = stamp
-	s.current = c
-	s.stamp = stamp
-	s.lastError = ""
-	return nil
-}
-
-// Save serializes CLI/API writers and commits a recoverable transaction before replacing split files.
-func (s *ConfigStore) Save(c Config, expected string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	unlock, e := fileLock(context.Background(), filepath.Join(s.Root, "config.lock"), 5*time.Second)
-	if e != nil {
-		return e
-	}
-	defer unlock()
-	if e = s.readLocked(); e != nil {
-		return e
-	}
-	if expected != "" && expected != s.current.Revision {
-		return errors.New("configuration changed; reload before saving")
-	}
-	if e = c.Validate(); e != nil {
-		return e
-	}
-	b, e := json.Marshal(c)
-	if e != nil {
-		return e
-	}
-	if e = atomicWrite(filepath.Join(s.Root, "config.transaction.json"), b, 0600); e != nil {
-		return e
-	}
-	if e = s.recoverLocked(); e != nil {
-		return e
-	}
-	s.stamp = ""
-	return s.readLocked()
-}
-func (s *ConfigStore) recoverLocked() error {
-	path := filepath.Join(s.Root, "config.transaction.json")
-	b, e := os.ReadFile(path)
-	if os.IsNotExist(e) {
-		return nil
-	}
-	if e != nil {
-		return e
-	}
-	var c Config
-	if e = json.Unmarshal(b, &c); e != nil {
-		return e
-	}
-	if e = c.Validate(); e != nil {
-		return e
-	}
-	parts := []any{c.Accounts, c.Sources, c.Pools, c.Proxies, c.Clients, c.SourceState}
-	for i, n := range configFiles {
-		b, e := json.MarshalIndent(parts[i], "", "  ")
-		if e != nil {
-			return e
-		}
-		if e = atomicWrite(filepath.Join(s.Root, n), append(b, '\n'), 0600); e != nil {
-			return e
-		}
-	}
-	return os.Remove(path)
-}
-func (s *ConfigStore) Error() string { s.mu.Lock(); defer s.mu.Unlock(); return s.lastError }
 func atomicWrite(path string, b []byte, mode os.FileMode) error {
 	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
 		return e

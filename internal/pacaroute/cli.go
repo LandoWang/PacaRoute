@@ -27,7 +27,7 @@ type arguments struct {
 
 func parseArgs(args []string) (arguments, error) {
 	v := arguments{flags: map[string]string{}}
-	bools := map[string]bool{"apply": true, "allow-local": true, "local-management": true, "json": true, "no-open": true}
+	bools := map[string]bool{"apply": true, "local": true, "allow-local": true, "local-management": true, "json": true, "no-open": true}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if !strings.HasPrefix(arg, "--") {
@@ -106,7 +106,7 @@ pacaroute serve [--bind 127.0.0.1] [--port 8766] [--allow-local]
            [--public-url https://gateway.example]  Origin behind a TLS proxy
 pacaroute desktop [--port 8766]    Native tray and local service (desktop build)
 pacaroute ui [--port 8766]         Open a running local service in your browser
-serve --local-management          Enable loopback-only Agent config and sessions
+serve --local-management          Enable loopback-only Agent configuration
 pacaroute auth login --account ID  Device login (GitHub or isolated Azure)
 pacaroute auth status|logout --account ID
 pacaroute accounts|sources|pools|proxies|clients list
@@ -120,6 +120,8 @@ pacaroute key set --account ID     OpenAI/Anthropic account API key on stdin
 pacaroute config show|apply        Full config with revision; JSON on stdin
 pacaroute configure --client codex|claude-code --source ID --model MODEL
                    [--port PORT] [--apply --fingerprint HASH]
+pacaroute connect --agent codex|claude-code --url URL --model ALIAS [--local] [--apply]
+                  Client key on stdin; no router service or account required
 pacaroute models --source ID
 pacaroute usage|errors
 
@@ -137,11 +139,20 @@ Web management uses <home>/admin.key. Network clients always use their own keys.
 	defer cancel()
 	emit := func(v any) { _ = json.NewEncoder(out).Encode(v) }
 	fail := func(e error) int { emit(map[string]any{"ok": false, "event": "error", "error": e.Error()}); return 1 }
+	if a.words[0] == "connect" {
+		v, e := connectClient(a, in)
+		if e != nil {
+			return fail(e)
+		}
+		emit(v)
+		return 0
+	}
 	root := a.get("home", defaultRoot())
 	s, e := NewConfigStore(root)
 	if e != nil {
 		return fail(e)
 	}
+	defer s.Close()
 	auth := NewAuth(s, a.get("credential-root", ""))
 	auth.systemKeys = desktopEnabled && runtime.GOOS == "darwin"
 	port, e := strconv.Atoi(a.get("port", "8766"))
@@ -498,7 +509,9 @@ func entityCommand(ctx context.Context, a arguments, s *ConfigStore, in io.Reade
 				return errors.New("ID not found")
 			}
 			if kind == "clients" {
-				if action == "add" {
+				if string(record["local"]) == "true" {
+					delete(record, "key_hash")
+				} else if action == "add" {
 					key := newKey()
 					record["key_hash"] = jsonBytes(keyHash(key))
 					extra["api_key"] = key
@@ -537,6 +550,9 @@ func entityCommand(ctx context.Context, a arguments, s *ConfigStore, in io.Reade
 			for i, v := range entries {
 				m := obj(v)
 				if rawString(m["id"]) == id {
+					if string(m["local"]) == "true" {
+						return errors.New("local Client does not use a key")
+					}
 					key := newKey()
 					m["key_hash"] = jsonBytes(keyHash(key))
 					entries[i] = jsonBytes(m)
