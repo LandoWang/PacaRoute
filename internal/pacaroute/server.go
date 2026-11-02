@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const Version = "0.8.4"
+const Version = "0.8.5"
 
 type Server struct {
 	Store           *ConfigStore
@@ -182,7 +182,15 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 			problem(w, 502, e.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"object": "list", "data": models})
+		// Management shows the full catalog; legacy Agent discovery retains
+		// the compatible subset rather than advertising unsupported protocols.
+		compatible := []Model{}
+		for _, model := range models {
+			if agent == "codex" && model.Codex || agent == "claude-code" && model.Claude {
+				compatible = append(compatible, model)
+			}
+		}
+		writeJSON(w, 200, map[string]any{"object": "list", "data": compatible})
 		return
 	}
 	if r.Method != "POST" || (operation != "responses" && operation != "messages" && operation != "messages/count_tokens") {

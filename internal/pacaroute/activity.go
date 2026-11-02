@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -166,21 +165,23 @@ func (t *Totals) add(a Activity) {
 type ActivityStore struct {
 	root    string
 	mu      sync.Mutex
-	buckets map[string]map[string]Totals
+	buckets map[string]map[activityDimension]Totals
 	recent  []Activity
 	offsets map[string]int64
 	err     string
 }
 
+type activityDimension struct{ Source, Client, Model string }
+
 func NewActivityStore(root string) *ActivityStore {
-	return &ActivityStore{root: filepath.Join(root, "runtime", "desktop-activity"), buckets: map[string]map[string]Totals{}, offsets: map[string]int64{}}
+	return &ActivityStore{root: filepath.Join(root, "runtime", "desktop-activity"), buckets: map[string]map[activityDimension]Totals{}, offsets: map[string]int64{}}
 }
 func (a *ActivityStore) ingest(v Activity) {
 	hour := v.Timestamp.UTC().Format("2006-01-02T15:00:00Z")
 	if a.buckets[hour] == nil {
-		a.buckets[hour] = map[string]Totals{}
+		a.buckets[hour] = map[activityDimension]Totals{}
 	}
-	key := v.Source + "\x00" + v.ClientID
+	key := activityDimension{v.Source, v.ClientID, v.Model}
 	t := a.buckets[hour][key]
 	t.add(v)
 	a.buckets[hour][key] = t
@@ -247,6 +248,7 @@ func (a *ActivityStore) Summary(from, to time.Time, source, client string) map[s
 	a.refresh()
 	total := Totals{}
 	sources := map[string]Totals{}
+	sourceModels := map[string]map[string]Totals{}
 	timeline := map[string]Totals{}
 	for hour, entries := range a.buckets {
 		t, _ := time.Parse(time.RFC3339, hour)
@@ -254,7 +256,7 @@ func (a *ActivityStore) Summary(from, to time.Time, source, client string) map[s
 			continue
 		}
 		for key, v := range entries {
-			s, c, _ := strings.Cut(key, "\x00")
+			s, c := key.Source, key.Client
 			if (source != "" && source != s) || (client != "" && client != c) {
 				continue
 			}
@@ -269,10 +271,14 @@ func (a *ActivityStore) Summary(from, to time.Time, source, client string) map[s
 			}
 			total = combine(total)
 			sources[s] = combine(sources[s])
+			if sourceModels[s] == nil {
+				sourceModels[s] = map[string]Totals{}
+			}
+			sourceModels[s][key.Model] = combine(sourceModels[s][key.Model])
 			timeline[hour] = combine(timeline[hour])
 		}
 	}
-	return map[string]any{"total": total, "sources": sources, "timeline": timeline, "from": from, "to": to}
+	return map[string]any{"total": total, "sources": sources, "source_models": sourceModels, "timeline": timeline, "from": from, "to": to}
 }
 func (a *ActivityStore) Recent(errorsOnly bool) []Activity {
 	a.mu.Lock()

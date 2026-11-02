@@ -143,7 +143,7 @@ npm --prefix apps/web test
 
 macOS bundles are ad-hoc signed, not notarized. Windows portable binaries are unsigned. Cross-compilation is not evidence of physical Intel or Windows tray behavior; record those separately. `.github/workflows/pacaroute.yml` supplies native Windows/macOS/Linux checks and a Windows installer build when run on the private repository.
 
-See [0.8 release verification](pacaroute-router-workspace-verification.md) for exact client evidence and platform limits. The [0.7 report](pacaroute-web-desktop-verification.md) remains historical evidence.
+See [0.8.5 model selection verification](pacaroute-0.8.5-verification.md) and [0.8 release verification](pacaroute-router-workspace-verification.md) for exact client evidence and platform limits. The [0.7 report](pacaroute-web-desktop-verification.md) remains historical evidence.
 
 ### Usage and upstream quota
 
@@ -154,3 +154,29 @@ Client setup. Copilot account quota is shown only in Accounts → account detail
 it is fetched on opening and explicitly refreshed, not on the usage polling interval. Unlimited quotas are not shown as zero, and token-billed quota
 credits are not labeled as inference tokens. Pool percentages exclude paused
 sources while retaining configured weights for future re-enablement.
+
+### Multiple models per Client and Agent
+
+In Client → Agent, select a source and use **Client chooses models** to check
+multiple models. The connection default is saved as the first canonical route
+and used in generated scripts. It does not rewrite other requests: selected
+models get exact-match rules, and unselected models are rejected. Fixed-model
+mode explicitly rewrites every request to one model; source pools still expose
+one model alias. Advanced multi-source, custom-alias and fallback rules remain
+in the advanced editor and are never silently simplified.
+
+Copilot discovery displays every enabled model returned by the account catalog.
+Models without a supported Agent path remain visible but disabled in multi-select.
+The reviewed Responses profile gate remains intact; native Messages models are
+no longer limited to Opus. The observed Claude Code aliases `claude-sonnet-5-5`
+and `claude-opus-5-5` get exact per-Client routes to Copilot's dotted IDs. Other
+provider deployment names are not normalized. Explicit Sonnet 5 remains distinct.
+
+### Usage by source and model
+
+Usage includes source totals and a model breakdown for the actual upstream model,
+under the same time/source/Client filters. Columns and overview cards place cached
+input immediately after input and before output. Cached tokens are cache reads
+already included in input; they must not be added to input again. Missing usage
+is counted separately and is not estimated. Existing activity logs populate the
+model index once at startup, then only newly appended bytes are consumed.

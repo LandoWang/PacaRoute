@@ -519,14 +519,15 @@ func (a *Auth) Models(ctx context.Context, id string) ([]Model, error) {
 		}
 		_, known := copilotResponseEfforts[m.ID]
 		codex := responses && known
-		claude := codex || messages && m.ID == "claude-opus-5.5"
-		if codex || claude {
-			name := m.Name
-			if name == "" {
-				name = m.ID
-			}
-			models = append(models, Model{m.ID, name, m.Vendor, claude, codex})
+		// Native Messages models are advertised by the upstream catalog.
+		claude := codex || messages
+		// Catalog visibility is separate from Agent compatibility. Keep every
+		// enabled upstream model visible without promising unsupported protocols.
+		name := m.Name
+		if name == "" {
+			name = m.ID
 		}
+		models = append(models, Model{m.ID, name, m.Vendor, claude, codex})
 	}
 	return models, nil
 }

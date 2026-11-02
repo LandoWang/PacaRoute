@@ -22,7 +22,7 @@ if [[ "$targets" == all || "$targets" == macos ]]; then
         python3 - "$app_dir" <<'PY'
 import pathlib,plistlib,sys
 app=pathlib.Path(sys.argv[1])
-info={'CFBundleName':'PacaRoute','CFBundleDisplayName':'PacaRoute','CFBundleIdentifier':'com.landowang.pacaroute.tray','CFBundleExecutable':'pacaroute','CFBundlePackageType':'APPL','CFBundleShortVersionString':'0.8.4','CFBundleVersion':'23','LSMinimumSystemVersion':'14.0','LSUIElement':True,'NSHighResolutionCapable':True,'NSPrincipalClass':'NSApplication','CFBundleIconFile':'AppIcon','LSApplicationCategoryType':'public.app-category.developer-tools'}
+info={'CFBundleName':'PacaRoute','CFBundleDisplayName':'PacaRoute','CFBundleIdentifier':'com.landowang.pacaroute.tray','CFBundleExecutable':'pacaroute','CFBundlePackageType':'APPL','CFBundleShortVersionString':'0.8.5','CFBundleVersion':'24','LSMinimumSystemVersion':'14.0','LSUIElement':True,'NSHighResolutionCapable':True,'NSPrincipalClass':'NSApplication','CFBundleIconFile':'AppIcon','LSApplicationCategoryType':'public.app-category.developer-tools'}
 with (app/'Contents/Info.plist').open('wb') as f:plistlib.dump(info,f)
 PY
         codesign --force --sign - "$app_dir"

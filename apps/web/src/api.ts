@@ -90,6 +90,7 @@ export type Totals = {
 export type Usage = {
   total: Totals;
   sources: Record<string, Totals>;
+  source_models: Record<string, Record<string, Totals>>;
   timeline: Record<string, Totals>;
 };
 export type Activity = {

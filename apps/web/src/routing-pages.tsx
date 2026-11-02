@@ -4,15 +4,21 @@ import {
   api,
   type Client,
   type Agent,
-  type Route,
   enabledAgents,
   agentNames,
   generatedID,
   suggestedName,
   sourceName,
-  routeTarget,
+  sources,
 } from "./api";
 import { useApp } from "./state";
+import {
+  readModelSelection,
+  selectedModelRoutes,
+  connectionModelRoutes,
+  type ModelSelection,
+} from "./model-routes";
+import { ModelMultiSelect } from "./model-multiselect";
 import {
   Button,
   Badge,
@@ -320,7 +326,7 @@ function ConnectionScript({
   agent: Agent;
   onClose: () => void;
 }) {
-  const { status } = useApp();
+  const { status, config } = useApp();
   const [platform, setPlatform] = useState<ScriptPlatform>("shell"),
     [address, setAddress] = useState(status.gateway_url || location.origin),
     [copied, setCopied] = useState(false),
@@ -348,7 +354,10 @@ function ConnectionScript({
       active.current = false;
     };
   }, [client.id, client.local]);
-  const matches = client.routes.filter((r) => r.agent === agent),
+  const agentRoutes = client.routes.filter((r) => r.agent === agent);
+  const kind =
+    sources(config).find((s) => s.id === agentRoutes[0]?.source_id)?.kind || "";
+  const matches = connectionModelRoutes(agentRoutes, kind),
     [routeID, setRouteID] = useState(matches[0]?.id || "");
   const route = matches.find((r) => r.id === routeID);
   const model =
@@ -522,19 +531,30 @@ function ConnectionScript({
 function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
   const { config, status, save, show, close } = useApp();
   const existing = client.routes.filter((r) => r.agent === agent);
-  const [route, setRoute] = useState<Route>(
-    existing[0] || {
-      id: generatedID("route"),
-      agent,
-      match_model: "*",
-      source_id: "",
-      model: "",
+  const kind = (id: string) =>
+    sources(config).find((s) => s.id === id)?.kind || "";
+  const initial = readModelSelection(existing, kind(existing[0]?.source_id));
+  const [selection, setSelection] = useState<ModelSelection>(
+    initial || {
+      source: "",
+      models: [],
+      defaultModel: "",
+      fixed: false,
     },
   );
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const complex =
-    existing.length > 1 || existing.some((r) => r.match_model !== "*");
+  const complex = initial === null;
+  const pool = config.pools.find((p) => "pool:" + p.id === selection.source);
+  function selectModels(models: string[]) {
+    setSelection((v) => ({
+      ...v,
+      models,
+      defaultModel: models.includes(v.defaultModel)
+        ? v.defaultModel
+        : models[0] || "",
+    }));
+  }
   async function persist(remove = false) {
     setBusy(true);
     setError("");
@@ -548,7 +568,14 @@ function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
                 legacy_direct: false,
                 routes: [
                   ...c.routes.filter((r) => r.agent !== agent),
-                  ...(remove ? [] : [route]),
+                  ...(remove
+                    ? []
+                    : selectedModelRoutes(
+                        agent,
+                        kind(selection.source),
+                        selection,
+                        existing,
+                      )),
                 ],
               }
             : c,
@@ -586,34 +613,88 @@ function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
         </>
       ) : (
         <>
-          <div className="form-grid">
-            <Field label="来源 / 来源池">
-              <TargetPicker
-                config={config}
-                agent={agent}
-                value={route.source_id}
-                onChange={(target) =>
-                  setRoute(routeTarget(route, target, config))
-                }
-              />
-            </Field>
-            <Field label="模型">
-              {route.source_id ? (
-                <ModelInput
+          <div className="route-selection">
+            <div className="form-grid">
+              <Field label="来源 / 来源池">
+                <TargetPicker
                   config={config}
-                  source={route.source_id}
-                  value={route.model}
-                  id={route.id}
-                  onChange={(model) => setRoute((r) => ({ ...r, model }))}
+                  agent={agent}
+                  value={selection.source}
+                  onChange={(source) => {
+                    const targetPool = config.pools.find(
+                      (p) => "pool:" + p.id === source,
+                    );
+                    setSelection({
+                      source,
+                      models: targetPool ? [targetPool.model] : [],
+                      defaultModel: targetPool?.model || "",
+                      fixed: !!targetPool,
+                    });
+                  }}
                 />
-              ) : (
-                <Input disabled placeholder="先选择来源" />
+              </Field>
+              {selection.source && !pool && (
+                <Field label="模型选择方式">
+                  <Select
+                    value={selection.fixed ? "fixed" : "multiple"}
+                    onChange={(e) =>
+                      setSelection((v) => ({
+                        ...v,
+                        fixed: e.target.value === "fixed",
+                      }))
+                    }
+                  >
+                    <option value="multiple">客户端选模型 · 多选</option>
+                    <option value="fixed">固定为一个模型</option>
+                  </Select>
+                </Field>
               )}
-            </Field>
+            </div>
+            {selection.source &&
+              (selection.fixed ? (
+                <>
+                  <Field label={pool ? "来源池模型" : "固定模型"}>
+                    <ModelInput
+                      config={config}
+                      source={selection.source}
+                      value={selection.defaultModel}
+                      id={client.id + agent}
+                      onChange={(model) =>
+                        setSelection((v) => ({
+                          ...v,
+                          models: [model],
+                          defaultModel: model,
+                        }))
+                      }
+                    />
+                  </Field>
+                  <small className="muted">
+                    所有请求使用此模型，包括 Agent 中选择的其他模型。
+                  </small>
+                </>
+              ) : (
+                <ModelMultiSelect
+                  key={selection.source}
+                  config={config}
+                  source={selection.source}
+                  agent={agent}
+                  selected={selection.models}
+                  defaultModel={selection.defaultModel}
+                  onChange={selectModels}
+                  onDefault={(defaultModel) =>
+                    setSelection((v) => ({ ...v, defaultModel }))
+                  }
+                />
+              ))}
           </div>
           <div className="actions">
             <Button
-              disabled={busy || !route.source_id || !route.model}
+              disabled={
+                busy ||
+                !selection.source ||
+                !selection.defaultModel ||
+                !selection.models.length
+              }
               onClick={() => void persist()}
             >
               保存路由

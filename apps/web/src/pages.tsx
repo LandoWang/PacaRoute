@@ -1,6 +1,6 @@
 import { CopilotQuotaDetails, type CopilotInfo } from "./copilot-quota";
 import { BrandIcon } from "./components/brand-icon";
-import { useEffect, useState, useRef, type ReactNode } from "react";
+import { useEffect, useState, useRef, Fragment, type ReactNode } from "react";
 import {
   ArrowRight,
   Plus,
@@ -153,8 +153,8 @@ export function Stats({ total }: { total?: Totals }) {
       {[
         ["请求数", total?.requests, "过去一段时间的模型请求"],
         ["输入 token", total?.input_tokens, "含缓存读取"],
+        ["缓存 token", total?.cached_tokens, "输入 token 中的缓存读取"],
         ["输出 token", total?.output_tokens, "模型生成内容"],
-        ["缓存 token", total?.cached_tokens, "输入 token 的一部分"],
       ].map(([label, value, hint]) => (
         <div className="stat" key={String(label)}>
           <span>{label}</span>
@@ -1702,30 +1702,63 @@ export function UsagePage() {
           </span>
         </div>
       </Panel>
-      <Panel title="按来源统计">
+      <Panel
+        title="按来源 / 模型统计"
+        description="每个来源先显示合计，再按实际调用模型展开；缓存为输入 token 中的缓存读取。"
+      >
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th>来源</th>
+                <th>模型</th>
                 <th>请求</th>
                 <th>输入 token</th>
-                <th>输出 token</th>
                 <th>缓存 token</th>
+                <th>输出 token</th>
                 <th>失败</th>
               </tr>
             </thead>
             <tbody>
-              {Object.entries(result.data?.sources || {}).map(([id, v]) => (
-                <tr key={id}>
-                  <td>{sourceName(config, id)}</td>
-                  <td>{format(v.requests)}</td>
-                  <td>{format(v.input_tokens)}</td>
-                  <td>{format(v.output_tokens)}</td>
-                  <td>{format(v.cached_tokens)}</td>
-                  <td>{v.failures}</td>
+              {Object.entries(result.data?.sources || {})
+                .sort(([a], [b]) =>
+                  sourceName(config, a).localeCompare(sourceName(config, b)),
+                )
+                .map(([id, v]) => (
+                  <Fragment key={id}>
+                    <tr className="usage-source-total">
+                      <th scope="row">{sourceName(config, id)}</th>
+                      <td>合计</td>
+                      <td>{format(v.requests)}</td>
+                      <td>{format(v.input_tokens)}</td>
+                      <td>{format(v.cached_tokens)}</td>
+                      <td>{format(v.output_tokens)}</td>
+                      <td>{v.failures}</td>
+                    </tr>
+                    {Object.entries(result.data?.source_models?.[id] || {})
+                      .sort(([, a], [, b]) => b.requests - a.requests)
+                      .map(([model, m]) => (
+                        <tr key={model} className="usage-model-row">
+                          <td>
+                            <span className="muted">↳</span>
+                          </td>
+                          <th scope="row">{model || "未记录模型"}</th>
+                          <td>{format(m.requests)}</td>
+                          <td>{format(m.input_tokens)}</td>
+                          <td>{format(m.cached_tokens)}</td>
+                          <td>{format(m.output_tokens)}</td>
+                          <td>{m.failures}</td>
+                        </tr>
+                      ))}
+                  </Fragment>
+                ))}
+              {result.data?.total.requests === 0 && (
+                <tr>
+                  <td colSpan={7} className="muted">
+                    此范围暂无用量
+                  </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

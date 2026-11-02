@@ -70,8 +70,13 @@ for argument in args.manifests:
                     transcript_outputs.add(item["tool_use_id"])
         final = next((event for event in reversed(events) if event.get("type") == "result"), {})
         complete = final.get("is_error") is False and "PACAROUTE_CLAUDE_OK" in final.get("result", "")
-        checks.update(transcript_tool_roundtrips=len(transcript_calls & transcript_outputs), complete_answer=complete)
-        passed &= len(transcript_calls & transcript_outputs) >= 3 and complete
+        upstream_models = sorted({json.loads(trace.read_text()).get("model", "")
+                                  for trace in (path.parent / "traces").rglob("upstream-*-req.json")})
+        expected_model = upstream_models == [manifest["upstream_model"]]
+        checks.update(transcript_tool_roundtrips=len(transcript_calls & transcript_outputs),
+                      complete_answer=complete, upstream_models=upstream_models,
+                      expected_model=expected_model)
+        passed &= len(transcript_calls & transcript_outputs) >= 3 and complete and expected_model
     current_hash = hashlib.sha256(Path(manifest["binaryPath"]).read_bytes()).hexdigest()
     checks["unchanged_binary"] = current_hash == manifest["binarySHA256"]
     passed &= checks["unchanged_binary"]
