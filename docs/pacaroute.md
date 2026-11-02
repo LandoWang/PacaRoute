@@ -128,6 +128,11 @@ Interrupted streams are errors and are never stitched to another source. A
 PacaRoute returns 409 when its original binding is unavailable. Use a fresh session
 or full replayable history after such an error.
 
+An upstream stream failure cools down its source/model for 30 seconds. The next
+full-history client retry may select another pool member when failover is enabled;
+PacaRoute never retries a partially delivered response internally. Downstream
+cancellation or write failure does not penalize the upstream source.
+
 ## Hot configuration and local Agent configuration
 
 CLI, web UI and management API share `pacaroute.sqlite`. All references are
@@ -148,6 +153,19 @@ Deleting `default` permanently disables local keyless access.
 See [the current workspace and migration contract](pacaroute-web-desktop.md#clients-routes-and-configuration).
 
 ## Usage and errors
+
+Sources show active model cooldowns with the last error and expiry. Pools show
+eligible/total members and effective new-session allocation, excluding cooled,
+paused and zero-weight members. A global warning highlights active cooldowns; an
+exhausted pool produces a red alert. Authenticated `GET /api/status` exposes the
+same `routing` snapshot from memory, refreshed by the UI every five seconds while
+visible. Cooldowns expire into eligibility, not proven health, and reset when the
+service restarts. Historical failure records remain available in Errors.
+
+Responses failure terminals are preserved, including Azure's `error` followed by
+`response.failed`. Missing terminals are reported as failures with provider or
+transport details, never as successful completions. See the
+[0.8.6 verification report](pacaroute-0.8.6-verification.md) for evidence and limits.
 
 The usage page provides whole-service totals, per-source totals and UTC hourly
 buckets over a chosen time window. The API also supports filtering by Client.

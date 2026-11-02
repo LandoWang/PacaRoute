@@ -10,9 +10,15 @@ import tempfile
 root = Path(__file__).resolve().parents[1]
 mutations = [
     ("terminal-frame-waits-for-eof", "server.go",
-     'if complete {\n\t\t\treturn nil\n\t\t}',
+     'if typ == "response.completed" || typ == "response.incomplete" || typ == "message_stop" {\n\t\t\treturn nil\n\t\t}',
      'if false {\n\t\t\treturn nil\n\t\t}',
      "TestTerminalFrameDoesNotWaitForTransportEOF"),
+    ("stream-failure-keeps-sticky-source", "server.go",
+     '\t\t\t\t\ts.Router.Fail(t, activity.Error)', '',
+     "TestStreamFailureRecoversOnNextClientRetry"),
+    ("azure-error-hides-terminal", "server.go",
+     'pending = streamEventError(m, false)', 'return streamEventError(m, true)',
+     "TestAzureErrorDoesNotHideFollowingFailureTerminal"),
     ("changing-stream-ids", "protocol.go",
      'key := "output:" + string(m["output_index"])',
      'key := rawString(m["item_id"])',

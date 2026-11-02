@@ -168,7 +168,7 @@ func TestNativeSSEUsageAndWireFidelity(t *testing.T) {
 	input := "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"usage\":{\"input_tokens\":10,\"output_tokens\":0}}}\n\nevent: future.event\ndata: {\"type\":\"future.event\",\"text\":\"羊驼\"}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":100,\"output_tokens\":23,\"input_tokens_details\":{\"cached_tokens\":70}}}}\n\n"
 	var out bytes.Buffer
 	u := Usage{}
-	if e := relaySSE(&out, strings.NewReader(input), &u); e != nil {
+	if e := relaySSE(&out, strings.NewReader(input), &u, "responses"); e != nil {
 		t.Fatal(e)
 	}
 	if out.String() != input {
@@ -177,7 +177,7 @@ func TestNativeSSEUsageAndWireFidelity(t *testing.T) {
 	if u.Input == nil || *u.Input != 100 || u.Output == nil || *u.Output != 23 || u.CacheRead == nil || *u.CacheRead != 70 {
 		t.Fatalf("usage=%+v", u)
 	}
-	if relaySSE(io.Discard, strings.NewReader("data: {\"type\":\"response.created\"}\n\n"), &Usage{}) == nil {
+	if relaySSE(io.Discard, strings.NewReader("data: {\"type\":\"response.created\"}\n\n"), &Usage{}, "responses") == nil {
 		t.Fatal("truncated stream treated as success")
 	}
 }
@@ -700,7 +700,7 @@ func TestTerminalFrameDoesNotWaitForTransportEOF(t *testing.T) {
 		tail := &terminalReadFailure{}
 		wire := "data: " + frame + "\n\n"
 		var output bytes.Buffer
-		if err := relaySSE(&output, io.MultiReader(strings.NewReader(wire), tail), &Usage{}); err != nil {
+		if err := relaySSE(&output, io.MultiReader(strings.NewReader(wire), tail), &Usage{}, "responses"); err != nil {
 			t.Fatal("completed response counted as failure", err)
 		}
 		if tail.calls != 0 || output.String() != wire {

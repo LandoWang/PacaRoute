@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 )
 
@@ -420,16 +419,13 @@ func emitSSE(w io.Writer, event string, v any) error {
 	if e != nil {
 		return e
 	}
-	_, e = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
-	return e
+	return writeStreamFrame(w, []byte(fmt.Sprintf("event: %s\ndata: %s\n\n", event, b)))
 }
 
 // Responses->Messages state machine opens each content block exactly once and closes it before message_stop.
 func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *Usage) error {
 	rd := newSSE(r)
+	last := "none"
 	id := "msg_" + strings.ReplaceAll(newID(), "-", "")
 	started := false
 	next := 0
@@ -462,10 +458,7 @@ func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *Usage) error
 	for {
 		_, data, e := rd.next()
 		if e != nil {
-			if e == io.EOF {
-				return errors.New("upstream ended before response.completed")
-			}
-			return e
+			return streamReadError(e, "response.completed", last)
 		}
 		if len(data) == 0 || bytes.Equal(data, []byte("[DONE]")) {
 			continue
@@ -473,6 +466,9 @@ func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *Usage) error
 		u.observe(data)
 		m := obj(data)
 		typ := rawString(m["type"])
+		if typ != "" {
+			last = typ
+		}
 		if e = start(); e != nil {
 			return e
 		}
@@ -524,7 +520,7 @@ func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *Usage) error
 			}
 			return emitSSE(w, "message_stop", map[string]string{"type": "message_stop"})
 		case "error", "response.failed":
-			return errors.New("upstream Responses stream failed")
+			return streamEventError(m, false)
 		}
 		if e != nil {
 			return e
@@ -605,6 +601,7 @@ func (tr *translation) toolItem(b object) map[string]any {
 }
 func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error {
 	rd := newSSE(r)
+	last := "none"
 	id := "resp_" + newID()
 	sequence := 0
 	output := []map[string]any{}
@@ -629,10 +626,7 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 	for {
 		_, data, e := rd.next()
 		if e != nil {
-			if e == io.EOF {
-				return errors.New("upstream ended before message_stop")
-			}
-			return e
+			return streamReadError(e, "message_stop", last)
 		}
 		if len(data) == 0 {
 			continue
@@ -640,6 +634,9 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 		u.observe(data)
 		m := obj(data)
 		typ := rawString(m["type"])
+		if typ != "" {
+			last = typ
+		}
 		if !started {
 			started = true
 			if e = send("response.created", map[string]any{"response": response("in_progress")}); e != nil {
@@ -752,7 +749,7 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 			}
 			return send("response."+status, map[string]any{"response": response(status)})
 		case "error":
-			return errors.New("upstream Messages stream failed")
+			return streamEventError(m, false)
 		}
 		if e != nil {
 			return e

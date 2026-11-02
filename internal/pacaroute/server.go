@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const Version = "0.8.5"
+const Version = "0.8.6"
 
 type Server struct {
 	Store           *ConfigStore
@@ -326,7 +326,7 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 			if e != nil && !strings.Contains(e.Error(), "https://") {
 				activity.Error = e.Error()
 			}
-			s.Router.Fail(t)
+			s.Router.Fail(t, activity.Error)
 			if i+1 < len(targets) {
 				continue
 			}
@@ -335,13 +335,13 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 		}
 		activity.Status = res.StatusCode
 		if retryable(res.StatusCode) && i+1 < len(targets) {
-			s.Router.Fail(t)
+			s.Router.Fail(t, fmt.Sprintf("upstream returned HTTP %d", res.StatusCode))
 			res.Body.Close()
 			continue
 		}
 		if res.StatusCode >= 400 {
-			s.Router.Fail(t)
 			activity.Error = fmt.Sprintf("upstream returned HTTP %d", res.StatusCode)
+			s.Router.Fail(t, activity.Error)
 			w.Header().Set("Content-Type", res.Header.Get("Content-Type"))
 			w.WriteHeader(res.StatusCode)
 			_, _ = io.Copy(w, io.LimitReader(res.Body, 2<<20))
@@ -380,13 +380,29 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 					e = tr.streamMessages(w, reader, &usage)
 				}
 			} else {
-				e = relaySSE(w, reader, &usage)
+				e = relaySSE(w, struct {
+					io.Reader
+					io.Closer
+				}{reader, res.Body}, &usage, protocol)
 			}
 			s.trace(activity.ID, "upstream-res.sse", trace.Bytes())
 			if e != nil {
-				activity.Status = 502
-				activity.Error = "stream interrupted before completion"
-				_ = emitSSE(w, "error", map[string]any{"type": "error", "error": map[string]string{"type": "api_error", "message": activity.Error}})
+				var downstream *downstreamStreamError
+				var upstream *upstreamStreamError
+				upstreamFailure := errors.As(e, &upstream)
+				if errors.As(e, &downstream) || (r.Context().Err() != nil && !upstreamFailure) {
+					activity.Status = 499
+					activity.Error = "client disconnected before stream completion"
+				} else {
+					activity.Status = 502
+					activity.Error = "stream interrupted before completion: " + streamDetail(e.Error())
+					// Never replay a started response. Cool down this source/model so
+					// the next client retry can recover under the existing pool rules.
+					s.Router.Fail(t, activity.Error)
+					if !upstreamFailure || !upstream.forwarded {
+						_ = emitStreamError(w, agent, activity.Error)
+					}
+				}
 			}
 		} else {
 			data, err := io.ReadAll(io.LimitReader(res.Body, 32<<20+1))
@@ -414,36 +430,49 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
-func relaySSE(w io.Writer, r io.Reader, u *Usage) error {
+func relaySSE(w io.Writer, r io.Reader, u *Usage, protocol string) error {
 	rd := newSSE(r)
-	complete := false
+	last := "none"
+	var pending error
+	var errorDeadline *time.Timer
+	defer func() {
+		if errorDeadline != nil {
+			errorDeadline.Stop()
+		}
+	}()
 	for {
 		frame, data, e := rd.next()
 		if e != nil {
-			if e == io.EOF && complete {
-				return nil
+			if pending != nil {
+				return pending
 			}
-			return e
+			return streamReadError(e, "response.completed or message_stop", last)
 		}
 		u.observe(data)
 		m := obj(data)
 		typ := rawString(m["type"])
-		if typ == "response.completed" || typ == "response.incomplete" || typ == "message_stop" || bytes.Equal(data, []byte("[DONE]")) {
-			complete = true
+		if typ != "" {
+			last = typ
 		}
-		if _, e = w.Write(frame); e != nil {
+		if e = writeStreamFrame(w, frame); e != nil {
 			return e
-		}
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
 		}
 		// The client may close as soon as the terminal frame is delivered. Do not
 		// wait for transport EOF and misclassify its cancellation as a failed turn.
-		if complete {
+		if typ == "response.completed" || typ == "response.incomplete" || typ == "message_stop" {
 			return nil
 		}
-		if typ == "response.failed" || typ == "error" {
-			return errors.New("upstream stream failed")
+		if typ == "response.failed" || (typ == "error" && protocol == "messages") {
+			return streamEventError(m, true)
+		}
+		if typ == "error" {
+			pending = streamEventError(m, false)
+			// Azure can emit error followed by response.failed. Codex ignores the
+			// first event, so preserve the actual terminal failure when present.
+			// Bound the wait for providers that leave the errored connection open.
+			if closer, ok := r.(io.Closer); ok && errorDeadline == nil {
+				errorDeadline = time.AfterFunc(time.Second, func() { _ = closer.Close() })
+			}
 		}
 	}
 }

@@ -33,12 +33,12 @@ type Router struct {
 	path     string
 	legacy   map[string]binding
 	bindings map[string]binding
-	cooldown map[string]time.Time
+	cooldown map[string]Cooldown
 	writes   int
 }
 
 func NewRouter(root string) (*Router, error) {
-	r := &Router{path: filepath.Join(root, "affinity-v2.jsonl"), bindings: map[string]binding{}, legacy: map[string]binding{}, cooldown: map[string]time.Time{}}
+	r := &Router{path: filepath.Join(root, "affinity-v2.jsonl"), bindings: map[string]binding{}, legacy: map[string]binding{}, cooldown: map[string]Cooldown{}}
 	// Import the previous application's hashes lazily, only for the local Client. Other Clients cannot inherit them.
 	legacyPath := filepath.Join(root, "runtime", "source-pool-sessions.jsonl")
 	if f, e := os.Open(legacyPath); e == nil {
@@ -151,7 +151,7 @@ func (r *Router) Targets(c *Config, client, agent, id, model, session string, co
 		for _, m := range p.Members {
 			if m.ID == prior.Member && m.SourceID == prior.Source && m.Model == prior.Model {
 				if s, ok := c.Source(m.SourceID); ok && !c.Paused(s.ID) && prior.Endpoint == endpointIdentity(s) {
-					if !r.cooldown[s.ID+":"+m.Model].After(time.Now()) {
+					if !r.cooldown[s.ID+":"+m.Model].Until.After(time.Now()) {
 						result = append(result, Target{s, m.Model, m.ID, key, &p, true})
 					}
 				}
@@ -178,7 +178,7 @@ func (r *Router) Targets(c *Config, client, agent, id, model, session string, co
 			continue
 		}
 		s, ok := c.Source(m.SourceID)
-		if !ok || c.Paused(s.ID) || r.cooldown[s.ID+":"+m.Model].After(time.Now()) {
+		if !ok || c.Paused(s.ID) || r.cooldown[s.ID+":"+m.Model].Until.After(time.Now()) {
 			continue
 		}
 		if len(result) > 0 && result[0].Member == m.ID {
@@ -277,7 +277,7 @@ func (r *Router) compact(now time.Time) error {
 	return nil
 }
 
-func (r *Router) Fail(t Target) {
+func (r *Router) Fail(t Target, reason ...string) {
 	if t.Pool == nil {
 		return
 	}
@@ -286,7 +286,12 @@ func (r *Router) Fail(t Target) {
 	if len(r.cooldown) > 20000 {
 		clear(r.cooldown)
 	}
-	r.cooldown[t.Source.ID+":"+t.Model] = time.Now().Add(30 * time.Second)
+	message := "upstream request failed"
+	if len(reason) > 0 && reason[0] != "" {
+		message = streamDetail(reason[0])
+	}
+	now := time.Now().UTC()
+	r.cooldown[t.Source.ID+":"+t.Model] = Cooldown{SourceID: t.Source.ID, Model: t.Model, Error: message, FailedAt: now, Until: now.Add(30 * time.Second)}
 }
 
 var legacySession = regexp.MustCompile(`(?:^|_)session_([A-Za-z0-9-]{1,128})$`)

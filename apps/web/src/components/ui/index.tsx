@@ -94,7 +94,7 @@ export function Badge({
   tone = "neutral",
 }: {
   children: ReactNode;
-  tone?: "mint" | "violet" | "amber" | "neutral";
+  tone?: "mint" | "violet" | "amber" | "rose" | "neutral";
 }) {
   return <span className={"badge badge-" + tone}>{children}</span>;
 }

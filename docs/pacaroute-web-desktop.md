@@ -143,7 +143,7 @@ npm --prefix apps/web test
 
 macOS bundles are ad-hoc signed, not notarized. Windows portable binaries are unsigned. Cross-compilation is not evidence of physical Intel or Windows tray behavior; record those separately. `.github/workflows/pacaroute.yml` supplies native Windows/macOS/Linux checks and a Windows installer build when run on the private repository.
 
-See [0.8.5 model selection verification](pacaroute-0.8.5-verification.md) and [0.8 release verification](pacaroute-router-workspace-verification.md) for exact client evidence and platform limits. The [0.7 report](pacaroute-web-desktop-verification.md) remains historical evidence.
+See [0.8.6 stream recovery and cooldown verification](pacaroute-0.8.6-verification.md), [0.8.5 model selection verification](pacaroute-0.8.5-verification.md) and [0.8 release verification](pacaroute-router-workspace-verification.md) for exact client evidence and platform limits. The [0.7 report](pacaroute-web-desktop-verification.md) remains historical evidence.
 
 ### Usage and upstream quota
 

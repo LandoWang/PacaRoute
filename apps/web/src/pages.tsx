@@ -1,5 +1,10 @@
 import { CopilotQuotaDetails, type CopilotInfo } from "./copilot-quota";
 import { BrandIcon } from "./components/brand-icon";
+import {
+  CooldownDetails,
+  PoolAvailability,
+  poolAllocation,
+} from "./routing-health";
 import { useEffect, useState, useRef, Fragment, type ReactNode } from "react";
 import {
   ArrowRight,
@@ -1079,7 +1084,7 @@ function ModelList({
   );
 }
 export function Sources() {
-  const { config, save, show, close, reload } = useApp();
+  const { config, status, save, show, close, reload } = useApp();
   const [error, setError] = useState(""),
     [busy, setBusy] = useState("");
   const common = { config, save, close };
@@ -1125,15 +1130,23 @@ export function Sources() {
                 <h3>{s.name}</h3>
                 <Badge
                   tone={
-                    config.source_state.paused.includes(s.id) ? "amber" : "mint"
+                    config.source_state.paused.includes(s.id) ||
+                    status.routing?.cooldowns.some((c) => c.source_id === s.id)
+                      ? "amber"
+                      : "mint"
                   }
                 >
                   {config.source_state.paused.includes(s.id)
                     ? "已暂停"
-                    : "可用"}
+                    : status.routing?.cooldowns.some(
+                          (c) => c.source_id === s.id,
+                        )
+                      ? "模型冷却中"
+                      : "已启用"}
                 </Badge>
               </div>
               <p>{s.endpoint || "GitHub Copilot API"}</p>
+              <CooldownDetails source={s.id} />
               <div className="metadata">
                 <span>
                   {accounts(config).find((a) => a.id === s.account_id)?.name ||
@@ -1268,12 +1281,12 @@ export function Sources() {
   );
 }
 export function Pools() {
-  const { config, save, show, close } = useApp();
+  const { config, status, save, show, close } = useApp();
   const common = { config, save, close };
   return (
     <>
       <div className="page-toolbar">
-        <p>新会话按权重分配，同一会话保持来源固定。</p>
+        <p>状态每 5 秒刷新。冷却结束后允许重试，并不代表已验证恢复。</p>
         <Button onClick={() => show(<PoolEditor {...common} />)}>
           <Plus size={16} />
           添加来源池
@@ -1310,6 +1323,7 @@ export function Pools() {
                 </Button>
               }
             >
+              <PoolAvailability id={p.id} />
               <div className="pool-members">
                 {p.members.map((m) => (
                   <div key={m.id}>
@@ -1321,20 +1335,14 @@ export function Pools() {
                           ? " · 已暂停"
                           : ""}
                       </small>
+                      <CooldownDetails source={m.source_id} model={m.model} />
                     </div>
                     <span className="weight">
                       {share(
-                        config.source_state.paused.includes(m.source_id)
-                          ? 0
-                          : m.weight,
-                        p.members.map((member) => ({
-                          ...member,
-                          weight: config.source_state.paused.includes(
-                            member.source_id,
-                          )
-                            ? 0
-                            : member.weight,
-                        })),
+                        poolAllocation(config, p, status.routing).find(
+                          (member) => member.id === m.id,
+                        )?.weight || 0,
+                        poolAllocation(config, p, status.routing),
                       )}
                       <small>%</small>
                     </span>
@@ -1343,7 +1351,9 @@ export function Pools() {
               </div>
               <div className="entity-footer">
                 <span>
-                  {p.failover ? "允许响应开始前故障切换" : "来源故障时报告错误"}
+                  {p.failover
+                    ? "允许故障切换；已开始的流由客户端重试"
+                    : "来源故障时报告错误"}
                 </span>
                 <Button
                   variant="ghost"

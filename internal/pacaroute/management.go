@@ -114,7 +114,7 @@ func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "pacaroute_admin", Value: "", Path: "/api", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	case path == "status" && r.Method == "GET":
-		writeJSON(w, 200, map[string]any{"name": "PacaRoute", "version": Version, "uptime_seconds": int(time.Since(s.started).Seconds()), "config_error": s.Store.Error(), "local_access": s.AllowLocal, "local_management": s.localAllowed(r), "desktop": s.Desktop != nil && s.localAllowed(r), "port": s.Port, "api_version": 1, "gateway_url": s.requestOrigin(r), "startup": s.Desktop != nil && startupEnabled()})
+		writeJSON(w, 200, map[string]any{"name": "PacaRoute", "version": Version, "uptime_seconds": int(time.Since(s.started).Seconds()), "config_error": s.Store.Error(), "routing": s.Router.Health(s.Store.Snapshot()), "local_access": s.AllowLocal, "local_management": s.localAllowed(r), "desktop": s.Desktop != nil && s.localAllowed(r), "port": s.Port, "api_version": 1, "gateway_url": s.requestOrigin(r), "startup": s.Desktop != nil && startupEnabled()})
 	case path == "config" && r.Method == "GET":
 		writeJSON(w, 200, s.Store.Snapshot())
 	case path == "config" && r.Method == "PUT":

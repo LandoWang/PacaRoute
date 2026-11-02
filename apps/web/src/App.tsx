@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { api, APIError, type Config, type Status } from "./api";
 import { StateContext } from "./state";
+import { RoutingAlert } from "./routing-health";
 import { Button, Input, Field, ErrorNote } from "./components/ui";
 import {
   Overview,
@@ -119,8 +120,10 @@ export function App() {
   }, []);
   useEffect(() => {
     if (!auth) return;
+    let pending = false;
     const tick = setInterval(() => {
-      if (!document.hidden)
+      if (!document.hidden && !pending) {
+        pending = true;
         void api<Status>("status")
           .then((value) => {
             setStatus(value);
@@ -129,8 +132,12 @@ export function App() {
           .catch((e) => {
             if (!(e instanceof APIError && e.status === 401))
               setError("服务连接中断，请从托盘检查服务状态。");
+          })
+          .finally(() => {
+            pending = false;
           });
-    }, 10000);
+      }
+    }, 5000);
     return () => clearInterval(tick);
   }, [auth]);
   function navigate(id: string) {
@@ -292,6 +299,7 @@ export function App() {
           {(error || status.config_error) && (
             <ErrorNote>{error || status.config_error}</ErrorNote>
           )}
+          <RoutingAlert />
           {message && (
             <div className="notice" role="status">
               <ShieldCheck size={17} />

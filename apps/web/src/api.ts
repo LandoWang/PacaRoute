@@ -68,6 +68,7 @@ export type Config = {
   source_state: { paused: string[] };
 };
 export type Status = {
+  routing?: RoutingHealth;
   version: string;
   uptime_seconds: number;
   config_error?: string;
@@ -78,6 +79,18 @@ export type Status = {
   startup: boolean;
   api_version: number;
   gateway_url: string;
+};
+export type Cooldown = {
+  source_id: string;
+  model: string;
+  error: string;
+  failed_at: string;
+  until: string;
+};
+export type RoutingHealth = {
+  observed_at: string;
+  cooldowns: Cooldown[];
+  pools: { id: string; available: number; total: number }[];
 };
 export type Totals = {
   requests: number;

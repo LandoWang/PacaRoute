@@ -60,6 +60,21 @@ for argument in args.manifests:
         turns = [event["params"]["turn"]["status"] for event in events if event.get("method") == "turn/completed"]
         checks.update(dispatch_rows=len(rows), router_fatals=len(fatals), turn_statuses=turns)
         passed &= bool(rows) and not fatals and len(turns) == 2 and all(turn == "completed" for turn in turns)
+        if manifest.get("stream_failure"):
+            activities = [json.loads(line) for log in (path.parent / "runtime/desktop-activity").glob("*.jsonl")
+                          for line in log.read_text().splitlines()]
+            activities.sort(key=lambda item: item["timestamp"])
+            retries = [event.get("params", {}).get("error", {}).get("additionalDetails", "") or ""
+                       for event in events if event.get("method") == "error" and event.get("params", {}).get("willRetry")]
+            reason = "QA upstream overloaded" if manifest["stream_failure"] == "error" else "stream interrupted before completion"
+            recovery = (len(activities) >= 2 and activities[0]["source"] == "qa-unavailable" and
+                        activities[0]["status"] == 502 and activities[0]["attempts"] == 1 and
+                        activities[1]["source"] != "qa-unavailable" and activities[1]["status"] == 200 and
+                        manifest.get("fixture_calls") == 1)
+            visible_reason = any(reason in retry for retry in retries)
+            checks.update(stream_failure=manifest["stream_failure"], next_request_recovered=recovery,
+                          client_saw_failure_reason=visible_reason, fixture_calls=manifest.get("fixture_calls"))
+            passed &= recovery and visible_reason
     else:
         transcript_calls, transcript_outputs = set(), set()
         for event in events:

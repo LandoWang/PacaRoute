@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real Codex actuator. Verdict requires client dispatch logs and matching wire tool results."""
 import pathlib,subprocess,os,json,socket,time,signal,threading,queue,sys,argparse,shutil
-parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--codex",default=shutil.which("codex"));parser.add_argument("--upstream-model",default="gpt-6-astra");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");parser.add_argument("--connection-script",action="store_true");options=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--codex",default=shutil.which("codex"));parser.add_argument("--upstream-model",default="gpt-6-astra");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");parser.add_argument("--connection-script",action="store_true");parser.add_argument("--stream-failure",choices=["eof","error"]);options=parser.parse_args()
 assert options.codex,"Set --codex or install Codex CLI"
 R=pathlib.Path.cwd();Q=R/('artifacts/pacaroute-verification/live-appserver-'+time.strftime('%Y%m%d-%H%M%S')+'-'+__import__('uuid').uuid4().hex[:6]);Q.mkdir(parents=True,exist_ok=True)
 exe=pathlib.Path(options.binary).resolve()
@@ -17,6 +17,13 @@ if options.source_id!='copilot':
  if options.azure_cli:
   selected=dict(selected,auth_mode='azure-cli');source_account=dict(source_account,login_mode='azure-cli')
  sources.append(selected);accounts.append(source_account);pools[0]['members'][1]['source_id']=selected['id']
+fixture=None
+runtime_exe=exe
+if options.stream_failure:
+ from verify_stream_fixture import StreamFixture
+ fixture=StreamFixture(R,Q,options.stream_failure)
+ runtime_exe=fixture.binary
+ sources[0]['endpoint']=fixture.endpoint
 for name,value in [('clients',clients),('accounts',accounts),('sources',sources),('source-pools',pools)]: (Q/(name+'.json')).write_text(json.dumps([] if name=='clients' and options.connection_script else value))
 env=dict(os.environ)
 for k in list(env):
@@ -27,7 +34,9 @@ bridge=None
 
 def start_bridge(label):
  global bridge
- log=(Q/(label+'.log')).open('wb');bridge=subprocess.Popen([str(exe),'serve','--home',str(Q),'--credential-root',str(credential_root),'--port',str(port),'--allow-local','--trace-dir',str(Q/'traces')],env=env,stdout=log,stderr=subprocess.STDOUT)
+ log=(Q/(label+'.log')).open('wb');bridge=subprocess.Popen([str(runtime_exe),'serve','--home',str(Q),'--credential-root',str(credential_root),'--port',str(port),'--allow-local','--trace-dir',str(Q/'traces')],env=dict(env,**(dict(fixture.env,COPILOT_BRIDGE_SECRETS_STDIN='1') if fixture else {})),stdin=subprocess.PIPE if fixture else None,stdout=log,stderr=subprocess.STDOUT)
+ if fixture:
+  bridge.stdin.write(b'{"qa-unavailable":"synthetic-fixture-only"}\n');bridge.stdin.flush()
  for _ in range(100):
   if bridge.poll() is not None:raise RuntimeError('QA service exited')
   try:
@@ -38,7 +47,7 @@ def start_bridge(label):
 def stop_bridge():
  global bridge
  if bridge and bridge.poll() is None:
-  assert str(exe) in subprocess.check_output(['ps','-p',str(bridge.pid),'-o','command=']).decode()
+  assert str(runtime_exe) in subprocess.check_output(['ps','-p',str(bridge.pid),'-o','command=']).decode()
   bridge.send_signal(signal.SIGINT)
   try:bridge.wait(timeout=35)
   except subprocess.TimeoutExpired:bridge.kill();bridge.wait()
@@ -89,7 +98,10 @@ try:
    assert result['params']['turn']['status']=='completed',result
    print('App-server turn completed',id,flush=True)
   turn(3,'Work only here. Read numbers.json. Write analyze.py that writes result.json with the sorted unique values and their sum. Execute it. Read result.json in a separate tool call and verify it. Finish PACAROUTE_APPSERVER_OK with the values. Do not use subagents or network.')
-  rows=[json.loads(l) for l in (Q/'affinity-v2.jsonl').read_text().splitlines()];assert len(rows)==1 and rows[0]['member']=='good',rows
+  if fixture:assert fixture.calls==1, f'Failed stream selected {fixture.calls} times'
+  rows=[json.loads(l) for l in (Q/'affinity-v2.jsonl').read_text().splitlines()]
+  expected_members=['bad','good'] if fixture else ['good']
+  assert [r['member'] for r in rows]==expected_members and len({r['key'] for r in rows})==1,rows
   pools[0]['members'][0]['weight']=1;pools[0]['members'][1]['weight']=0
   # Exercise the revisioned SQLite writer rather than the one-time JSON import.
   cfg=json.loads(subprocess.check_output([str(exe),'config','show','--home',str(Q)],env=env));cfg['pools']=pools
@@ -100,7 +112,7 @@ try:
   assert (Q/'affinity-v2.jsonl').read_bytes()==before,'Sticky binding changed after restart'
   send('thread/delete',{'threadId':thread},1000000);until(lambda m:m.get('id')==1000000)
   client.stdin.close();client.wait(timeout=20);assert client.returncode==0
-  (Q/'appserver.manifest.json').write_text(json.dumps({'start':int(started)-2,'end':int(time.time())+2,'dispatchLogPath':str(db/'logs_2.sqlite'),'stdoutPath':str(Q/'appserver.stdout'),'upstream_model':options.upstream_model,'source_id':options.source_id,'azure_cli':options.azure_cli,'connection_script':options.connection_script,'binaryPath':str(exe),'binarySHA256':__import__('hashlib').sha256(exe.read_bytes()).hexdigest()}))
+  (Q/'appserver.manifest.json').write_text(json.dumps({'start':int(started)-2,'end':int(time.time())+2,'dispatchLogPath':str(db/'logs_2.sqlite'),'stdoutPath':str(Q/'appserver.stdout'),'upstream_model':options.upstream_model,'source_id':options.source_id,'azure_cli':options.azure_cli,'connection_script':options.connection_script,'stream_failure':options.stream_failure,'fixture_calls':fixture.calls if fixture else 0,'packagedBinaryPath':str(exe),'binaryPath':str(runtime_exe),'binarySHA256':__import__('hashlib').sha256(runtime_exe.read_bytes()).hexdigest()}))
   print('Manifest:',Q/'appserver.manifest.json',flush=True)
  finally:
   if client.poll() is None:client.terminate();client.wait(timeout=10)
@@ -108,3 +120,4 @@ try:
 
 finally:
  stop_bridge()
+ if fixture:fixture.close()
