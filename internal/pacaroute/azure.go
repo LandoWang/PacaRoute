@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -109,3 +111,27 @@ func (a *Auth) AzureLogin(ctx context.Context, id string, logout bool, emit func
 }
 
 var _ = json.Valid
+
+func sharedAzure(c *Config, id string) bool {
+	account, _ := c.Account(id)
+	return id == "" || id == "azure-local" || account.LoginMode == "azure-cli"
+}
+func (a *Auth) azureDirectory(c *Config, id string) string {
+	if !sharedAzure(c, id) {
+		return filepath.Join(a.vault.root, "accounts", id)
+	}
+	if dir := os.Getenv("AZURE_CONFIG_DIR"); dir != "" {
+		return dir
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".azure")
+}
+func (a *Auth) azureEnv(c *Config, id string, p Proxy) []string {
+	env := proxyEnv(p)
+	for i := len(env) - 1; i >= 0; i-- {
+		if strings.HasPrefix(env[i], "AZURE_CONFIG_DIR=") {
+			env = append(env[:i], env[i+1:]...)
+		}
+	}
+	return append(env, "AZURE_CONFIG_DIR="+a.azureDirectory(c, id))
+}
