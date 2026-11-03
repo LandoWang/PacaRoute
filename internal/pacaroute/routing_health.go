@@ -89,7 +89,7 @@ func (r *Router) Fail(t Target, reason ...string) {
 	}
 	message := "upstream request failed"
 	if len(reason) > 0 && reason[0] != "" {
-		message = streamDetail(reason[0])
+		message = cooldownDetail(reason[0])
 	}
 	kind := "error"
 	if strings.Contains(message, "rate_limit_") {
@@ -149,5 +149,16 @@ func (r *Router) failCooldown(t Target, message string, delay time.Duration, kin
 			delete(r.cooldown, oldestKey)
 		}
 	}
-	r.cooldown[key] = Cooldown{SourceID: t.Source.ID, Model: t.Model, Error: streamDetail(message), FailedAt: now, Until: until, Kind: kind}
+	r.cooldown[key] = Cooldown{SourceID: t.Source.ID, Model: t.Model, Error: cooldownDetail(message), FailedAt: now, Until: until, Kind: kind}
+}
+
+// cooldownDetail bounds the failure text kept in a cooldown entry: whitespace is
+// collapsed and long text is cut at 2048 runes.
+func cooldownDetail(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	r := []rune(s)
+	if len(r) > 2048 {
+		return string(r[:2048]) + "…"
+	}
+	return s
 }

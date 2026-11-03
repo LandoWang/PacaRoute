@@ -23,7 +23,7 @@ func TestNativePrepareDoesNotCloneLargePayload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wire, tr, err := prepare(body, target, "codex")
+	wire, tr, err := prepare(body, target.Source.Kind, target.Model, "codex", target.upstreamProtocol("codex"))
 	if err != nil || tr != nil {
 		t.Fatalf("native prepare: %v %v", tr, err)
 	}
@@ -40,7 +40,7 @@ func TestNativePrepareDoesNotCloneLargePayload(t *testing.T) {
 	for i := 0; i < 9; i++ {
 		var before, after runtime.MemStats
 		runtime.ReadMemStats(&before)
-		_, _, _ = prepare(body, target, "codex")
+		_, _, _ = prepare(body, target.Source.Kind, target.Model, "codex", target.upstreamProtocol("codex"))
 		runtime.ReadMemStats(&after)
 		allocated = min(allocated, after.TotalAlloc-before.TotalAlloc)
 	}

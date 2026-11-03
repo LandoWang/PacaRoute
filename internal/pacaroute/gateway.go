@@ -272,20 +272,20 @@ func (s *Server) attempt(x *gatewayExchange, i int, t Target) bool {
 	activity.Source = t.Source.ID
 	activity.Model = t.Model
 	activity.Attempts = i + 1
-	wire, tr, e := prepare(x.body, t, agent)
+	protocol := t.upstreamProtocol(agent)
+	wire, tr, e := prepare(x.body, t.Source.Kind, t.Model, agent, protocol)
 	if e != nil {
 		activity.Status = 400
 		activity.Error = e.Error()
 		problem(w, 400, e.Error())
 		return false
 	}
-	if operation == "messages/count_tokens" && t.upstreamProtocol(agent) != "messages" {
+	if operation == "messages/count_tokens" && protocol != "messages" {
 		activity.Status = 422
 		activity.Error = "token counting is unavailable on this Responses source"
 		problem(w, 422, activity.Error)
 		return false
 	}
-	protocol := t.upstreamProtocol(agent)
 	x.upstreamMessages = protocol == "messages"
 	s.trace(activity.ID, fmt.Sprintf("upstream-%d-req.json", i), wire)
 	res, e := s.send(x, t, wire, protocol, upstreamPath(t, agent, protocol, operation))

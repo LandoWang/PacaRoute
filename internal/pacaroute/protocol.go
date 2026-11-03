@@ -18,18 +18,21 @@ func incomingProtocol(agent AgentProtocol) string {
 }
 
 // Native paths preserve opaque request and response fields. Only probed Copilot constraints are changed.
-func prepare(body object, t Target, agent AgentProtocol) ([]byte, *translation, error) {
+// prepare builds the upstream body for a source kind, actual model and chosen
+// upstream protocol. Native paths keep unknown fields; a protocol mismatch
+// selects an explicit translation.
+func prepare(body object, kind SourceKind, model string, agent AgentProtocol, upstream string) ([]byte, *translation, error) {
 	// RawMessage values are never modified in place; copying the top-level map
 	// isolates edits from the body that later failover targets reuse.
 	wire := make(object, len(body))
 	for k, v := range body {
 		wire[k] = v
 	}
-	wire["model"] = jsonBytes(t.Model)
+	wire["model"] = jsonBytes(model)
 	var tr *translation
 	var e error
-	if incomingProtocol(agent) != t.upstreamProtocol(agent) {
-		tr = &translation{from: incomingProtocol(agent), to: t.upstreamProtocol(agent), model: rawString(body["model"]), toolNames: map[string]toolIdentity{}}
+	if incomingProtocol(agent) != upstream {
+		tr = &translation{from: incomingProtocol(agent), to: upstream, model: rawString(body["model"]), toolNames: map[string]toolIdentity{}}
 		if tr.to == "responses" {
 			wire, e = messagesToResponses(wire, tr)
 		} else {
@@ -39,8 +42,8 @@ func prepare(body object, t Target, agent AgentProtocol) ([]byte, *translation, 
 			return nil, nil, e
 		}
 	}
-	if t.Source.Kind == SourceCopilot {
-		if t.upstreamProtocol() == "responses" {
+	if kind == SourceCopilot {
+		if upstream == "responses" {
 			delete(wire, "service_tier")
 			if string(wire["store"]) == "true" {
 				wire["store"] = jsonBytes(false)
@@ -57,9 +60,9 @@ func prepare(body object, t Target, agent AgentProtocol) ([]byte, *translation, 
 					wire["tools"] = jsonBytes(kept)
 				}
 			}
-			clampEffort(wire, t.Model)
+			clampEffort(wire, model)
 		} else {
-			sanitizeMessages(wire, t.Model)
+			sanitizeMessages(wire, model)
 		}
 	}
 	b, e := json.Marshal(wire)

@@ -183,7 +183,8 @@ func TestNativeSSEUsageAndWireFidelity(t *testing.T) {
 }
 func TestNativeToolEchoPreservesCustomNamespaceAndOpaqueFields(t *testing.T) {
 	body := obj([]byte(`{"model":"alias","stream":true,"unknown":{"keep":"exact"},"tools":[{"type":"custom","name":"exec","format":{"type":"grammar","syntax":"lark","definition":"start: /.+/"}}],"input":[{"type":"custom_tool_call","call_id":"call-a","name":"exec","namespace":"functions","input":"await do_work()"},{"type":"custom_tool_call_output","call_id":"call-a","output":"done"}]}`))
-	b, tr, e := prepare(body, Target{Source: Source{Kind: "copilot"}, Model: "gpt-6-astra"}, "codex")
+	target := Target{Source: Source{Kind: "copilot"}, Model: "gpt-6-astra"}
+	b, tr, e := prepare(body, target.Source.Kind, target.Model, "codex", target.upstreamProtocol("codex"))
 	if e != nil || tr != nil {
 		t.Fatal("native path translated")
 	}
