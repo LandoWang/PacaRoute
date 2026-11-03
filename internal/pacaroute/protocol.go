@@ -9,11 +9,6 @@ import (
 // anthropicVersion is sent on Messages requests that do not carry one.
 const anthropicVersion = "2023-06-01"
 
-type object = map[string]json.RawMessage
-
-func obj(b json.RawMessage) object     { v := object{}; _ = json.Unmarshal(b, &v); return v }
-func array(b json.RawMessage) []object { var v []object; _ = json.Unmarshal(b, &v); return v }
-
 // Native paths preserve opaque request and response fields. Only probed Copilot constraints are changed.
 // prepare builds the upstream body for a source kind, actual model and chosen
 // upstream protocol. Native paths keep unknown fields; a protocol mismatch
@@ -65,6 +60,3 @@ func prepare(body object, kind domain.SourceKind, model string, agent domain.Age
 	b, e := json.Marshal(wire)
 	return b, tr, e
 }
-
-func rawString(b json.RawMessage) string { var s string; _ = json.Unmarshal(b, &s); return s }
-func jsonBytes(v any) json.RawMessage    { b, _ := json.Marshal(v); return b }
