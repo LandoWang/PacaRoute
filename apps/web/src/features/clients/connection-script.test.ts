@@ -117,21 +117,29 @@ describe("客户端 connection scripts", () => {
     expect(text).toContain("'https://host/one''two'");
     expect(text).toContain("Remove-Variable pacaKey");
   });
-  it("doubles every PowerShell single-quote-like character", () => {
+  it("never embeds PowerShell single-quote-like characters", () => {
     const text = connectionScript(
       client,
       "codex",
-      "https://host/a\u2018b\u2019c\u201ad\u201be",
+      "https://host/a‘b’c‚d‛e",
       "coding",
       "powershell",
-      "k\u2018\u2019\u201a\u201b'",
+      "k'",
     );
     expect(text).toContain(
-      "'https://host/a\u2018\u2018b\u2019\u2019c\u201a\u201ad\u201b\u201be'",
+      "'https://host/a%E2%80%98b%E2%80%99c%E2%80%9Ad%E2%80%9Be'",
     );
-    expect(text).toContain(
-      "$pacaKey = 'k\u2018\u2018\u2019\u2019\u201a\u201a\u201b\u201b'''",
-    );
+    expect(text).toContain("$pacaKey = 'k'''");
+    expect(() =>
+      connectionScript(
+        client,
+        "codex",
+        "https://host",
+        "coding",
+        "powershell",
+        "k‘’‚‛'",
+      ),
+    ).toThrow("ASCII");
   });
   it.skipIf(!hasPwsh)(
     "passes PowerShell quote-like characters and metacharacters literally",
@@ -146,8 +154,7 @@ describe("客户端 connection scripts", () => {
         );
         const url =
           "https://host/p\u2019;New-Item url-marker;echo \u2018\u201a\u201b$(New-Item url-sub)`x";
-        const key =
-          "synthetic\u2019;New-Item key-marker;\u2019\u2018\u201a\u201b$(New-Item key-sub)`$HOME";
+        const key = "synthetic';New-Item key-marker;'$(New-Item key-sub)`$HOME";
         const script = connectionScript(
           client,
           "codex",
@@ -168,7 +175,7 @@ describe("客户端 connection scripts", () => {
           },
         });
         const captured = readFileSync(capture, "utf8");
-        expect(captured).toContain("--url\n" + url + "\n");
+        expect(captured).toContain("--url\n" + new URL(url).href + "\n");
         expect(captured).toContain("--apply\n" + key);
         for (const marker of ["url-marker", "url-sub", "key-marker", "key-sub"])
           expect(() => readFileSync(join(dir, marker))).toThrow();
@@ -221,7 +228,38 @@ describe("客户端 connection scripts", () => {
     }
   });
   it("keeps router onboarding separate from native Agent scripts", () => {
-    expect(() => connectionScript({ ...client, enabled_agents: ["pacaroute"] }, "pacaroute", "https://host", "coding", "shell", "synthetic-key")).toThrow("接入二维码");
+    expect(() =>
+      connectionScript(
+        { ...client, enabled_agents: ["pacaroute"] },
+        "pacaroute",
+        "https://host",
+        "coding",
+        "shell",
+        "synthetic-key",
+      ),
+    ).toThrow("接入二维码");
   });
 
+  it("keeps PowerShell scripts ASCII so Windows-1252 decoding cannot create quotes", () => {
+    const text = connectionScript(
+      client,
+      "codex",
+      "https://b\u00fccher.example/pa\u2012th",
+      "coding",
+      "powershell",
+      "synthetic-key",
+    );
+    expect(text).toMatch(/^[\x00-\x7f]*$/);
+    expect(text).toContain("'https://xn--bcher-kva.example/pa%E2%80%92th'");
+    expect(() =>
+      connectionScript(
+        client,
+        "codex",
+        "https://host",
+        "coding",
+        "powershell",
+        "key\u2012value",
+      ),
+    ).toThrow("ASCII");
+  });
 });

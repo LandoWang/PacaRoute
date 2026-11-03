@@ -46,8 +46,15 @@ export function connectionScript(
     (!apiKey || apiKey.length > 16384 || /[\r\n\x00]/.test(apiKey))
   )
     throw Error("请先保存这个客户端的 Key，再生成接入脚本。");
+  // Windows PowerShell 5.1 reads a BOM-less .ps1 as Windows-1252, where UTF-8
+  // continuation bytes 0x91-0x94 become quote characters. Keep PowerShell
+  // scripts pure ASCII: embed the normalized (punycode, percent-encoded) URL
+  // and refuse non-ASCII keys.
+  if (platform === "powershell" && /[^\x20-\x7e]/.test(apiKey))
+    throw Error("客户端 Key 含有非 ASCII 字符，无法生成 PowerShell 脚本。");
+  const target = platform === "powershell" ? url.href : address;
   const q = platform === "shell" ? shellQuote : psQuote;
-  const command = `connect --agent ${q(agent)} --url ${q(address.replace(/\/$/, ""))} --model ${q(model)}${client.local ? " --local" : ""} --apply`;
+  const command = `connect --agent ${q(agent)} --url ${q(target.replace(/\/$/, ""))} --model ${q(model)}${client.local ? " --local" : ""} --apply`;
   if (platform === "shell")
     return `#!/usr/bin/env bash
 set +x
