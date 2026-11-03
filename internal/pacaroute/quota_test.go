@@ -52,7 +52,7 @@ func TestQuotaConcurrentAdmissionRestartAndIdempotentSettlement(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, e := q.Admit(Activity{ID: newID(), ClientID: "alice", Client: "codex", Timestamp: now}, limit)
+			_, e := q.Admit(Activity{ID: newID(), ClientID: "alice", Agent: "codex", Timestamp: now}, limit)
 			if e != nil {
 				t.Error(e)
 				return

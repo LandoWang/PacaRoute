@@ -223,7 +223,7 @@ func (s *Server) admitQuota(x *gatewayExchange) bool {
 	if client != nil {
 		clientID = client.ID
 	}
-	x.activity = Activity{ID: strings.ReplaceAll(newID(), "-", ""), Timestamp: time.Now().UTC(), Kind: "request", Client: string(x.agent), ClientID: clientID}
+	x.activity = Activity{ID: strings.ReplaceAll(newID(), "-", ""), Timestamp: time.Now().UTC(), Kind: "request", Agent: string(x.agent), ClientID: clientID}
 	quota, err := s.Quotas.Admit(x.activity, client.Quota)
 	if err != nil {
 		problem(w, 503, "Client quota ledger unavailable")

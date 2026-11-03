@@ -15,7 +15,7 @@ type Activity struct {
 	Kind       string    `json:"kind"`
 	Source     string    `json:"source"`
 	Model      string    `json:"model"`
-	Client     string    `json:"client"`
+	Agent      string    `json:"client"`
 	ClientID   string    `json:"client_id"`
 	Status     int       `json:"status"`
 	Input      *int64    `json:"input_tokens"`
@@ -64,7 +64,7 @@ type ActivityStore struct {
 	err     string
 }
 
-type activityDimension struct{ Source, Client, Model string }
+type activityDimension struct{ Source, Agent, Model string }
 
 func NewActivityStore(root string) *ActivityStore {
 	return &ActivityStore{root: filepath.Join(root, "runtime", "desktop-activity"), buckets: map[string]map[activityDimension]Totals{}, offsets: map[string]int64{}}
@@ -149,7 +149,7 @@ func (a *ActivityStore) Summary(from, to time.Time, source, client string) map[s
 			continue
 		}
 		for key, v := range entries {
-			s, c := key.Source, key.Client
+			s, c := key.Source, key.Agent
 			if (source != "" && source != s) || (client != "" && client != c) {
 				continue
 			}

@@ -127,7 +127,7 @@ func (q *QuotaStore) Admit(v Activity, limit *ClientQuota) (QuotaState, error) {
 	if e != nil || state.Blocked != "" {
 		return state, e
 	}
-	_, e = tx.Exec(`INSERT INTO quota_requests(request_id,client_id,agent,started_ms,state) VALUES(?,?,?,?,'reserved')`, v.ID, v.ClientID, v.Client, v.Timestamp.UnixMilli())
+	_, e = tx.Exec(`INSERT INTO quota_requests(request_id,client_id,agent,started_ms,state) VALUES(?,?,?,?,'reserved')`, v.ID, v.ClientID, v.Agent, v.Timestamp.UnixMilli())
 	if e != nil {
 		return state, e
 	}
