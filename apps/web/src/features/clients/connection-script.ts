@@ -94,3 +94,22 @@ try {
 }
 `;
 }
+const hiddenKey = "PACAROUTE-KEY-HIDDEN";
+// Display-only script. It is generated with an ASCII stand-in key so it
+// passes the same checks as the real script, then shows a masked placeholder.
+export function connectionScriptPreview(
+  client: Client,
+  agent: Agent,
+  address: string,
+  model: string,
+  platform: ScriptPlatform,
+): string {
+  return connectionScript(
+    client,
+    agent,
+    address,
+    model,
+    platform,
+    hiddenKey,
+  ).replaceAll(hiddenKey, "<客户端密钥 已隐藏>");
+}

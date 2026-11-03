@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { type Client } from "../../api/types";
-import { connectionScript } from "./connection-script";
+import {
+  connectionScript,
+  connectionScriptPreview,
+} from "./connection-script";
 const client: Client = {
   id: "alice",
   name: "Alice",
@@ -264,4 +267,27 @@ describe("客户端 connection scripts", () => {
       ),
     ).toThrow("ASCII");
   });
+  it("masks the key in previews for both platforms without failing the PowerShell checks", () => {
+    for (const platform of ["shell", "powershell"] as const) {
+      const preview = connectionScriptPreview(
+        client,
+        "codex",
+        "https://b\u00fccher.example/path",
+        "coding",
+        platform,
+      );
+      expect(preview).toContain("<客户端密钥 已隐藏>");
+      expect(preview).not.toContain("PACAROUTE-KEY-HIDDEN");
+    }
+    expect(
+      connectionScriptPreview(
+        client,
+        "codex",
+        "https://b\u00fccher.example/path",
+        "coding",
+        "powershell",
+      ),
+    ).toContain("'https://xn--bcher-kva.example/path'");
+  });
+
 });
