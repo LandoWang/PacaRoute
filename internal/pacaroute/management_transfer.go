@@ -1,7 +1,9 @@
 package pacaroute
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 )
@@ -72,4 +74,30 @@ func (s *Server) configTransferAPI(w http.ResponseWriter, r *http.Request, actio
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "plan": p})
+}
+
+func applyConfigImport(ctx context.Context, store *ConfigStore, auth *Auth, p *ConfigImportPlan) error {
+	current, err := store.Reload()
+	if err != nil {
+		return err
+	}
+	if current.Revision != p.Revision {
+		return errors.New("configuration changed; preview the import again")
+	}
+	c := cloneConfig(&p.config)
+	for i := range c.Clients {
+		for _, id := range p.clientIDs {
+			if c.Clients[i].ID != id {
+				continue
+			}
+			key := newKey()
+			c.Clients[i].KeyHash = keyHash(key)
+			if err := auth.SaveClientKey(ctx, c.Clients[i], key); err != nil {
+				return errors.New("cannot save imported Client credential; configuration unchanged")
+			}
+		}
+	}
+	// Client credentials are hash-versioned by Auth. A losing concurrent write
+	// can leave an unused encrypted record but cannot replace a live credential.
+	return store.Save(c, p.Revision)
 }

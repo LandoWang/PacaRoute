@@ -2,7 +2,6 @@ package pacaroute
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -262,32 +261,6 @@ func planConfigImport(current *Config, b ConfigBundle, mode, namespace string) (
 }
 
 func importNamespace() string { return "i" + strings.ReplaceAll(newID(), "-", "") }
-
-func applyConfigImport(ctx context.Context, store *ConfigStore, auth *Auth, p *ConfigImportPlan) error {
-	current, err := store.Reload()
-	if err != nil {
-		return err
-	}
-	if current.Revision != p.Revision {
-		return errors.New("configuration changed; preview the import again")
-	}
-	c := cloneConfig(&p.config)
-	for i := range c.Clients {
-		for _, id := range p.clientIDs {
-			if c.Clients[i].ID != id {
-				continue
-			}
-			key := newKey()
-			c.Clients[i].KeyHash = keyHash(key)
-			if err := auth.SaveClientKey(ctx, c.Clients[i], key); err != nil {
-				return errors.New("cannot save imported Client credential; configuration unchanged")
-			}
-		}
-	}
-	// Client credentials are hash-versioned by Auth. A losing concurrent write
-	// can leave an unused encrypted record but cannot replace a live credential.
-	return store.Save(c, p.Revision)
-}
 
 // digestHex is the SHA-256 hex digest used for imported ID suffixes and the
 // preview fingerprint.
