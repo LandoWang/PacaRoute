@@ -29,6 +29,7 @@ import { Proxies } from "../features/proxies/proxies-page";
 import { Settings } from "../features/settings/settings-page";
 import { Sources } from "../features/sources/sources-page";
 import { UsagePage } from "../features/usage/usage-page";
+import { saveConfig } from "./config-save";
 import { Login } from "./login";
 import { StateContext } from "./state";
 const pages = [
@@ -148,7 +149,7 @@ export function App() {
     setMessage("");
   }
   async function save(next: Config) {
-    const c = await api<Config>("config", "PUT", next);
+    const c = await saveConfig(next, setConfig);
     setConfig(c);
     setMessage("已保存，新请求立即使用新配置。");
   }
