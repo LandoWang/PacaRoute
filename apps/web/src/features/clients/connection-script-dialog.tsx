@@ -1,7 +1,11 @@
 import { Download, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/transport";
-import { type Client, type ProtocolAgent } from "../../api/types";
+import {
+  type Client,
+  type ProtocolAgent,
+  type ClientKeyResponse,
+} from "../../api/types";
 import { useApp } from "../../app/state";
 import {
   Button,
@@ -41,7 +45,7 @@ export function ConnectionScript({
   useEffect(() => {
     active.current = true;
     if (!client.local) {
-      api<{ api_key: string }>(`clients/${client.id}/key`)
+      api<ClientKeyResponse>(`clients/${client.id}/key`)
         .then((v) => {
           if (active.current) setApiKey(v.api_key);
         })

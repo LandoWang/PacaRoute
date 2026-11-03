@@ -1,3 +1,4 @@
+import { type ClientKeyResponse } from "../../api/types";
 import { Plus, Pencil, Trash2, Terminal } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../api/transport";
@@ -177,7 +178,7 @@ export function Clients() {
                           saveLabel="生成新密钥"
                           onClose={close}
                           onSave={async () => {
-                            const v = await api<{ api_key: string }>(
+                            const v = await api<ClientKeyResponse>(
                               `clients/${c.id}/rotate`,
                               "POST",
                               {},

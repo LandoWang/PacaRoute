@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { api } from "../../api/transport";
-import { type Client, type Grant } from "../../api/types";
+import {
+  type Client,
+  type Grant,
+  type ClientKeyResponse,
+} from "../../api/types";
 import { useApp, useDraftBase } from "../../app/state";
 import { Identity } from "../../components/identity";
 import { Editor, Field } from "../../components/ui";
@@ -42,7 +46,7 @@ export function ClientEditor({
           });
           onClose();
         } else {
-          const result = await api<{ api_key: string }>("clients", "POST", v);
+          const result = await api<ClientKeyResponse>("clients", "POST", v);
           onKey(result.api_key, v.id);
         }
       }}

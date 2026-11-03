@@ -1,7 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
 import { api } from "../../api/transport";
-import { type Config, type Model } from "../../api/types";
+import { type Config, type Model, type ModelCatalog } from "../../api/types";
 import { Button, Input, Select } from "../../components/ui";
 import { sources } from "../../domain/config";
 import { poolModels } from "../../domain/routing";
@@ -34,7 +34,7 @@ export function ModelInput({
       return;
     }
     setLoading(true);
-    api<{ models: Model[] }>(
+    api<ModelCatalog>(
       "models?source=" + encodeURIComponent(source),
       "GET",
       undefined,

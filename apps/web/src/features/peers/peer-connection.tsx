@@ -1,7 +1,7 @@
 import { Camera, Copy, Download, QrCode } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/transport";
-import { type Client } from "../../api/types";
+import { type Client, type ClientKeyResponse } from "../../api/types";
 import { useApp } from "../../app/state";
 import {
   Button,
@@ -35,7 +35,7 @@ export function ClientQR({
   useEffect(() => {
     const controller = new AbortController();
     if (!client.local)
-      api<{ api_key: string }>(
+      api<ClientKeyResponse>(
         `clients/${client.id}/key`,
         "GET",
         undefined,

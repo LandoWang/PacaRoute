@@ -1,9 +1,9 @@
 import { RefreshCw } from "lucide-react";
-import { type Account } from "../../api/types";
+import { type Account, type CopilotInfo } from "../../api/types";
 import { useLoad } from "../../app/state";
 import { Loading } from "../../components/feedback";
 import { Button, Modal } from "../../components/ui";
-import { CopilotQuotaDetails, type CopilotInfo } from "./copilot-quota";
+import { CopilotQuotaDetails } from "./copilot-quota";
 export function AccountDetail({
   account,
   onClose,

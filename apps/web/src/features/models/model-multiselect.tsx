@@ -1,6 +1,11 @@
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { type Config, type Grant, type Model } from "../../api/types";
+import {
+  type Config,
+  type Grant,
+  type Model,
+  type ModelCatalog,
+} from "../../api/types";
 import { useLoad } from "../../app/state";
 import { Button, Input, Select, Field, ErrorNote } from "../../components/ui";
 import { sources } from "../../domain/config";
@@ -22,7 +27,7 @@ export function ModelMultiSelect({
   onChange: (models: string[]) => void;
   onDefault: (model: string) => void;
 }) {
-  const catalog = useLoad<{ models: Model[] }>(
+  const catalog = useLoad<ModelCatalog>(
     "models?source=" + encodeURIComponent(source),
   );
   const [query, setQuery] = useState(""),

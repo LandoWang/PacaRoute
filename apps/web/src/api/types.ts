@@ -186,3 +186,87 @@ export type ModelDiscovery = {
   resource_id?: string;
   subscription_id?: string;
 };
+
+// Response bodies of management endpoints used by the UI.
+export type ClientKeyResponse = { api_key: string; available?: boolean };
+export type DeviceLoginStart = {
+  done?: boolean;
+  job_id: string;
+  verification_uri: string;
+  user_code: string;
+  expires_in: number;
+};
+export type LoginJob = { done: boolean; error?: string };
+export type ModelCatalog = { models: Model[] };
+export type ClientQuotaState = {
+  window_seconds: number;
+  requests: number;
+  input_tokens: number;
+  cost_usd: string;
+  pending: number;
+  unpriced: number;
+  missing_usage: number;
+  blocked?: string;
+  limits?: ClientQuota;
+};
+export type CopilotQuota = {
+  copilot_plan?: string;
+  quota_reset_date?: string;
+  quota_snapshots?: Record<
+    string,
+    {
+      unlimited?: boolean;
+      percent_remaining?: number;
+      remaining?: number;
+      quota_remaining?: number;
+      entitlement?: number;
+      token_based_billing?: boolean;
+    }
+  >;
+};
+export type CopilotInfo = {
+  quota?: CopilotQuota;
+  quota_error?: string;
+  login?: string;
+};
+export type AzureSubscriptions = {
+  subscriptions: { id: string; name: string; is_default?: boolean }[];
+};
+export type AzureResource = { id: string; name: string; endpoint: string };
+export type AzureDeployments = { models: { id: string }[] };
+export type LocalBackups = {
+  backups: {
+    id: string;
+    created_at: string;
+    missing_file: boolean;
+    valid: boolean;
+  }[];
+};
+export type RestorePlan = {
+  path: string;
+  fingerprint: string;
+  changes: string[];
+  backup_path?: string;
+};
+export type ImportKind =
+  | "accounts"
+  | "sources"
+  | "pools"
+  | "proxies"
+  | "clients";
+export type ImportPlan = {
+  mode: "add" | "replace";
+  revision: string;
+  namespace: string;
+  fingerprint: string;
+  added: Record<ImportKind, number>;
+  removed: Record<ImportKind, number>;
+  changes: {
+    kind: ImportKind;
+    from_id: string;
+    to_id: string;
+    from_name: string;
+    to_name: string;
+  }[];
+  issues: { code: string; id?: string; name?: string }[];
+};
