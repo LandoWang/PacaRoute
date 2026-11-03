@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +12,9 @@ const client: Client = {
   enabled_agents: ["codex"],
   routes: [],
 };
+const hasPwsh =
+  spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", "exit 0"])
+    .status === 0;
 describe("客户端 connection scripts", () => {
   it("rejects disabled Agents, unsafe URLs and remote local Clients", () => {
     expect(() =>
@@ -114,6 +117,66 @@ describe("客户端 connection scripts", () => {
     expect(text).toContain("'https://host/one''two'");
     expect(text).toContain("Remove-Variable pacaKey");
   });
+  it("doubles every PowerShell single-quote-like character", () => {
+    const text = connectionScript(
+      client,
+      "codex",
+      "https://host/a\u2018b\u2019c\u201ad\u201be",
+      "coding",
+      "powershell",
+      "k\u2018\u2019\u201a\u201b'",
+    );
+    expect(text).toContain(
+      "'https://host/a\u2018\u2018b\u2019\u2019c\u201a\u201ad\u201b\u201be'",
+    );
+    expect(text).toContain(
+      "$pacaKey = 'k\u2018\u2018\u2019\u2019\u201a\u201a\u201b\u201b'''",
+    );
+  });
+  it.skipIf(!hasPwsh)(
+    "passes PowerShell quote-like characters and metacharacters literally",
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), "paca-ps-script-"));
+      try {
+        const capture = join(dir, "capture");
+        writeFileSync(
+          join(dir, "pacaroute-cli"),
+          `#!/bin/bash\nprintf '%s\\n' "$@" > "$CAPTURE"\ncat >> "$CAPTURE"\n`,
+          { mode: 0o700 },
+        );
+        const url =
+          "https://host/p\u2019;New-Item url-marker;echo \u2018\u201a\u201b$(New-Item url-sub)`x";
+        const key =
+          "synthetic\u2019;New-Item key-marker;\u2019\u2018\u201a\u201b$(New-Item key-sub)`$HOME";
+        const script = connectionScript(
+          client,
+          "codex",
+          url,
+          "coding",
+          "powershell",
+          key,
+        );
+        const file = join(dir, "connect.ps1");
+        writeFileSync(file, script);
+        execFileSync("pwsh", ["-NoProfile", "-NonInteractive", "-File", file], {
+          input: "",
+          cwd: dir,
+          env: {
+            ...process.env,
+            PATH: dir + ":" + process.env.PATH,
+            CAPTURE: capture,
+          },
+        });
+        const captured = readFileSync(capture, "utf8");
+        expect(captured).toContain("--url\n" + url + "\n");
+        expect(captured).toContain("--apply\n" + key);
+        for (const marker of ["url-marker", "url-sub", "key-marker", "key-sub"])
+          expect(() => readFileSync(join(dir, marker))).toThrow();
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
   it("keeps router onboarding separate from native Agent scripts", () => {
     expect(() => connectionScript({ ...client, enabled_agents: ["pacaroute"] }, "pacaroute", "https://host", "coding", "shell", "synthetic-key")).toThrow("接入二维码");
   });
