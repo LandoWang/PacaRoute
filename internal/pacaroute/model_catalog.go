@@ -28,7 +28,7 @@ func (a *catalog) Models(ctx context.Context, id string) ([]Model, error) {
 		id = "copilot"
 	}
 	c := a.config.Snapshot()
-	if strings.HasPrefix(id, "pool:") {
+	if isPoolTarget(id) {
 		p, ok := c.Pool(id)
 		if !ok {
 			return nil, errors.New("pool not found")
