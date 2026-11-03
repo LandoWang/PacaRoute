@@ -1,6 +1,8 @@
 import { Input, Field } from "./ui";
+// Browsers compile `pattern` with the `v` flag, where an unescaped trailing
+// `-` in a character class is invalid and silently disables validation.
 export const identifier = {
-  pattern: "[a-z][a-z0-9-]{0,62}",
+  pattern: "[a-z][a-z0-9\\-]{0,62}",
   title: "小写字母开头，可使用小写字母、数字和短横线",
   required: true,
 };
