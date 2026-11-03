@@ -12,17 +12,19 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
 
-const Version = "0.8.6"
+const Version = "0.9.0"
 
 type Server struct {
 	Store           *ConfigStore
 	Auth            *Auth
 	Router          *Router
 	Activity        *ActivityStore
+	Quotas          *QuotaStore
 	AllowLocal      bool
 	LocalManagement bool
 	Port            int
@@ -57,7 +59,11 @@ func NewServer(store *ConfigStore, auth *Auth) (*Server, error) {
 	if len(key) < 32 {
 		return nil, errors.New("invalid management key")
 	}
-	return &Server{Store: store, Auth: auth, Router: r, Activity: NewActivityStore(store.Root), AdminKey: string(key), started: time.Now(), loginJobs: newLoginJobs()}, nil
+	quotas, e := newQuotaStore(store.db)
+	if e != nil {
+		return nil, e
+	}
+	return &Server{Quotas: quotas, Store: store, Auth: auth, Router: r, Activity: NewActivityStore(store.Root), AdminKey: string(key), started: time.Now(), loginJobs: newLoginJobs()}, nil
 }
 func constantEqual(a, b []byte) bool { return subtle.ConstantTimeCompare(a, b) == 1 }
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -90,6 +96,24 @@ func (s *Server) Handler() http.Handler {
 		}
 		if r.URL.Path == "/health" {
 			writeJSON(w, 200, map[string]any{"name": "PacaRoute", "version": Version, "ready": true})
+			return
+		}
+		if r.URL.Path == "/.well-known/pacaroute" && r.Method == "GET" {
+			writeJSON(w, 200, map[string]any{"name": "PacaRoute", "version": Version, "discovery_version": 1, "peer_path": "pacaroute", "models": "pacaroute/v1/models", "agents": map[string]string{"codex": "codex", "claude-code": "cc"}})
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/pacaroute/") {
+			copy := r.Clone(r.Context())
+			copy.URL.Path = strings.TrimPrefix(r.URL.Path, "/pacaroute")
+			if copy.URL.Path == "/v1/models" || copy.URL.Path == "/models" {
+				s.peerCatalog(w, copy)
+			} else {
+				s.gatewayFor(w, copy, true)
+			}
+			return
+		}
+		if r.URL.Path == "/v1/models" || r.URL.Path == "/models" {
+			s.peerCatalog(w, r)
 			return
 		}
 		s.gateway(w, r)
@@ -135,14 +159,18 @@ func (s *Server) authenticate(r *http.Request, c *Config) (*Client, bool) {
 			return &copy, true
 		}
 	}
-	if s.AllowLocal && s.PublicURL == "" && loopbackRequest(r) && r.Header.Get("Forwarded") == "" && r.Header.Get("X-Forwarded-For") == "" && r.Header.Get("X-Forwarded-Host") == "" && (key == "" || key == "dummy" || key == "pacaroute-local") {
+	// AgentLink's auth provider-token emits a public discovery sentinel, not an
+	// account credential. Existing Codex sessions retain that helper after migration.
+	localKey := key == "" || key == "dummy" || key == "pacaroute-local" || key == "copilot-bridge-provider"
+	if s.AllowLocal && s.PublicURL == "" && loopbackRequest(r) && r.Header.Get("Forwarded") == "" && r.Header.Get("X-Forwarded-For") == "" && r.Header.Get("X-Forwarded-Host") == "" && localKey {
 		if local, exists := c.Client("default"); exists && local.Local && !local.Disabled {
 			return local, true
 		}
 	}
 	return nil, false
 }
-func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
+func (s *Server) gateway(w http.ResponseWriter, r *http.Request) { s.gatewayFor(w, r, false) }
+func (s *Server) gatewayFor(w http.ResponseWriter, r *http.Request, peer bool) {
 	if r.Header.Get("Origin") != "" && !s.sameOrigin(r) {
 		problem(w, 403, "cross-origin Agent requests are not permitted")
 		return
@@ -153,10 +181,28 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 		problem(w, 401, "valid Client API key required")
 		return
 	}
-	agent, explicit, operation := parseGatewayPath(r.URL.Path)
-	if !client.AgentEnabled(agent) {
-		problem(w, 403, "Agent is not enabled for this Client")
+	hops, err := peerHops(r)
+	if err != nil {
+		problem(w, 400, err.Error())
 		return
+	}
+	if hops >= maxPeerHops {
+		problem(w, 508, "PacaRoute forwarding loop or hop limit reached")
+		return
+	}
+	agent, explicit, operation := parseGatewayPath(r.URL.Path)
+	grant := agent
+	if peer {
+		grant = "pacaroute"
+	}
+	if !client.AgentEnabled(grant) {
+		problem(w, 404, "endpoint not found")
+		return
+	}
+	affinityScope := affinityClient(client)
+	if peer {
+		client = c.peerClient(client, agent)
+		affinityScope += "\x00pacaroute"
 	}
 	if operation == "models" && r.Method == "GET" {
 		if !client.LegacyDirect {
@@ -219,7 +265,7 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 		clientID = client.ID
 	}
 	session := sessionID(agent, r.Header, body)
-	targets, e := s.Router.Targets(c, affinityClient(client), agent, id, model, session, hasContinuation(body))
+	targets, e := s.Router.Targets(c, affinityScope, agent, id, model, session, hasContinuation(body))
 	if e != nil {
 		status := 503
 		if hasContinuation(body) {
@@ -229,6 +275,16 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	activity := Activity{ID: strings.ReplaceAll(newID(), "-", ""), Timestamp: time.Now().UTC(), Kind: "request", Client: agent, ClientID: clientID}
+	quota, err := s.Quotas.Admit(activity, client.Quota)
+	if err != nil {
+		problem(w, 503, "Client quota ledger unavailable")
+		return
+	}
+	if quota.Blocked != "" {
+		w.Header().Set("Retry-After", strconv.FormatInt(quota.RetryAfter, 10))
+		problem(w, 429, "Client quota exceeded: "+quota.Blocked)
+		return
+	}
 	start := time.Now()
 	usage := Usage{}
 	upstreamMessages := false
@@ -238,6 +294,15 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 		activity.Output = usage.Output
 		activity.CacheRead = usage.CacheRead
 		activity.CacheWrite = usage.CacheWrite
+		var price *ModelPrice
+		if source, ok := c.Source(activity.Source); ok {
+			if p, exists := source.Prices[activity.Model]; exists {
+				price = &p
+			}
+		}
+		if err := s.Quotas.Settle(activity, price, upstreamMessages); err != nil {
+			log.Printf("quota settlement failed: %v", err)
+		}
 		if e := s.Activity.Record(activity); e != nil {
 			log.Printf("activity write failed: %v", e)
 		}
@@ -255,13 +320,13 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 			problem(w, 400, e.Error())
 			return
 		}
-		if operation == "messages/count_tokens" && t.upstreamProtocol() != "messages" {
+		if operation == "messages/count_tokens" && t.upstreamProtocol(agent) != "messages" {
 			activity.Status = 422
 			activity.Error = "token counting is unavailable on this Responses source"
 			problem(w, 422, activity.Error)
 			return
 		}
-		protocol := t.upstreamProtocol()
+		protocol := t.upstreamProtocol(agent)
 		upstreamMessages = protocol == "messages"
 		upstreamPath := "/responses"
 		if protocol == "messages" {
@@ -269,6 +334,13 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 		}
 		if operation == "messages/count_tokens" {
 			upstreamPath += "/count_tokens"
+		}
+		if t.Source.Kind == "pacaroute" {
+			prefix := "/codex"
+			if agent == "claude-code" {
+				prefix = "/cc"
+			}
+			upstreamPath = prefix + "/" + operation
 		}
 		s.trace(activity.ID, fmt.Sprintf("upstream-%d-req.json", i), wire)
 		var res *http.Response
@@ -302,6 +374,12 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 				req.Header.Set("anthropic-version", "2023-06-01")
 			}
 			req.Header.Set(l.Header, l.Value)
+			if t.Source.Kind == "pacaroute" {
+				req.Header.Set(peerHopHeader, strconv.Itoa(hops+1))
+				if session != "" {
+					req.Header.Set("X-PacaRoute-Session", keyHash(s.AdminKey+"\x00"+affinityScope+"\x00"+agent+"\x00"+t.Source.ID+"\x00"+session))
+				}
+			}
 			if t.Source.Kind == "copilot" {
 				s.Auth.copilotHeaders(req, l, bytes.Contains(wire, []byte("input_image")) || bytes.Contains(wire, []byte(`"image"`)))
 				req.Header.Set("X-Initiator", "agent")
@@ -335,14 +413,19 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 		}
 		activity.Status = res.StatusCode
 		if retryable(res.StatusCode) && i+1 < len(targets) {
-			s.Router.Fail(t, fmt.Sprintf("upstream returned HTTP %d", res.StatusCode))
+			s.Router.FailResponse(t, res.StatusCode, res.Header)
 			res.Body.Close()
 			continue
 		}
 		if res.StatusCode >= 400 {
 			activity.Error = fmt.Sprintf("upstream returned HTTP %d", res.StatusCode)
-			s.Router.Fail(t, activity.Error)
+			s.Router.FailResponse(t, res.StatusCode, res.Header)
 			w.Header().Set("Content-Type", res.Header.Get("Content-Type"))
+			for _, header := range []string{"Retry-After", "Retry-After-Ms", "X-Ms-Retry-After-Ms"} {
+				if value := res.Header.Get(header); value != "" {
+					w.Header().Set(header, value)
+				}
+			}
 			w.WriteHeader(res.StatusCode)
 			_, _ = io.Copy(w, io.LimitReader(res.Body, 2<<20))
 			res.Body.Close()
@@ -357,7 +440,7 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if agent == "codex" && t.Source.Kind == "copilot" && protocol == "responses" {
+		if agent == "codex" && protocol == "responses" && (t.Source.Kind == "copilot" || t.Source.Kind == "pacaroute" && res.Header.Get("X-Reasoning-Included") == "true") {
 			w.Header().Set("X-Reasoning-Included", "true")
 		}
 		w.Header().Set("X-PacaRoute-Request", activity.ID)

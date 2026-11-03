@@ -5,6 +5,18 @@ import foundry from "../assets/brands/foundry.svg";
 import azure from "../assets/brands/azure-icon.svg";
 import openai from "../assets/brands/openai-icon.svg";
 import anthropic from "../assets/brands/anthropic.svg";
+import codex from "../assets/brands/codex.svg";
+import pacaRouteMark from "../assets/pacaroute-mark.png";
+
+export function CodexIcon({ size = 24 }: { size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="codex-icon"
+      style={{ width: size, height: size, maskImage: `url(${codex})` }}
+    />
+  );
+}
 
 export function BrandIcon({
   kind,
@@ -16,21 +28,23 @@ export function BrandIcon({
   size?: number;
 }) {
   const brand =
-    kind === "github"
-      ? account
-        ? { src: github, label: "GitHub", mono: true }
-        : { src: copilot, label: "GitHub Copilot", mono: true }
-      : kind === "copilot"
-        ? { src: copilot, label: "GitHub Copilot", mono: true }
-        : kind === "azure" || kind === "azure-openai"
-          ? account
-            ? { src: azure, label: "Azure", mono: false }
-            : { src: foundry, label: "Azure Foundry", mono: false }
-          : kind === "openai"
-            ? { src: openai, label: "OpenAI", mono: true }
-            : kind === "anthropic"
-              ? { src: anthropic, label: "Anthropic", mono: true }
-              : undefined;
+    kind === "pacaroute"
+      ? { src: pacaRouteMark, label: "PacaRoute", mono: false }
+      : kind === "github"
+        ? account
+          ? { src: github, label: "GitHub", mono: true }
+          : { src: copilot, label: "GitHub Copilot", mono: true }
+        : kind === "copilot"
+          ? { src: copilot, label: "GitHub Copilot", mono: true }
+          : kind === "azure" || kind === "azure-openai"
+            ? account
+              ? { src: azure, label: "Azure", mono: false }
+              : { src: foundry, label: "Azure Foundry", mono: false }
+            : kind === "openai"
+              ? { src: openai, label: "OpenAI", mono: true }
+              : kind === "anthropic"
+                ? { src: anthropic, label: "Anthropic", mono: true }
+                : undefined;
   return brand ? (
     <img
       src={brand.src}

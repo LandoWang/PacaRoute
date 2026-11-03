@@ -6,6 +6,7 @@ import (
 )
 
 type Cooldown struct {
+	Kind     string    `json:"kind"`
 	SourceID string    `json:"source_id"`
 	Model    string    `json:"model"`
 	Error    string    `json:"error"`
@@ -14,7 +15,13 @@ type Cooldown struct {
 }
 
 type PoolHealth struct {
-	ID        string `json:"id"`
+	ID        string            `json:"id"`
+	Available int               `json:"available"`
+	Total     int               `json:"total"`
+	Models    []PoolModelHealth `json:"models"`
+}
+type PoolModelHealth struct {
+	Model     string `json:"model"`
 	Available int    `json:"available"`
 	Total     int    `json:"total"`
 }
@@ -50,11 +57,21 @@ func (r *Router) Health(c *Config) RoutingHealth {
 	})
 	for _, pool := range c.Pools {
 		p := PoolHealth{ID: pool.ID, Total: len(pool.Members)}
+		modelHealth := map[string]*PoolModelHealth{}
+		for _, name := range pool.ModelNames() {
+			modelHealth[name] = &PoolModelHealth{Model: name}
+		}
 		for _, m := range pool.Members {
+			group := modelHealth[pool.MemberModel(m)]
+			group.Total++
 			_, exists := c.Source(m.SourceID)
 			if exists && m.Weight > 0 && !c.Paused(m.SourceID) && !r.cooldown[m.SourceID+":"+m.Model].Until.After(now) {
 				p.Available++
+				group.Available++
 			}
+		}
+		for _, name := range pool.ModelNames() {
+			p.Models = append(p.Models, *modelHealth[name])
 		}
 		h.Pools = append(h.Pools, p)
 	}

@@ -32,7 +32,6 @@ export function readModelSelection(
       defaultModel: first.model,
       fixed: true,
     };
-  if (first.source_id.startsWith("pool:")) return null;
   const canonical = routes.filter((r) => r.match_model === r.model);
   const models = canonical.map((r) => r.model);
   if (
@@ -67,8 +66,6 @@ export function selectedModelRoutes(
   const models = [...new Set(selection.models)];
   if (!source || !models.length || !models.includes(defaultModel))
     throw new Error("请选择模型和默认接入模型");
-  if (!fixed && source.startsWith("pool:"))
-    throw new Error("来源池使用池的模型别名");
   function rule(model: string, match_model: string): Route {
     const old = existing.find(
       (r) =>

@@ -1,8 +1,14 @@
+import { PeerScan } from "./peer-connection";
+import {
+  normalizePeerEndpoint,
+  type PeerConnection,
+} from "./peer-connection-data";
 import { BrandIcon } from "./components/brand-icon";
 import { useState, useEffect, useRef } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2, RefreshCw } from "lucide-react";
 import {
   api,
+  peerCapabilities,
   generatedID,
   suggestedName,
   accountProvider,
@@ -17,6 +23,8 @@ import {
   routeAgent,
   routeTarget,
   share,
+  poolModels,
+  memberModel,
   type Config,
   type Client,
   type Source,
@@ -81,8 +89,28 @@ export function AccountEditor({
     name: suggestedName("GitHub", accounts(config)),
     kind: "github",
   }));
+  const [scan, setScan] = useState(false);
   const [key, setKey] = useState("");
   const [created, setCreated] = useState(false);
+  if (scan)
+    return (
+      <PeerScan
+        onClose={() => setScan(false)}
+        onRead={(connection: PeerConnection) => {
+          set({
+            id: v.id,
+            kind: "pacaroute",
+            name: suggestedName(
+              connection.name || "PacaRoute",
+              accounts(config),
+            ),
+            endpoint: connection.endpoint,
+          });
+          setKey(connection.client_key);
+          setScan(false);
+        }}
+      />
+    );
   return (
     <Editor
       title="添加账号"
@@ -92,7 +120,11 @@ export function AccountEditor({
       }
       onSave={async () => {
         if (!created) {
-          await save({ ...config, accounts: [...config.accounts, v] });
+          const value =
+            v.kind === "pacaroute"
+              ? { ...v, endpoint: normalizePeerEndpoint(v.endpoint || "") }
+              : v;
+          await save({ ...config, accounts: [...config.accounts, value] });
           setCreated(true);
         }
         if (!deviceAccount(v.kind)) {
@@ -100,11 +132,15 @@ export function AccountEditor({
           setKey("");
         }
         close();
-        if (deviceAccount(v.kind) && !sharedAzure(v)) onConnect(v);
+        if (
+          (deviceAccount(v.kind) && !sharedAzure(v)) ||
+          v.kind === "pacaroute"
+        )
+          onConnect(v);
       }}
     >
       <div className="provider-choices" role="group" aria-label="账号类型">
-        {["github", "openai", "anthropic", "azure"].map((kind) => (
+        {["github", "openai", "anthropic", "azure", "pacaroute"].map((kind) => (
           <Button
             key={kind}
             type="button"
@@ -132,6 +168,31 @@ export function AccountEditor({
           </Button>
         ))}
       </div>
+      {v.kind === "pacaroute" && (
+        <>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={created}
+            onClick={() => setScan(true)}
+          >
+            扫描二维码 / 粘贴接入信息
+          </Button>
+          <Field
+            label="PacaRoute 服务地址"
+            hint="对方提供的完整地址，可包含部署路径。"
+          >
+            <Input
+              type="url"
+              required
+              disabled={created}
+              value={v.endpoint || ""}
+              placeholder="https://router.example.com"
+              onChange={(e) => set({ ...v, endpoint: e.target.value })}
+            />
+          </Field>
+        </>
+      )}
       {deviceAccount(v.kind) ? (
         <>
           <Field label="登录方式">
@@ -179,8 +240,12 @@ export function AccountEditor({
         </>
       ) : (
         <Field
-          label="API Key"
-          hint="使用 API 账号的密钥，与 ChatGPT / Claude 聊天订阅独立。"
+          label={v.kind === "pacaroute" ? "客户端密钥" : "API Key"}
+          hint={
+            v.kind === "pacaroute"
+              ? "使用对方分配的客户端密钥；只发现这个客户端可访问的模型。"
+              : "使用 API 账号的密钥，与 ChatGPT / Claude 聊天订阅独立。"
+          }
         >
           <Input
             type="password"
@@ -243,7 +308,7 @@ export function SourceEditor({
       kind,
       account_id: a.id,
       auth_mode: kind === "azure-openai" ? "azure-cli" : "api-key",
-      endpoint: defaultEndpoint(kind),
+      endpoint: kind === "pacaroute" ? a.endpoint || "" : defaultEndpoint(kind),
       deployments: [],
     };
   });
@@ -281,6 +346,11 @@ export function SourceEditor({
       setDiscovery(result);
       set({
         ...v,
+        endpoint: result.endpoint || v.endpoint,
+        agent_models:
+          v.kind === "pacaroute"
+            ? peerCapabilities(result.models)
+            : v.agent_models,
         resource_id: result.resource_id,
         subscription_id: result.subscription_id || v.subscription_id,
       });
@@ -304,6 +374,16 @@ export function SourceEditor({
       onSave={async () => {
         if (v.kind !== "copilot" && !selected.length)
           throw Error("请选择至少一个模型，或展开手动填写模型。");
+        if (
+          v.kind === "pacaroute" &&
+          selected.some(
+            (id) =>
+              !Object.values(v.agent_models || {}).some((models) =>
+                models.includes(id),
+              ),
+          )
+        )
+          throw Error("请先发现模型，再选择远端客户端可访问的模型。");
         const value = { ...v, deployments: selected };
         await save({
           ...config,
@@ -391,19 +471,21 @@ export function SourceEditor({
                 : "点击发现模型，再勾选需要使用的模型。"}
             </p>
           )}
-          <details className="advanced-options">
-            <summary>手动填写模型</summary>
-            <Field
-              label="模型 / Deployment"
-              hint="使用逗号分隔；Azure 使用 deployment 名称"
-            >
-              <Input
-                value={deployments}
-                onChange={(e) => setDeployments(e.target.value)}
-                placeholder="模型名称"
-              />
-            </Field>
-          </details>
+          {v.kind !== "pacaroute" && (
+            <details className="advanced-options">
+              <summary>手动填写模型</summary>
+              <Field
+                label="模型 / Deployment"
+                hint="使用逗号分隔；Azure 使用 deployment 名称"
+              >
+                <Input
+                  value={deployments}
+                  onChange={(e) => setDeployments(e.target.value)}
+                  placeholder="模型名称"
+                />
+              </Field>
+            </details>
+          )}
         </>
       )}
       <details
@@ -430,7 +512,18 @@ export function SourceEditor({
           <Select
             value={v.account_id}
             onChange={(e) => {
-              set({ ...v, account_id: e.target.value });
+              set({
+                ...v,
+                account_id: e.target.value,
+                ...(v.kind === "pacaroute"
+                  ? {
+                      endpoint:
+                        accounts(config).find((a) => a.id === e.target.value)
+                          ?.endpoint || "",
+                      agent_models: undefined,
+                    }
+                  : {}),
+              });
               setDiscovery(undefined);
               setDiscoveryError("");
             }}
@@ -451,7 +544,12 @@ export function SourceEditor({
               required
               value={v.endpoint}
               onChange={(e) => {
-                set({ ...v, endpoint: e.target.value, resource_id: undefined });
+                set({
+                  ...v,
+                  endpoint: e.target.value,
+                  resource_id: undefined,
+                  agent_models: undefined,
+                });
                 setDiscovery(undefined);
               }}
             />
@@ -476,7 +574,7 @@ export function SourceEditor({
             </Field>
           </>
         )}
-        <Field label="网络 / Proxy">
+        <Field label="网络 / 代理">
           <Select value={proxy} onChange={(e) => setProxy(e.target.value)}>
             <option value="system">跟随系统环境</option>
             <option value="direct">直连</option>
@@ -516,10 +614,14 @@ export function TargetPicker({
         ))}
       </optgroup>
       {includePools &&
-        config.pools.some((p) => !agent || p.agent === agent) && (
+        config.pools.some(
+          (p) => !agent || agent === "pacaroute" || p.agent === agent,
+        ) && (
           <optgroup label="来源池">
             {config.pools
-              .filter((p) => !agent || p.agent === agent)
+              .filter(
+                (p) => !agent || agent === "pacaroute" || p.agent === agent,
+              )
               .map((p) => (
                 <option key={p.id} value={"pool:" + p.id}>
                   {p.name}
@@ -554,7 +656,10 @@ export function ModelInput({
     setModels([]);
     setError("");
     setManual(false);
-    if (pool) return;
+    if (pool || !source) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     api<{ models: Model[] }>(
       "models?source=" + encodeURIComponent(source),
@@ -595,13 +700,13 @@ export function ModelInput({
           <Select
             id={id}
             required
-            disabled={!!pool || (loading && suggestions.length === 0)}
-            value={pool?.model || value}
+            disabled={loading && suggestions.length === 0 && !pool}
+            value={value || pool?.model || ""}
             onChange={(e) => onChange(e.target.value)}
           >
             <option value="">{loading ? "正在获取模型…" : "选择模型"}</option>
             {(pool
-              ? [pool.model]
+              ? poolModels(pool)
               : [...new Set([...suggestions, ...(value ? [value] : [])])]
             ).map((m) => (
               <option key={m} value={m}>
@@ -652,14 +757,14 @@ export function AdvancedRoutesEditor({
       ? structuredClone(original)
       : {
           id: generatedID("client"),
-          name: suggestedName("Client", config.clients),
+          name: suggestedName("客户端", config.clients),
           disabled: false,
           routes: [
             {
               id: "route-1",
               agent: "codex",
               match_model: "*",
-              source_id: "copilot",
+              source_id: sources(config)[0]?.id || "",
               model: "",
             },
           ],
@@ -677,7 +782,7 @@ export function AdvancedRoutesEditor({
     <Editor
       wide
       title="高级路由规则"
-      description="每个 Client 对应一个人或调用方。路由从上到下匹配，首次匹配后停止。"
+      description="每个客户端对应一个人或调用方。路由从上到下匹配，首次匹配后停止。"
       onClose={close}
       onSave={async () => {
         if (original) {
@@ -742,6 +847,7 @@ export function AdvancedRoutesEditor({
               >
                 <option value="codex">Codex</option>
                 <option value="claude-code">Claude Code</option>
+                <option value="pacaroute">PacaRoute</option>
               </Select>
             </Field>
             <Field label="请求模型别名" hint="* 匹配任意模型">
@@ -799,7 +905,7 @@ export function AdvancedRoutesEditor({
                 id: "route-" + crypto.randomUUID().slice(0, 8),
                 agent: "codex",
                 match_model: "*",
-                source_id: "copilot",
+                source_id: sources(config)[0]?.id || "",
                 model: "",
               },
             ],
@@ -828,7 +934,12 @@ export function PoolEditor({
           model: "balanced",
           failover: true,
           members: [
-            { id: "member-1", source_id: "copilot", model: "", weight: 100 },
+            {
+              id: "member-1",
+              source_id: sources(config)[0]?.id || "",
+              model: "",
+              weight: 100,
+            },
           ],
         },
   );
@@ -841,7 +952,16 @@ export function PoolEditor({
       onSave={async () => {
         await save({
           ...config,
-          pools: [...config.pools.filter((p) => p.id !== v.id), v],
+          pools: [
+            ...config.pools.filter((p) => p.id !== v.id),
+            {
+              ...v,
+              model:
+                v.multi_model && !poolModels(v).includes(v.model)
+                  ? poolModels(v)[0] || ""
+                  : v.model,
+            },
+          ],
         });
         close();
       }}
@@ -863,20 +983,61 @@ export function PoolEditor({
             <option value="claude-code">Claude Code</option>
           </Select>
         </Field>
-        <Field label="对外模型别名">
-          <Input
-            required
-            value={v.model}
-            onChange={(e) => set({ ...v, model: e.target.value })}
-          />
+        <Field label={v.multi_model ? "默认接入模型" : "对外模型别名"}>
+          {v.multi_model ? (
+            <Select
+              value={
+                poolModels(v).includes(v.model)
+                  ? v.model
+                  : poolModels(v)[0] || ""
+              }
+              onChange={(e) => set({ ...v, model: e.target.value })}
+            >
+              {poolModels(v)
+                .filter(Boolean)
+                .map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+            </Select>
+          ) : (
+            <Input
+              required
+              value={v.model}
+              onChange={(e) => set({ ...v, model: e.target.value })}
+            />
+          )}
         </Field>
       </div>
+      <Field
+        label="来源池模式"
+        hint="多模型池像一个大来源。客户端选择模型后，仅在同模型组内分流、固定会话和故障切换。"
+      >
+        <Select
+          value={v.multi_model ? "multiple" : "single"}
+          onChange={(e) =>
+            set({ ...v, multi_model: e.target.value === "multiple" })
+          }
+        >
+          <option value="single">单模型别名 · 兼容现有来源池</option>
+          <option value="multiple">多模型 · 作为一个大来源</option>
+        </Select>
+      </Field>
       {v.members.map((m, i) => (
         <div className="route-editor" key={m.id}>
           <div className="row-between">
             <strong>
               来源 {i + 1}{" "}
-              <Badge tone="violet">{share(m.weight, v.members)}%</Badge>
+              <Badge tone="violet">
+                {share(
+                  m.weight,
+                  v.members.filter(
+                    (other) => memberModel(v, other) === memberModel(v, m),
+                  ),
+                )}
+                %
+              </Badge>
             </strong>
             <Button
               type="button"
@@ -891,6 +1052,25 @@ export function PoolEditor({
               <Trash2 size={15} />
             </Button>
           </div>
+          {v.multi_model && (
+            <Field
+              label="对外模型名"
+              hint="留空使用实际模型名称；相同名称的成员组成一个负载均衡组。"
+            >
+              <Input
+                value={m.alias || ""}
+                placeholder={m.model || "例如 gpt-6-astra"}
+                onChange={(e) =>
+                  set({
+                    ...v,
+                    members: v.members.map((old, j) =>
+                      j === i ? { ...m, alias: e.target.value } : old,
+                    ),
+                  })
+                }
+              />
+            </Field>
+          )}
           <div className="member-fields">
             <Field label="来源">
               <TargetPicker
@@ -955,7 +1135,7 @@ export function PoolEditor({
               ...v.members,
               {
                 id: "member-" + crypto.randomUUID().slice(0, 8),
-                source_id: "copilot",
+                source_id: sources(config)[0]?.id || "",
                 model: "",
                 weight: 100,
               },
@@ -990,14 +1170,14 @@ export function ProxyEditor({
       ? { ...original }
       : {
           id: generatedID("proxy"),
-          name: suggestedName("Proxy", config.proxies.profiles),
+          name: suggestedName("代理", config.proxies.profiles),
           mode: "custom",
           address: "",
         },
   );
   return (
     <Editor
-      title={original ? "编辑 Proxy" : "添加 Proxy"}
+      title={original ? "编辑代理" : "添加代理"}
       onClose={close}
       onSave={async () => {
         await save({

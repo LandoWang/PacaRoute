@@ -27,7 +27,7 @@ type arguments struct {
 
 func parseArgs(args []string) (arguments, error) {
 	v := arguments{flags: map[string]string{}}
-	bools := map[string]bool{"apply": true, "local": true, "allow-local": true, "local-management": true, "json": true, "no-open": true}
+	bools := map[string]bool{"apply": true, "local": true, "allow-local": true, "local-management": true, "json": true, "no-open": true, "no-serve": true}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if !strings.HasPrefix(arg, "--") {
@@ -73,6 +73,10 @@ func defaultRoot() string {
 	home, _ := os.UserHomeDir()
 	if runtime.GOOS == "darwin" {
 		base := filepath.Join(home, "Library", "Application Support")
+		preferred := filepath.Join(base, "PacaRoute")
+		if f, err := os.Stat(filepath.Join(preferred, "pacaroute.sqlite")); err == nil && !f.IsDir() {
+			return preferred
+		}
 		legacy := filepath.Join(base, "Copilot Bridge")
 		if f, e := os.Stat(legacy); e == nil && f.IsDir() {
 			return legacy
@@ -103,6 +107,7 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 		fmt.Fprint(out, `PacaRoute — Go agent request gateway
 
 pacaroute serve [--bind 127.0.0.1] [--port 8766] [--allow-local]
+                [--admin-port 8767] [--no-serve]  Separate local management listener
            [--public-url https://gateway.example]  Origin behind a TLS proxy
 pacaroute desktop [--port 8766]    Native tray and local service (desktop build)
 pacaroute ui [--port 8766]         Open a running local service in your browser
@@ -118,6 +123,9 @@ pacaroute clients rotate --id ID
 pacaroute key set --source ID      Resource API key on stdin (never argv)
 pacaroute key set --account ID     OpenAI/Anthropic account API key on stdin
 pacaroute config show|apply        Full config with revision; JSON on stdin
+pacaroute config export --file PATH     Portable configuration without credentials
+pacaroute config import --file PATH [--mode add|replace] [--apply]
+                                  Preview by default; --apply commits the import
 pacaroute configure --client codex|claude-code --source ID --model MODEL
                    [--port PORT] [--apply --fingerprint HASH]
 pacaroute connect --agent codex|claude-code --url URL --model ALIAS [--local] [--apply]
@@ -153,7 +161,11 @@ Web management uses <home>/admin.key. Network clients always use their own keys.
 		return fail(e)
 	}
 	defer s.Close()
-	auth := NewAuth(s, a.get("credential-root", ""))
+	authority := a.get("credential-root", "")
+	if authority == "" {
+		authority = readDesktopSettings(s.Root).CredentialRoot
+	}
+	auth := NewAuth(s, authority)
 	auth.systemKeys = desktopEnabled && runtime.GOOS == "darwin"
 	port, e := strconv.Atoi(a.get("port", "8766"))
 	if e != nil || port < 1 || port > 65535 {
@@ -168,6 +180,11 @@ Web management uses <home>/admin.key. Network clients always use their own keys.
 	case "serve":
 		return serve(ctx, a, s, auth, port, in, emit, fail)
 	case "ui":
+		if _, explicit := a.flags["port"]; !explicit {
+			if saved := readDesktopSettings(root); saved.AdminPort > 0 {
+				port = saved.AdminPort
+			}
+		}
 		if e := openManagement(root, port); e != nil {
 			return fail(e)
 		}
@@ -272,6 +289,14 @@ Web management uses <home>/admin.key. Network clients always use their own keys.
 		emit(map[string]any{"ok": true, "event": "result"})
 		return 0
 	case "config":
+		if action == "export" || action == "import" {
+			v, err := configTransferCommand(ctx, a, s, auth, action)
+			if err != nil {
+				return fail(err)
+			}
+			emit(v)
+			return 0
+		}
 		if action == "show" {
 			emit(s.Snapshot())
 			return 0
@@ -312,7 +337,7 @@ func serve(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, port in
 	server.TraceDir = a.get("trace-dir", "")
 	server.LocalManagement = a.get("local-management", "") == "true"
 	server.Port = port
-	if server.LocalManagement && a.get("bind", "127.0.0.1") != "127.0.0.1" && a.get("bind", "") != "::1" {
+	if server.LocalManagement && a.get("admin-port", "") == "" && a.get("bind", "127.0.0.1") != "127.0.0.1" && a.get("bind", "") != "::1" {
 		return fail(errors.New("local-management requires a loopback listener"))
 	}
 	if public := a.get("public-url", ""); public != "" {
@@ -350,6 +375,29 @@ func serve(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, port in
 				}
 			}
 		}()
+	}
+	if value := a.get("admin-port", ""); value != "" {
+		adminPort, err := strconv.Atoi(value)
+		if err != nil || adminPort < 1024 || adminPort > 65535 || adminPort == port {
+			return fail(errors.New("admin-port must be 1024–65535 and differ from port"))
+		}
+		control := &desktopControl{store: s, auth: auth, port: port, adminPort: adminPort, bind: a.get("bind", "127.0.0.1"), gateway: server}
+		if err = control.startManagement(); err != nil {
+			return fail(err)
+		}
+		defer control.close()
+		if a.get("no-serve", "") == "true" {
+			err = control.stop()
+		} else {
+			err = control.start()
+		}
+		// A gateway bind failure must not prevent repairing configuration in management.
+		emit(map[string]any{"ok": true, "event": "ready", "name": "PacaRoute", "version": Version, "address": fmt.Sprintf("127.0.0.1:%d", adminPort), "service": control.status()})
+		<-ctx.Done()
+		return 0
+	}
+	if a.get("no-serve", "") == "true" {
+		return fail(errors.New("no-serve requires --admin-port"))
 	}
 	listener, e := net.Listen("tcp", net.JoinHostPort(a.get("bind", "127.0.0.1"), strconv.Itoa(port)))
 	if e != nil {

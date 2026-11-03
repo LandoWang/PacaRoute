@@ -14,14 +14,16 @@ OutputBaseFilename=PacaRoute-Windows-x64-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayIcon={app}\PacaRoute.exe
+SetupIconFile=..\internal\pacaroute\trayassets\mark.ico
+UninstallDisplayIcon={app}\PacaRoute.ico
 [Files]
 Source: "{#SourceDir}\PacaRoute.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\pacaroute-cli.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\PacaRoute.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"
 [Icons]
-Name: "{autoprograms}\PacaRoute"; Filename: "{app}\PacaRoute.exe"
+Name: "{autoprograms}\PacaRoute"; Filename: "{app}\PacaRoute.exe"; IconFilename: "{app}\PacaRoute.ico"
 [Run]
 Filename: "{app}\PacaRoute.exe"; Description: "Launch PacaRoute"; Flags: nowait postinstall skipifsilent
 [UninstallDelete]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real Claude actuator; inspect its complete answer and tool_use/tool_result pairs."""
 import pathlib,subprocess,os,json,socket,time,signal,sys,argparse,shutil
-parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--claude",default=shutil.which("claude"));parser.add_argument("--mode",choices=["native","cross"],default="native");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");parser.add_argument("--connection-script",action="store_true");parser.add_argument("--client-model",default="claude-opus-5.5");parser.add_argument("--upstream-model");parser.add_argument("--match-model");options=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--claude",default=shutil.which("claude"));parser.add_argument("--mode",choices=["native","cross"],default="native");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");parser.add_argument("--connection-script",action="store_true");parser.add_argument("--client-model",default="claude-opus-5.5");parser.add_argument("--upstream-model");parser.add_argument("--match-model");parser.add_argument("--import-pool",action="store_true");parser.add_argument("--peer",action="store_true");parser.add_argument("--billing",action="store_true");options=parser.parse_args()
 assert options.claude,"Set --claude or install Claude Code"
 R=pathlib.Path.cwd();kind=options.mode;Q=R/'artifacts/pacaroute-verification'/('live-claude-'+kind+'-'+time.strftime('%Y%m%d-%H%M%S')+'-'+__import__('uuid').uuid4().hex[:6]);Q.mkdir(parents=True,exist_ok=True)
 exe=pathlib.Path(options.binary).resolve();credential_root=pathlib.Path(options.credential_root).resolve()
@@ -16,6 +16,10 @@ if options.source_id!='copilot':
  if options.azure_cli:
   selected=dict(selected,auth_mode='azure-cli');source_account=dict(source_account,login_mode='azure-cli')
  (Q/'sources.json').write_text(json.dumps([selected]));(Q/'accounts.json').write_text(json.dumps([source_account]));clients[0]['routes'][0]['source_id']=selected['id']
+if options.import_pool:
+ pool={'id':'qa-models','name':'QA Big Source','agent':'claude-code','model':client_model,'multi_model':True,'failover':True,'members':[{'id':'selected','source_id':clients[0]['routes'][0]['source_id'],'model':model,'alias':client_model,'weight':1},{'id':'other','source_id':'copilot','model':'wrong-model-never-call','alias':'qa-other','weight':1000000}]}
+ (Q/'source-pools.json').write_text(json.dumps([pool]))
+ clients[0]['routes'][0].update(source_id='pool:qa-models',model=client_model)
 (Q/'clients.json').write_text(json.dumps([] if options.connection_script else clients))
 env=dict(os.environ)
 for k in list(env):
@@ -23,6 +27,7 @@ for k in list(env):
 env['PATH']=str(pathlib.Path(options.claude).parent)+os.pathsep+env['PATH']
 sock=socket.socket();sock.bind(('127.0.0.1',0));port=sock.getsockname()[1];sock.close();assert port!=8765
 bridge=None
+peer=None
 try:
  log=(Q/'bridge.log').open('wb');bridge=subprocess.Popen([str(exe),'serve','--home',str(Q),'--credential-root',str(credential_root),'--port',str(port),'--trace-dir',str(Q/'traces')],env=env,stdout=log,stderr=subprocess.STDOUT)
  for _ in range(100):
@@ -32,23 +37,37 @@ try:
   except OSError:time.sleep(.1)
  else:raise TimeoutError('QA startup')
  print('PacaRoute Claude',kind,'pid',bridge.pid,'port',port,flush=True)
+ client_key='qa-client-synthetic-key'
+ if options.billing:
+  from verify_quota_setup import configure_billing
+  configure_billing(Q,port,model)
+ if options.import_pool:
+  from verify_config_import import imported_pool
+  imported_client,_,client_key=imported_pool(Q,port,'qa-claude')
+  clients=[imported_client]
+ client_port=port
+ if options.peer:
+  from verify_peer_hop import PeerHop
+  peer=PeerHop(exe,Q,port,client_key,'claude-code',client_model,env)
+  client_port,client_key=peer.port,peer.key
  work=Q/'workspace';work.mkdir(exist_ok=True);(work/'numbers.json').write_text('[9, 2, 9, 5, 2, 11]');home=Q/'claude-home';home.mkdir(exist_ok=True)
  if options.connection_script:
   from verify_connection_setup import configure
   setup=configure(exe,Q,port,clients[0],'claude-code',client_model,dict(env,CLAUDE_CONFIG_DIR=str(home)))
  else:
-  setup=subprocess.run([str(exe),'connect','--agent','claude-code','--url',f'http://127.0.0.1:{port}','--model',client_model,'--apply'],input=b'qa-client-synthetic-key',env=dict(env,CLAUDE_CONFIG_DIR=str(home)),capture_output=True,check=True)
+  setup=subprocess.run([str(exe),'connect','--agent','claude-code','--url',f'http://127.0.0.1:{client_port}','--model',client_model,'--apply'],input=client_key.encode(),env=dict(env,CLAUDE_CONFIG_DIR=str(home)),capture_output=True,check=True)
  (Q/'connect-result.json').write_bytes(setup.stdout)
  ce=dict(env,CLAUDE_CONFIG_DIR=str(home),CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1')
  prompt='Work only here. Read numbers.json with Read. Write analyze.py with Write; it must compute a frequency map and the sum of unique numbers into result.json. Run it using Bash, then read result.json in a separate Read tool call. Verify the result and finish PACAROUTE_CLAUDE_OK with the computed values. Do not use subagents or network.'
  started=time.time()
  with (Q/'claude.stdout').open('wb') as out,(Q/'claude.stderr').open('wb') as err:
   result=subprocess.run([options.claude,'--settings',str(home/'settings.json'),'--setting-sources','user','--print','--output-format','stream-json','--verbose','--dangerously-skip-permissions','--model',client_model,'--tools','Read,Write,Edit,Bash','--',prompt],cwd=work,env=ce,stdout=out,stderr=err,timeout=300)
- (Q/'manifest.json').write_text(json.dumps({'start':started,'end':time.time(),'exit_code':result.returncode,'upstream_model':model,'client_model':client_model,'stdoutPath':str(Q/'claude.stdout'),'source_id':options.source_id,'azure_cli':options.azure_cli,'connection_script':options.connection_script,'binaryPath':str(exe),'binarySHA256':__import__('hashlib').sha256(exe.read_bytes()).hexdigest()}))
+ (Q/'manifest.json').write_text(json.dumps({'start':started,'end':time.time(),'exit_code':result.returncode,'upstream_model':model,'client_model':client_model,'stdoutPath':str(Q/'claude.stdout'),'source_id':options.source_id,'azure_cli':options.azure_cli,'billing':options.billing,'peer':options.peer,'peer_root':str(peer.root) if peer else None,'import_pool':options.import_pool,'connection_script':options.connection_script,'binaryPath':str(exe),'binarySHA256':__import__('hashlib').sha256(exe.read_bytes()).hexdigest()}))
  print('Claude',kind,'exit',result.returncode,'duration',round(time.time()-started),flush=True)
  assert result.returncode==0,'Claude failed; inspect transcript'
  print('Manifest:',Q/'manifest.json',flush=True)
 finally:
+ if peer:peer.close()
  if bridge and bridge.poll() is None:
   assert str(exe) in subprocess.check_output(['ps','-p',str(bridge.pid),'-o','command=']).decode()
   bridge.send_signal(signal.SIGINT)

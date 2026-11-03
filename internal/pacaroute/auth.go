@@ -589,7 +589,7 @@ func (a *Auth) HasAccountKey(id string) bool {
 func (a *Auth) SaveAccountKey(ctx context.Context, id, key string) error {
 	account, ok := a.store.Snapshot().Account(id)
 	if !ok || !accountUsesAPIKey(account.Kind) || key == "" || !validSecret(key) {
-		return errors.New("select an OpenAI or Anthropic account and a valid API key")
+		return errors.New("select a key-based account and a valid API key")
 	}
 	path := a.vault.accountKeyPath(id)
 	unlock, e := fileLock(ctx, path+".lock", 10*time.Second)

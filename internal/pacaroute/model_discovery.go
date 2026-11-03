@@ -10,6 +10,7 @@ import (
 )
 
 type modelDiscovery struct {
+	Endpoint       string  `json:"endpoint,omitempty"`
 	Models         []Model `json:"models"`
 	ResourceID     string  `json:"resource_id,omitempty"`
 	SubscriptionID string  `json:"subscription_id,omitempty"`
@@ -19,6 +20,9 @@ func (a *Auth) DiscoverModels(ctx context.Context, c *Config, source Source) (mo
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	out := modelDiscovery{Models: []Model{}, ResourceID: source.ResourceID, SubscriptionID: source.SubscriptionID}
+	if source.Kind == "pacaroute" {
+		return a.discoverPeer(ctx, c, source)
+	}
 	if source.Kind == "copilot" {
 		models, e := a.Models(ctx, source.ID)
 		out.Models = models

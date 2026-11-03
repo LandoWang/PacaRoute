@@ -1,0 +1,27 @@
+# Tasks
+
+- [x] Implement credential-free bundle export and validated import planning.
+- [x] Add namespace/name allocation, reference remapping and revision-guarded apply.
+- [x] Add management UI and CLI workflows with explicit add/replace semantics.
+- [x] Remove pre-created accounts from the fresh UI and preserve legacy identities.
+- [x] Implement multi-model catalogs, model-scoped admission and affinity.
+- [x] Display model-group allocation, separate throttle deadlines and exhaustion.
+- [x] Add contract tests for imports, fresh accounts, routing isolation and ratios.
+- [x] Complete real-client, browser, mutation and build verification.
+- [x] Document verification and produce updated packages.
+- [x] Add remote PacaRoute account/source discovery with Client-scoped capabilities.
+- [x] Relay native Agent protocols with bounded hops and isolated session affinity.
+- [x] Generate Client QR codes and import via image, camera or pasted information.
+- [x] Separate management and service listeners, with tray/UI runtime controls.
+- [x] Test service draining, configuration while stopped and state preservation.
+- [x] Verify peer paths with real Codex and Claude clients and inspect their evidence.
+- [x] Verify QR onboarding and service controls in the browser.
+- [x] Localize Client/Proxy labels and add overview configuration-import shortcut.
+- [x] Place Proxies before Clients in navigation and use the Codex product mark for Clients.
+- [x] Add an explicit PacaRoute Client grant with separate routes and 404 for disabled Agent paths.
+- [x] Verify namespaced peer grants with real native and translated clients and browser onboarding.
+- [x] Add source model rate snapshots and durable Client quota/billing events.
+- [x] Enforce atomic request admission and confirmed token/cost limits before upstream calls.
+- [x] Verify quota concurrency, restart, duplicate settlement, missing usage and real-client billing.
+- [x] Install the final package with management available and inference disabled.
+- [ ] Complete the local endpoint migration after resolving the live conversation's upstream 400; keep restored AgentLink on 8765 in the meantime.

@@ -30,14 +30,16 @@ import {
 } from "./pages";
 import { Settings } from "./local-pages";
 import { Clients } from "./routing-pages";
+import { CodexIcon } from "./components/brand-icon";
+import pacaRouteMark from "./assets/pacaroute-mark.png";
 const pages = [
   ["overview", "导览", LayoutDashboard, "你的模型网络，一目了然。"],
   ["accounts", "账号", Users, "连接身份，管理授权。"],
   ["sources", "来源", Server, "组合账号、模型和网络。"],
   ["pools", "来源池", Layers, "按比例分配会话，按需切换来源。"],
-  ["clients", "Client", Users, "管理调用方，为 Agent 分配来源并生成接入脚本。"],
+  ["proxies", "代理", Network, "独立配置网络，按来源复用。"],
+  ["clients", "客户端", CodexIcon, "管理调用方，为 Agent 分配来源并生成接入脚本。"],
   ["usage", "用量", ChartNoAxesCombined, "从整体到来源，查看每一次调用。"],
-  ["proxies", "Proxy", Network, "独立配置网络，按来源复用。"],
   ["settings", "服务配置", Settings2, "管理 PacaRoute 的运行方式。"],
   ["errors", "错误", TriangleAlert, "定位失败请求与来源问题。"],
 ] as const;
@@ -197,7 +199,7 @@ export function App() {
         )}
         <aside className={sidebar ? "sidebar open" : "sidebar"}>
           <a href="#/overview" className="brand">
-            <img src="/mark.svg" alt="PacaRoute 羊驼" />
+            <img src={pacaRouteMark} alt="PacaRoute 羊驼" />
             <div>
               <strong>PacaRoute</strong>
               <small>连接模型与 Agent</small>
@@ -222,9 +224,21 @@ export function App() {
           </nav>
           <div className="sidebar-footer">
             <div className="service-badge">
-              <span className={error ? "status-dot warning" : "status-dot"} />
+              <span
+                className={
+                  error || status.service?.serving === false
+                    ? "status-dot warning"
+                    : "status-dot"
+                }
+              />
               <div>
-                <strong>{error ? "连接异常" : "服务运行中"}</strong>
+                <strong>
+                  {error
+                    ? "连接异常"
+                    : status.service?.serving === false
+                      ? "模型服务已关闭"
+                      : "服务运行中"}
+                </strong>
                 <small>
                   Go {status.version} ·{" "}
                   {status.port || new URL(location.href).port}
@@ -273,7 +287,11 @@ export function App() {
                 onClick={() => navigate("settings")}
               >
                 <span className="status-dot" />
-                {status.desktop ? "本机服务" : "服务在线"}
+                {status.service?.serving === false
+                  ? "模型服务已关闭"
+                  : status.desktop
+                    ? "本机服务"
+                    : "服务在线"}
               </Button>
               <Button
                 variant="ghost"
@@ -341,7 +359,7 @@ function Login({
   return (
     <div className="login-screen">
       <div className="login-card">
-        <img src="/mark.svg" alt="极光电子羊驼" />
+        <img src={pacaRouteMark} alt="戴霓虹眼镜的 PacaRoute 羊驼" />
         <div className="eyebrow">WELCOME TO PACAROUTE</div>
         <h1>连接你的模型网络</h1>
         <p>

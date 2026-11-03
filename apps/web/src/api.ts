@@ -1,12 +1,26 @@
-export type Agent = "codex" | "claude-code";
+export type ModelPrice = {
+  input_usd: string;
+  cached_usd: string;
+  output_usd: string;
+  cache_write_usd?: string;
+};
+export type ClientQuota = {
+  window_seconds: number;
+  requests?: number;
+  input_tokens?: number;
+  cost_usd?: string;
+};
+export type Agent = "codex" | "claude-code" | "pacaroute";
 export type Account = {
   id: string;
   name: string;
   kind: string;
+  endpoint?: string;
   oauth_client_id?: string;
   login_mode?: string;
 };
 export type Source = {
+  prices?: Record<string, ModelPrice>;
   id: string;
   name: string;
   kind: string;
@@ -16,6 +30,7 @@ export type Source = {
   subscription_id?: string;
   resource_id?: string;
   deployments: string[];
+  agent_models?: Partial<Record<Agent, string[]>>;
 };
 export type Proxy = {
   id: string;
@@ -24,12 +39,14 @@ export type Proxy = {
   address?: string;
 };
 export type Member = {
+  alias?: string;
   id: string;
   source_id: string;
   model: string;
   weight: number;
 };
 export type Pool = {
+  multi_model?: boolean;
   id: string;
   name: string;
   agent: Agent;
@@ -45,6 +62,7 @@ export type Route = {
   model: string;
 };
 export type Client = {
+  quota?: ClientQuota;
   local?: boolean;
   legacy_direct?: boolean;
   enabled_agents?: Agent[];
@@ -75,12 +93,21 @@ export type Status = {
   local_access: boolean;
   local_management: boolean;
   desktop: boolean;
+  service_control?: boolean;
+  service?: {
+    serving: boolean;
+    port?: number;
+    admin_port?: number;
+    draining?: number;
+    error?: string;
+  };
   port: number;
   startup: boolean;
   api_version: number;
   gateway_url: string;
 };
 export type Cooldown = {
+  kind?: "error" | "throttle";
   source_id: string;
   model: string;
   error: string;
@@ -90,7 +117,12 @@ export type Cooldown = {
 export type RoutingHealth = {
   observed_at: string;
   cooldowns: Cooldown[];
-  pools: { id: string; available: number; total: number }[];
+  pools: {
+    id: string;
+    available: number;
+    total: number;
+    models?: { model: string; available: number; total: number }[];
+  }[];
 };
 export type Totals = {
   requests: number;
@@ -158,21 +190,13 @@ export async function api<T>(
   }
   return value;
 }
-export const builtinAccounts: Account[] = [
-  { id: "copilot", name: "GitHub（默认）", kind: "github" },
-  { id: "azure-local", name: "本机 Azure CLI", kind: "azure" },
+export const accounts = (c: Config) => c.accounts;
+export const sources = (c: Config) => c.sources;
+export const memberModel = (p: Pool, m: Member) =>
+  p.multi_model ? m.alias || m.model : p.model;
+export const poolModels = (p: Pool) => [
+  ...new Set(p.members.map((m) => memberModel(p, m))),
 ];
-export const builtinSource: Source = {
-  id: "copilot",
-  name: "GitHub Copilot",
-  kind: "copilot",
-  account_id: "copilot",
-  endpoint: "",
-  auth_mode: "",
-  deployments: [],
-};
-export const accounts = (c: Config) => [...builtinAccounts, ...c.accounts];
-export const sources = (c: Config) => [builtinSource, ...c.sources];
 export const sourceName = (c: Config, id: string) =>
   id.startsWith("pool:")
     ? c.pools.find((p) => "pool:" + p.id === id)?.name || id
@@ -190,13 +214,14 @@ export function routeTarget(route: Route, target: string, c: Config): Route {
 }
 export function routeAgent(route: Route, agent: Agent, c: Config): Route {
   const pool = c.pools.find((p) => "pool:" + p.id === route.source_id);
-  return pool && pool.agent !== agent
-    ? { ...route, agent, source_id: "copilot", model: "" }
+  return pool && agent !== "pacaroute" && pool.agent !== agent
+    ? { ...route, agent, source_id: sources(c)[0]?.id || "", model: "" }
     : { ...route, agent };
 }
 export const share = (weight: number, members: Member[]) =>
   members.reduce((n, m) => n + m.weight, 0) > 0
-    ? Math.round((weight / members.reduce((n, m) => n + m.weight, 0)) * 100)
+    ? Math.round((weight / members.reduce((n, m) => n + m.weight, 0)) * 1000) /
+      10
     : 0;
 export const format = (n: number | null | undefined) =>
   n == null
@@ -208,6 +233,7 @@ export const format = (n: number | null | undefined) =>
 
 export const accountProvider = (kind: string) =>
   ({
+    pacaroute: "PacaRoute",
     github: "GitHub",
     openai: "OpenAI",
     anthropic: "Anthropic",
@@ -217,19 +243,23 @@ export const accountProvider = (kind: string) =>
 export const deviceAccount = (kind: string) =>
   kind === "github" || kind === "azure";
 export const compatibleAccount = (source: string, kind: string) =>
-  source === "copilot"
-    ? kind === "github"
-    : source === "azure-openai"
-      ? kind === "azure"
-      : kind === source || kind === "api-key";
+  source === "pacaroute"
+    ? kind === "pacaroute"
+    : source === "copilot"
+      ? kind === "github"
+      : source === "azure-openai"
+        ? kind === "azure"
+        : kind === source || kind === "api-key";
 export const resourceKind = (account: string) =>
-  account === "github"
-    ? "copilot"
-    : account === "azure"
-      ? "azure-openai"
-      : account === "anthropic"
-        ? "anthropic"
-        : "openai";
+  account === "pacaroute"
+    ? "pacaroute"
+    : account === "github"
+      ? "copilot"
+      : account === "azure"
+        ? "azure-openai"
+        : account === "anthropic"
+          ? "anthropic"
+          : "openai";
 export const defaultEndpoint = (kind: string) =>
   kind === "openai"
     ? "https://api.openai.com/v1"
@@ -237,6 +267,7 @@ export const defaultEndpoint = (kind: string) =>
       ? "https://api.anthropic.com"
       : "";
 export type ModelDiscovery = {
+  endpoint?: string;
   models: Model[];
   resource_id?: string;
   subscription_id?: string;
@@ -256,6 +287,7 @@ export function suggestedName(
 }
 
 export const agentNames: Record<Agent, string> = {
+  pacaroute: "PacaRoute",
   codex: "Codex",
   "claude-code": "Claude Code",
 };
@@ -264,3 +296,8 @@ export const enabledAgents = (c: Client): Agent[] =>
 export const sharedAzure = (a: Account) =>
   a.kind === "azure" &&
   (a.id === "azure-local" || a.login_mode === "azure-cli");
+
+export const peerCapabilities = (models: Model[]): Source["agent_models"] => ({
+  codex: models.filter((m) => m.codex).map((m) => m.id),
+  "claude-code": models.filter((m) => m.claude).map((m) => m.id),
+});

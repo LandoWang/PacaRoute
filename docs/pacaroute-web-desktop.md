@@ -1,6 +1,6 @@
 # PacaRoute web and desktop architecture
 
-PacaRoute 0.8 uses one React/TypeScript frontend and a Go management API. The desktop distribution adds a small native system-tray/menu-bar controller to the Go process; it opens the management interface in the default browser. It does not use Wails, Electron or a bundled browser. Closing the browser does not stop the gateway.
+PacaRoute 0.9 uses one React/TypeScript frontend and a Go management API. The desktop distribution adds a small native system-tray/menu-bar controller to the Go process; it opens the management interface in the default browser. It does not use Wails, Electron or a bundled browser. Closing the browser does not stop the gateway.
 
 ## Run and distribute
 
@@ -9,15 +9,17 @@ PacaRoute 0.8 uses one React/TypeScript frontend and a Go management API. The de
 - Server: run `pacaroute serve --bind 0.0.0.0 --port 8766 --public-url https://gateway.example`. Put TLS termination in front of the listener.
 - Local command line: `pacaroute serve --port 8766 --allow-local --local-management`, then `pacaroute ui --port 8766`.
 
-The tray offers Open management, Start/Stop service, Login startup and Quit. Desktop mode owns one gateway in the same process, binds loopback and enables local Agent connections. Stop closes its listener and allows active requests up to 30 seconds to finish. Open management starts a stopped service. An occupied port is reported without terminating another process. Port edits in Service settings establish the replacement listener first; if binding fails, the current listener stays alive. Successful edits persist and reconnect the browser with a fresh one-use login ticket.
+The tray offers Open management, Open/Close model service port, Login startup and Quit. Desktop mode owns two listeners in one Go process: a persistent loopback management port and a separately controlled Agent port. Closing the Agent port stops new admission and lets accepted requests finish. Open management does not restart inference. Both listeners reuse the same configuration, Auth authority, routing/cooldown state and usage store. Application exit allows up to 30 seconds to drain. Port conflicts preserve the current listener. Service port edits keep the management URL and browser login intact; editing while stopped leaves inference stopped. Desktop remembers both ports and the serving state.
 
-Desktop configuration defaults to port 8766. The existing macOS `Copilot Bridge` data directory is reused when present; Windows uses `%LOCALAPPDATA%\PacaRoute`. `--home` overrides metadata; `--credential-root` can reference an existing credential authority without copying credentials. Quit the old native AgentLink/PacaRoute before sharing its data directory with desktop mode. For trials, use an independent `--home` and port. Existing Agent configuration is never changed simply by launching the app.
+For server deployments, opt in with `pacaroute serve --port 8766 --admin-port 8767` (add `--no-serve` to start only management). `--bind` applies to inference; the management listener binds to loopback. In split mode, Agent and management endpoints are unavailable through each other's ports. Existing single-port CLI deployments remain supported.
+
+Desktop inference defaults to port 8766; the management port is allocated and saved on first launch. `pacaroute ui` discovers the saved management port. An existing native `PacaRoute/pacaroute.sqlite` workspace takes precedence; otherwise the legacy macOS `Copilot Bridge` directory is reused when present; Windows uses `%LOCALAPPDATA%\PacaRoute`. `--home` overrides metadata; `--credential-root` can reference an existing credential authority without copying credentials. Desktop settings remember this absolute credential directory so reopening the app preserves the same authority. Quit the old native AgentLink/PacaRoute before sharing its data directory with desktop mode. For trials, use an independent `--home` and port. Existing Agent configuration is never changed simply by launching the app.
 
 macOS API keys in the desktop binary (including its CLI commands) use the existing Keychain service. Windows vault writes use current-user DPAPI; historical portable encrypted records remain readable. CLI/server vault storage on Unix retains its previous authenticated encryption format. Refresh-bearing records and their locks remain under Auth, never under the web UI or tray code. Desktop sign-in opens a URL containing a random one-use ticket in the fragment, removes it immediately and exchanges it for an HttpOnly, SameSite cookie. The persistent management key is not passed in URLs or stored in browser localStorage.
 
 ## Accounts and resources
 
-Account cards use provider marks; source cards use product marks (including GitHub Copilot and Azure Foundry). Icons are bundled locally. Accounts are provider identities: **GitHub, OpenAI, Anthropic, Azure**. The account ID is independent of every resource/source ID.
+Account cards use provider marks; source cards use product marks (including GitHub Copilot and Azure Foundry). Icons are bundled locally. Accounts are provider identities: **GitHub, OpenAI, Anthropic, Azure, PacaRoute**. The account ID is independent of every resource/source ID.
 
 | Account provider | Resource/source product | Authentication |
 | --- | --- | --- |
@@ -25,10 +27,11 @@ Account cards use provider marks; source cards use product marks (including GitH
 | OpenAI | OpenAI API / compatible resource | Account API key; optional source override |
 | Anthropic | Anthropic API | Account API key; optional source override |
 | Azure | Foundry / Azure OpenAI resource | Azure CLI identity or resource API key |
+| PacaRoute | Remote Client model catalog | Remote service URL and Client Key; QR import supported |
 
 The default account form asks only for a provider and, for OpenAI/Anthropic, an API key. GitHub offers built-in device authorization or a custom OAuth App client ID. Azure offers shared CLI identity (default) or isolated device authorization. Names and stable IDs are generated automatically; optional labels and IDs are under Advanced. Add source starts with account selection, then infers the resource type. Azure picks the default subscription when available and discovers resources/deployments. API resources use official endpoints and discover models automatically. Custom endpoints, credentials and manual model IDs remain available under Advanced; source rows expose a compact Proxy selector; discovering models never silently rewrites saved routes.
 
-An OpenAI account cannot be attached to an Anthropic source. Legacy `api-key` account records remain compatible but are no longer the default new-account choice. GitHub Device Login authenticates the account; use Add source to connect its Copilot resource. The legacy default Copilot source remains available. OpenAI and Anthropic account keys are set once on the account; their sources inherit that key unless a resource-specific credential overrides it. Key rotation invalidates leases without restarting the service. CLI equivalents are `pacaroute key set --account ACCOUNT` and `pacaroute key set --source SOURCE`, both reading the secret from stdin.
+An OpenAI account cannot be attached to an Anthropic source. Legacy `api-key` account records remain compatible but are no longer the default new-account choice. GitHub Device Login authenticates the account; use Add source to connect its Copilot resource. Fresh accounts and sources are empty. Existing referenced legacy identities are migrated explicitly to preserve their credentials. OpenAI and Anthropic account keys are set once on the account; their sources inherit that key unless a resource-specific credential overrides it. Key rotation invalidates leases without restarting the service. CLI equivalents are `pacaroute key set --account ACCOUNT` and `pacaroute key set --source SOURCE`, both reading the secret from stdin.
 
 Azure Accounts exposes subscription discovery, resource discovery and deployment selection. The resulting source retains `subscription_id` and `resource_id`. Existing sources can rediscover deployments and explicitly update their configured model list. A source without a resource ID can match its endpoint within its saved subscription. Discovery requires an Azure CLI login with resource read permission; an inference API key alone does not grant management-plane deployment discovery. OpenAI and Anthropic resources can discover the model catalog through their authenticated API. A discovered model ID does not guarantee every Agent/tool capability; only configured selections are exposed for routing.
 
@@ -180,3 +183,7 @@ input immediately after input and before output. Cached tokens are cache reads
 already included in input; they must not be added to input again. Missing usage
 is counted separately and is not estimated. Existing activity logs populate the
 model index once at startup, then only newly appended bytes are consumed.
+
+## Peer sharing
+
+Network Client cards generate a connection QR containing the reachable Agent service URL and that Client Key. Treat it like the Client Key; rotation invalidates old QR codes. Local password-free Clients cannot be shared this way. Accounts can import by QR image, camera (HTTPS/localhost and browser permission required), or pasted connection information. Review the account form, then select the remote Client's public models. The remote router's internal accounts and pools remain hidden. Remote sources support ordinary Proxy bindings and pool membership.

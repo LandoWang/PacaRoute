@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { agentNames, type Agent, type Config, sources } from "./api";
+import {
+  agentNames,
+  type Agent,
+  type Config,
+  sources,
+  poolModels,
+} from "./api";
 import { useLoad } from "./state";
 import type { Model } from "./api";
 import { Button, Input, Select, Field, ErrorNote } from "./components/ui";
@@ -28,18 +34,34 @@ export function ModelMultiSelect({
   const [query, setQuery] = useState(""),
     [manual, setManual] = useState("");
   const resource = sources(config).find((s) => s.id === source);
+  const pool = config.pools.find((p) => "pool:" + p.id === source);
   const all = new Map((catalog.data?.models || []).map((m) => [m.id, m]));
-  for (const id of [...(resource?.deployments || []), ...selected])
+  for (const id of [
+    ...(resource?.deployments || []),
+    ...(pool ? poolModels(pool) : []),
+    ...selected,
+  ])
     if (!all.has(id))
       all.set(id, {
         id,
         name: id,
         vendor: "",
-        codex: resource?.kind !== "copilot",
-        claude: resource?.kind !== "copilot",
+        codex:
+          resource?.kind === "pacaroute"
+            ? !!resource.agent_models?.codex?.includes(id)
+            : resource?.kind !== "copilot",
+        claude:
+          resource?.kind === "pacaroute"
+            ? !!resource.agent_models?.["claude-code"]?.includes(id)
+            : resource?.kind !== "copilot",
       });
   const models = [...all.values()];
-  const supported = (m: Model) => (agent === "codex" ? m.codex : m.claude);
+  const supported = (m: Model) =>
+    agent === "pacaroute"
+      ? m.codex || m.claude
+      : agent === "codex"
+        ? m.codex
+        : m.claude;
   const visible = models.filter((m) =>
     `${m.id} ${m.name} ${m.vendor}`.toLowerCase().includes(query.toLowerCase()),
   );
@@ -128,7 +150,7 @@ export function ModelMultiSelect({
           清空
         </Button>
       </div>
-      {resource?.kind !== "copilot" && (
+      {!pool && resource?.kind !== "copilot" && (
         <details>
           <summary>手动添加模型 / deployment</summary>
           <div className="input-action">
@@ -151,23 +173,25 @@ export function ModelMultiSelect({
           </div>
         </details>
       )}
-      <Field
-        label="默认接入模型"
-        hint="用于生成接入脚本。Agent 切换模型时，按请求里的 model 匹配；未勾选的模型会被拒绝。"
-      >
-        <Select
-          value={defaultModel}
-          disabled={!selected.length}
-          onChange={(e) => onDefault(e.target.value)}
+      {agent !== "pacaroute" && (
+        <Field
+          label="默认接入模型"
+          hint="用于生成接入脚本。Agent 切换模型时，按请求里的 model 匹配；未勾选的模型会被拒绝。"
         >
-          {!selected.length && <option value="">先勾选模型</option>}
-          {selected.map((id) => (
-            <option key={id} value={id}>
-              {id}
-            </option>
-          ))}
-        </Select>
-      </Field>
+          <Select
+            value={defaultModel}
+            disabled={!selected.length}
+            onChange={(e) => onDefault(e.target.value)}
+          >
+            {!selected.length && <option value="">先勾选模型</option>}
+            {selected.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
     </div>
   );
 }

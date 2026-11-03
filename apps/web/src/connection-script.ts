@@ -10,8 +10,12 @@ export function connectionScript(
   platform: ScriptPlatform,
   apiKey = "",
 ): string {
+  if (agent === "pacaroute")
+    throw Error(
+      "PacaRoute 使用接入二维码或账号地址与密钥，不需要 Agent 配置脚本。",
+    );
   if (client.disabled || !enabledAgents(client).includes(agent))
-    throw Error("这个 Client 尚未启用此 Agent。");
+    throw Error("这个客户端尚未启用此 Agent。");
   const url = new URL(address);
   if (
     !["http:", "https:"].includes(url.protocol) ||
@@ -25,14 +29,14 @@ export function connectionScript(
     client.local &&
     !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
   )
-    throw Error("本机 default Client 只能连接本机地址。");
+    throw Error("本机 default 客户端只能连接本机地址。");
   if (!model || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/.test(model))
-    throw Error("先为这个 Client 的 Agent 配置模型。");
+    throw Error("先为这个客户端的 Agent 配置模型。");
   if (
     !client.local &&
     (!apiKey || apiKey.length > 16384 || /[\r\n\x00]/.test(apiKey))
   )
-    throw Error("请先保存这个 Client 的 Key，再生成接入脚本。");
+    throw Error("请先保存这个客户端的 Key，再生成接入脚本。");
   const q = platform === "shell" ? shellQuote : psQuote;
   const command = `connect --agent ${q(agent)} --url ${q(address.replace(/\/$/, ""))} --model ${q(model)}${client.local ? " --local" : ""} --apply`;
   if (platform === "shell")

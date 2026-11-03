@@ -14,6 +14,7 @@ import {
   ErrorNote,
 } from "./components/ui";
 import { Loading } from "./pages";
+import { ConfigTransfer } from "./config-transfer";
 type Plan = {
   path: string;
   fingerprint: string;
@@ -132,13 +133,46 @@ export function Settings() {
           </div>
         </dl>
       </Panel>
-      {status.desktop ? (
+      <ConfigTransfer />
+      {status.service_control ? (
         <Panel
-          title="本机服务设置"
-          description="修改端口会创建新监听地址；原端口上的请求会有最多 30 秒完成。"
+          title="模型服务端口"
+          description="关闭或更换端口会停止接收新请求，已接收的请求继续完成。管理端口保持运行。"
         >
           <div className="form-body compact">
-            <Field label="监听端口">
+            <p>
+              管理地址：<code>{location.origin}</code> ·{" "}
+              {status.service?.serving ? "模型服务已开启" : "模型服务已关闭"}
+            </p>
+            {!!status.service?.draining && (
+              <p className="muted">旧端口仍有请求正在完成。</p>
+            )}
+            {status.service?.error && (
+              <ErrorNote>{status.service.error}</ErrorNote>
+            )}
+            <Button
+              disabled={busy}
+              variant={status.service?.serving ? "secondary" : "default"}
+              onClick={async () => {
+                setBusy(true);
+                setError("");
+                try {
+                  await api("service", "PUT", {
+                    serving: !status.service?.serving,
+                  });
+                  await reload();
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {status.service?.serving
+                ? "关闭模型服务端口"
+                : "打开模型服务端口"}
+            </Button>
+            <Field label="模型服务监听端口">
               <Input
                 type="number"
                 min="1024"
@@ -153,56 +187,56 @@ export function Settings() {
                 setBusy(true);
                 setError("");
                 try {
-                  const result = await api<{ url: string }>(
-                    "local/service",
-                    "PUT",
-                    { port: Number(port) },
-                  );
-                  location.assign(result.url);
+                  await api("service", "PUT", { port: Number(port) });
+                  await reload();
+                  notice("服务端口已更新；请重新生成客户端接入信息。");
                 } catch (e) {
                   setError((e as Error).message);
+                } finally {
                   setBusy(false);
                 }
               }}
             >
-              应用端口并重新连接
+              保存服务端口
             </Button>
-            <label className="switch-row">
-              <div>
-                <strong>登录系统时启动</strong>
-                <small>在 Mac 顶栏或 Windows 系统托盘中运行</small>
-              </div>
-              <input
-                type="checkbox"
-                checked={status.startup}
-                disabled={busy}
-                onChange={async (e) => {
-                  setBusy(true);
-                  setError("");
-                  try {
-                    await api("local/startup", "PUT", {
-                      enabled: e.target.checked,
-                    });
-                    await reload();
-                  } catch (e) {
-                    setError((e as Error).message);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              />
-            </label>
+            {status.desktop && (
+              <label className="switch-row">
+                <div>
+                  <strong>登录系统时启动</strong>
+                  <small>在 Mac 顶栏或 Windows 系统托盘中运行</small>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={status.startup}
+                  disabled={busy}
+                  onChange={async (e) => {
+                    setBusy(true);
+                    setError("");
+                    try {
+                      await api("local/startup", "PUT", {
+                        enabled: e.target.checked,
+                      });
+                      await reload();
+                    } catch (e) {
+                      setError((e as Error).message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                />
+              </label>
+            )}
             {error && <ErrorNote>{error}</ErrorNote>}
           </div>
         </Panel>
       ) : (
         <Panel title="启动方式">
           <pre>
-            pacaroute desktop{`\n`}pacaroute serve --port 8766{`\n`}pacaroute ui
-            --port 8766
+            pacaroute desktop{`\n`}pacaroute serve --port 8766 --admin-port 8767
+            {`\n`}pacaroute ui --port 8766
           </pre>
           <p className="muted">
-            CLI 服务通过启动参数设置监听地址和端口；账号、来源、Proxy 和 Client
+            CLI 服务通过启动参数设置监听地址和端口；账号、来源、代理和客户端
             路由都支持热更新。
           </p>
         </Panel>
@@ -210,8 +244,8 @@ export function Settings() {
       <Panel title="本机访问">
         <p>
           {status.local_access
-            ? "已允许本机 Agent 使用本地路由。网络调用方仍需独立 Client 密钥。"
-            : "所有 Agent 请求均需独立 Client 密钥。"}
+            ? "已允许本机 Agent 使用本地路由。网络调用方仍需独立客户端密钥。"
+            : "所有 Agent 请求均需独立客户端密钥。"}
         </p>
         <p className="muted">
           {status.local_management

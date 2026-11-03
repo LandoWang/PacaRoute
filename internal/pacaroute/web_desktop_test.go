@@ -153,14 +153,14 @@ func TestLocalAgentPreviewApplyAndBackup(t *testing.T) {
 	}
 }
 
-// Contract: a failed port change keeps the current service, while a successful one persists and serves a fresh login ticket.
+// Contract: a failed port change keeps the current service; successful changes preserve management and authentication.
 func TestDesktopPortChangeKeepsServiceOnConflict(t *testing.T) {
 	store := storeForTest(t)
 	d := &desktopControl{store: store, auth: NewAuth(store, ""), port: 0}
 	if e := d.start(); e != nil {
 		t.Fatal(e)
 	}
-	defer d.stop()
+	defer d.close()
 	old := d.server
 	occupied, e := net.Listen("tcp", "127.0.0.1:0")
 	if e != nil {
@@ -180,8 +180,8 @@ func TestDesktopPortChangeKeepsServiceOnConflict(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(address, "ticket=") {
-		t.Fatal("missing new-port login handoff")
+	if address != fmt.Sprintf("http://127.0.0.1:%d/", d.managementPort()) {
+		t.Fatal("management address changed with the service port")
 	}
 	response, e := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
 	if e != nil {

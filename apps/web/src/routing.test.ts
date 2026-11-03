@@ -50,7 +50,7 @@ describe("visual route editing contracts", () => {
     );
     expect(updated).toMatchObject({
       agent: "codex",
-      source_id: "copilot",
+      source_id: "azure",
       model: "",
     });
   });
@@ -64,6 +64,13 @@ describe("visual route editing contracts", () => {
     ];
     expect(members.map((m) => share(m.weight, members))).toEqual([70, 30, 0]);
     expect(share(0, [members[2]])).toBe(0);
+    const surviving = [
+      { ...members[0], weight: 5 },
+      { ...members[1], weight: 3 },
+    ];
+    expect(surviving.map((m) => share(m.weight, surviving))).toEqual([
+      62.5, 37.5,
+    ]);
   });
 });
 

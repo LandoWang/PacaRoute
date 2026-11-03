@@ -13,6 +13,7 @@ import (
 )
 
 type Account struct {
+	Endpoint      string `json:"endpoint,omitempty"`
 	ID            string `json:"id"`
 	Name          string `json:"name"`
 	Kind          string `json:"kind"`
@@ -20,15 +21,17 @@ type Account struct {
 	LoginMode     string `json:"login_mode,omitempty"`
 }
 type Source struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	Kind           string   `json:"kind"`
-	Endpoint       string   `json:"endpoint"`
-	AuthMode       string   `json:"auth_mode"`
-	AccountID      string   `json:"account_id,omitempty"`
-	SubscriptionID string   `json:"subscription_id,omitempty"`
-	ResourceID     string   `json:"resource_id,omitempty"`
-	Deployments    []string `json:"deployments"`
+	Prices         map[string]ModelPrice `json:"prices,omitempty"`
+	AgentModels    map[string][]string   `json:"agent_models,omitempty"`
+	ID             string                `json:"id"`
+	Name           string                `json:"name"`
+	Kind           string                `json:"kind"`
+	Endpoint       string                `json:"endpoint"`
+	AuthMode       string                `json:"auth_mode"`
+	AccountID      string                `json:"account_id,omitempty"`
+	SubscriptionID string                `json:"subscription_id,omitempty"`
+	ResourceID     string                `json:"resource_id,omitempty"`
+	Deployments    []string              `json:"deployments"`
 }
 type Proxy struct {
 	ID      string `json:"id"`
@@ -42,19 +45,57 @@ type Proxies struct {
 	AccountProxyID string            `json:"account_proxy_id"`
 }
 type Member struct {
+	Alias    string `json:"alias,omitempty"`
 	ID       string `json:"id"`
 	SourceID string `json:"source_id"`
 	Model    string `json:"model"`
 	Weight   int    `json:"weight"`
 }
 type Pool struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Agent    string   `json:"agent"`
-	Model    string   `json:"model"`
-	Failover bool     `json:"failover"`
-	Members  []Member `json:"members"`
+	MultiModel bool     `json:"multi_model,omitempty"`
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Agent      string   `json:"agent"`
+	Model      string   `json:"model"`
+	Failover   bool     `json:"failover"`
+	Members    []Member `json:"members"`
 }
+
+// ModelNames is the pool's public catalog. A legacy pool exposes its single
+// alias; a multi-model pool groups concrete deployments by their public alias.
+func (p Pool) MemberModel(m Member) string {
+	if !p.MultiModel {
+		return p.Model
+	}
+	if m.Alias != "" {
+		return m.Alias
+	}
+	return m.Model
+}
+func (p Pool) ModelNames() []string {
+	if !p.MultiModel {
+		return []string{p.Model}
+	}
+	out := []string{}
+	seen := map[string]bool{}
+	for _, m := range p.Members {
+		name := p.MemberModel(m)
+		if !seen[name] {
+			out = append(out, name)
+			seen[name] = true
+		}
+	}
+	return out
+}
+func (p Pool) HasModel(model string) bool {
+	for _, name := range p.ModelNames() {
+		if name == model {
+			return true
+		}
+	}
+	return false
+}
+
 type Route struct {
 	ID         string `json:"id"`
 	Agent      string `json:"agent"`
@@ -63,14 +104,15 @@ type Route struct {
 	Model      string `json:"model"`
 }
 type Client struct {
-	Local         bool     `json:"local,omitempty"`
-	LegacyDirect  bool     `json:"legacy_direct,omitempty"`
-	EnabledAgents []string `json:"enabled_agents"`
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Disabled      bool     `json:"disabled"`
-	KeyHash       string   `json:"key_hash,omitempty"`
-	Routes        []Route  `json:"routes"`
+	Quota         *ClientQuota `json:"quota,omitempty"`
+	Local         bool         `json:"local,omitempty"`
+	LegacyDirect  bool         `json:"legacy_direct,omitempty"`
+	EnabledAgents []string     `json:"enabled_agents"`
+	ID            string       `json:"id"`
+	Name          string       `json:"name"`
+	Disabled      bool         `json:"disabled"`
+	KeyHash       string       `json:"key_hash,omitempty"`
+	Routes        []Route      `json:"routes"`
 }
 type SourceState struct {
 	Paused []string `json:"paused"`
@@ -90,27 +132,27 @@ var modelIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$`)
 
 func validID(v string) bool { return identifier.MatchString(v) }
 func (c *Config) Account(id string) (Account, bool) {
+	for _, a := range c.Accounts {
+		if a.ID == id {
+			return a, true
+		}
+	}
 	if id == "copilot" {
 		return Account{ID: id, Name: "GitHub Copilot", Kind: "github"}, true
 	}
 	if id == "azure-local" {
 		return Account{ID: id, Name: "Local Azure CLI", Kind: "azure"}, true
 	}
-	for _, a := range c.Accounts {
-		if a.ID == id {
-			return a, true
-		}
-	}
 	return Account{}, false
 }
 func (c *Config) Source(id string) (Source, bool) {
-	if id == "copilot" {
-		return Source{ID: id, Name: "GitHub Copilot", Kind: "copilot", AccountID: "copilot"}, true
-	}
 	for _, s := range c.Sources {
 		if s.ID == id {
 			return s, true
 		}
+	}
+	if id == "copilot" {
+		return Source{ID: id, Name: "GitHub Copilot", Kind: "copilot", AccountID: "copilot"}, true
 	}
 	return Source{}, false
 }
@@ -168,7 +210,7 @@ func (c *Config) Validate() error {
 		c.SourceState.Paused = []string{}
 	}
 
-	seen := map[string]bool{"copilot": true, "azure-local": true}
+	seen := map[string]bool{}
 	for _, a := range c.Accounts {
 		if !validID(a.ID) || seen[a.ID] || strings.TrimSpace(a.Name) == "" || (a.Kind != "github" && a.Kind != "azure" && !accountUsesAPIKey(a.Kind)) {
 			return fmt.Errorf("invalid or duplicate account %q", a.ID)
@@ -179,16 +221,30 @@ func (c *Config) Validate() error {
 		if a.LoginMode == "oauth-app" && strings.TrimSpace(a.OAuthClientID) == "" {
 			return errors.New("OAuth App client ID required")
 		}
+		if a.Kind == "pacaroute" && !validPeerEndpoint(a.Endpoint) {
+			return errors.New("PacaRoute account requires an HTTP(S) service address without credentials")
+		}
 		seen[a.ID] = true
 	}
-	seen = map[string]bool{"copilot": true}
+	seen = map[string]bool{}
 	for i := range c.Sources {
 		s := &c.Sources[i]
+		if len(s.Prices) > 512 {
+			return errors.New("too many model prices")
+		}
+		for model, price := range s.Prices {
+			if !modelIdentifier.MatchString(model) {
+				return errors.New("invalid priced model")
+			}
+			if err := price.validate(); err != nil {
+				return err
+			}
+		}
 		if s.Kind == "" {
 			s.Kind = "azure-openai"
 		}
 		if s.AuthMode == "" {
-			if s.Kind == "openai" || s.Kind == "anthropic" {
+			if s.Kind == "openai" || s.Kind == "anthropic" || s.Kind == "pacaroute" {
 				s.AuthMode = "api-key"
 			} else {
 				s.AuthMode = "azure-cli"
@@ -215,10 +271,10 @@ func (c *Config) Validate() error {
 			}
 			continue
 		}
-		if s.Kind != "azure-openai" && s.Kind != "openai" && s.Kind != "anthropic" {
+		if s.Kind != "azure-openai" && s.Kind != "openai" && s.Kind != "anthropic" && s.Kind != "pacaroute" {
 			return fmt.Errorf("unsupported source kind %q", s.Kind)
 		}
-		if (s.Kind == "openai" || s.Kind == "anthropic") && (s.AuthMode != "api-key" || !sourceAcceptsAccount(s.Kind, a.Kind)) {
+		if (s.Kind == "openai" || s.Kind == "anthropic" || s.Kind == "pacaroute") && (s.AuthMode != "api-key" || !sourceAcceptsAccount(s.Kind, a.Kind)) {
 			return errors.New("API source requires API-key account and authentication")
 		}
 		if s.Deployments == nil {
@@ -228,7 +284,7 @@ func (c *Config) Validate() error {
 			return errors.New("invalid Azure authentication")
 		}
 		u, e := url.Parse(s.Endpoint)
-		if e != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		if e != nil || (u.Scheme != "https" && !(s.Kind == "pacaroute" && validPeerEndpoint(s.Endpoint))) || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 			return fmt.Errorf("source %s requires an HTTPS endpoint without credentials", s.ID)
 		}
 		if s.Kind == "azure-openai" {
@@ -244,6 +300,16 @@ func (c *Config) Validate() error {
 		for _, m := range s.Deployments {
 			if !modelIdentifier.MatchString(m) {
 				return fmt.Errorf("invalid model %q", m)
+			}
+		}
+		for agent, models := range s.AgentModels {
+			if !agentValid(agent) {
+				return errors.New("unknown Agent in discovered source models")
+			}
+			for _, model := range models {
+				if !modelIdentifier.MatchString(model) {
+					return errors.New("invalid discovered model")
+				}
 			}
 		}
 	}
@@ -278,6 +344,7 @@ func (c *Config) Validate() error {
 		seen[p.ID] = true
 		ids := map[string]bool{}
 		sum := 0
+		weights := map[string]int{}
 		for _, m := range p.Members {
 			if strings.HasPrefix(m.SourceID, "pool:") {
 				return errors.New("nested pools are not supported")
@@ -287,6 +354,10 @@ func (c *Config) Validate() error {
 			}
 			ids[m.ID] = true
 			sum += m.Weight
+			if !modelIdentifier.MatchString(p.MemberModel(m)) {
+				return errors.New("invalid pool model alias")
+			}
+			weights[p.MemberModel(m)] += m.Weight
 			if e := c.validateTarget(m.SourceID, m.Model, p.Agent); e != nil {
 				return e
 			}
@@ -294,10 +365,21 @@ func (c *Config) Validate() error {
 		if sum == 0 {
 			return errors.New("pool weights must have a positive total")
 		}
+		if !p.HasModel(p.Model) {
+			return errors.New("default pool model must be exposed by a member")
+		}
+		for _, weight := range weights {
+			if weight == 0 {
+				return errors.New("each pool model needs a positive total weight")
+			}
+		}
 	}
 	seen = map[string]bool{}
 	for i := range c.Clients {
 		v := &c.Clients[i]
+		if err := v.Quota.validate(); err != nil {
+			return err
+		}
 		if v.EnabledAgents == nil {
 			v.EnabledAgents = []string{"codex", "claude-code"}
 		}
@@ -310,7 +392,7 @@ func (c *Config) Validate() error {
 		seen[v.ID] = true
 		agents := map[string]bool{}
 		for _, agent := range v.EnabledAgents {
-			if !agentValid(agent) || agents[agent] {
+			if !clientAgentValid(agent) || agents[agent] {
 				return errors.New("invalid enabled Agent")
 			}
 			agents[agent] = true
@@ -329,7 +411,7 @@ func (c *Config) Validate() error {
 		}
 		ids := map[string]bool{}
 		for _, route := range v.Routes {
-			if !validID(route.ID) || ids[route.ID] || !agentValid(route.Agent) || (route.MatchModel != "*" && !modelIdentifier.MatchString(route.MatchModel)) {
+			if !validID(route.ID) || ids[route.ID] || !clientAgentValid(route.Agent) || (route.MatchModel != "*" && !modelIdentifier.MatchString(route.MatchModel)) {
 				return errors.New("invalid client route")
 			}
 			ids[route.ID] = true
@@ -348,11 +430,20 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func agentValid(a string) bool { return a == "codex" || a == "claude-code" }
+func agentValid(a string) bool       { return a == "codex" || a == "claude-code" }
+func clientAgentValid(a string) bool { return agentValid(a) || a == "pacaroute" }
 func (c *Config) validateTarget(id, model, agent string) error {
+	if agent == "pacaroute" {
+		for _, protocol := range []string{"codex", "claude-code"} {
+			if c.validateTarget(id, model, protocol) == nil {
+				return nil
+			}
+		}
+		return errors.New("PacaRoute target must expose this model for Codex or Claude Code")
+	}
 	if strings.HasPrefix(id, "pool:") {
 		p, ok := c.Pool(id)
-		if !ok || p.Agent != agent || model != p.Model {
+		if !ok || p.Agent != agent || !p.HasModel(model) {
 			return errors.New("route must match the pool Agent and model")
 		}
 		return nil
@@ -360,6 +451,9 @@ func (c *Config) validateTarget(id, model, agent string) error {
 	s, ok := c.Source(id)
 	if !ok || !modelIdentifier.MatchString(model) {
 		return errors.New("unknown source or invalid model")
+	}
+	if s.Kind == "pacaroute" && !s.SupportsAgentModel(agent, model) {
+		return errors.New("remote PacaRoute does not expose this model for the selected Agent; refresh its model catalog")
 	}
 	if s.Kind != "copilot" {
 		for _, v := range s.Deployments {
@@ -428,7 +522,7 @@ func cloneConfig(c *Config) Config {
 }
 
 func accountUsesAPIKey(kind string) bool {
-	return kind == "openai" || kind == "anthropic" || kind == "api-key"
+	return kind == "openai" || kind == "anthropic" || kind == "api-key" || kind == "pacaroute"
 }
 func sourceAcceptsAccount(source, account string) bool {
 	switch source {
@@ -438,6 +532,24 @@ func sourceAcceptsAccount(source, account string) bool {
 		return account == "azure"
 	case "openai", "anthropic":
 		return account == source || account == "api-key"
+	case "pacaroute":
+		return account == "pacaroute"
+	}
+	return false
+}
+
+func validPeerEndpoint(value string) bool {
+	u, err := url.Parse(value)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && u.Fragment == ""
+}
+func (s Source) SupportsAgentModel(agent, model string) bool {
+	if s.Kind != "pacaroute" {
+		return true
+	}
+	for _, name := range s.AgentModels[agent] {
+		if name == model {
+			return true
+		}
 	}
 	return false
 }

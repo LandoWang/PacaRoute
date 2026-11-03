@@ -42,8 +42,8 @@ func TestSQLiteMigrationDefaultDeletionAndInvalidSave(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer reopened.Close()
-	if len(reopened.Snapshot().Clients) != 0 || len(reopened.Snapshot().Accounts) != 1 {
-		t.Fatal("migration repeated")
+	if len(reopened.Snapshot().Clients) != 0 || len(reopened.Snapshot().Accounts) != 2 {
+		t.Fatal("migration repeated or lost the materialized legacy GitHub account")
 	}
 	b, _ := os.ReadFile(filepath.Join(root, "accounts.json"))
 	if string(b) != string(original) {
@@ -115,7 +115,7 @@ func TestClientAgentGateAndDefaultAuthorization(t *testing.T) {
 			method = "GET"
 		}
 		w := localRequest(s, method, path, `{"model":"gpt-6-astra"}`, "127.0.0.1:42", "127.0.0.1:18766", false)
-		if w.Code != 403 {
+		if w.Code != 404 {
 			t.Fatalf("disabled Agent %s: %d", path, w.Code)
 		}
 	}
@@ -137,7 +137,7 @@ func TestClientAgentGateAndDefaultAuthorization(t *testing.T) {
 	r.Header.Set("Authorization", "Bearer synthetic-key")
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, r)
-	if w.Code != 403 {
+	if w.Code != 404 {
 		t.Fatal("empty Agent list ignored")
 	}
 	r.Header.Del("Authorization")

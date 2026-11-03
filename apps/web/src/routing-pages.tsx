@@ -1,3 +1,5 @@
+import { QuotaFields, QuotaMeter } from "./quota";
+import { ClientQR } from "./peer-connection";
 import { useEffect, useRef, useState } from "react";
 import { Plus, Pencil, Trash2, Terminal, Download, Copy } from "lucide-react";
 import {
@@ -56,7 +58,7 @@ function ClientEditor({
       ? structuredClone(original)
       : {
           id: generatedID("client"),
-          name: suggestedName("Client", config.clients),
+          name: suggestedName("客户端", config.clients),
           disabled: false,
           enabled_agents: ["codex", "claude-code"],
           routes: [],
@@ -64,8 +66,8 @@ function ClientEditor({
   );
   return (
     <Editor
-      title={original ? "编辑 Client" : "添加 Client"}
-      description="一个 Client 对应一个调用方。启用 Agent 后，在此 Client 下选择来源或来源池。"
+      title={original ? "编辑客户端" : "添加客户端"}
+      description="一个客户端对应一个调用方。启用 Agent 后，在此客户端下选择来源或来源池。"
       onClose={onClose}
       onSave={async () => {
         if (original) {
@@ -88,7 +90,7 @@ function ClientEditor({
         onName={(name) => set({ ...v, name })}
       />
       <Field label="启用的 Agent">
-        {(["codex", "claude-code"] as Agent[]).map((agent) => (
+        {(["codex", "claude-code", "pacaroute"] as Agent[]).map((agent) => (
           <label className="switch-row" key={agent}>
             <span>{agentNames[agent]}</span>
             <input
@@ -106,6 +108,11 @@ function ClientEditor({
           </label>
         ))}
       </Field>
+      <QuotaFields value={v.quota} onChange={(quota) => set({ ...v, quota })} />
+      <p className="muted">
+        PacaRoute 用于下游路由器，可转发其 Codex / Claude 请求。未启用的 Agent
+        路径返回 404。
+      </p>
       <p className="muted">
         {v.local
           ? "default 仅供本机使用，不需要密钥。删除它可关闭本机免密接入。"
@@ -133,8 +140,8 @@ export function Clients() {
       <div className="page-toolbar">
         <Input
           className="search"
-          aria-label="搜索 Client"
-          placeholder="搜索 Client…"
+          aria-label="搜索客户端"
+          placeholder="搜索客户端…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -142,13 +149,13 @@ export function Clients() {
           onClick={() => show(<ClientEditor onClose={close} onKey={key} />)}
         >
           <Plus size={16} />
-          添加 Client
+          添加客户端
         </Button>
       </div>
       <div className="connection-strip">
         <Terminal size={20} />
         <div>
-          <strong>每个 Client，在这里配好来源和接入。</strong>
+          <strong>每个客户端，在这里配好来源和接入。</strong>
           <p>
             为每种 Agent
             选择来源或来源池，保存后生成接入脚本。后续切换来源无需重配客户端。
@@ -157,7 +164,7 @@ export function Clients() {
       </div>
       {list.length === 0 ? (
         <Panel>
-          <Empty title={search ? "没有匹配的 Client" : "还没有 Client"}>
+          <Empty title={search ? "没有匹配的客户端" : "还没有客户端"}>
             添加调用方并分配独立密钥。本机 default 被删除后不会自动恢复。
           </Empty>
         </Panel>
@@ -199,6 +206,7 @@ export function Clients() {
                 服务未开启本机免密接入；请使用桌面模式或 --allow-local。
               </p>
             )}
+            <QuotaMeter key={c.id + config.revision} client={c} />
             <div className="client-routes">
               {enabledAgents(c).map((agent) => (
                 <RouteCard
@@ -229,13 +237,24 @@ export function Clients() {
                 高级模型规则
               </Button>
               <div className="actions">
+                {!c.local && enabledAgents(c).includes("pacaroute") && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      show(<ClientQR client={c} onClose={close} />)
+                    }
+                  >
+                    接入二维码
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() =>
                     show(
                       <Confirm
-                        title={c.disabled ? "启用 Client？" : "停用 Client？"}
+                        title={c.disabled ? "启用客户端？" : "停用客户端？"}
                         description="新请求立即生效，进行中的请求会继续完成。"
                         onClose={close}
                         action={() =>
@@ -261,7 +280,7 @@ export function Clients() {
                     onClick={() =>
                       show(
                         <Editor
-                          title="轮换 Client 密钥？"
+                          title="轮换客户端密钥？"
                           saveLabel="生成新密钥"
                           onClose={close}
                           onSave={async () => {
@@ -288,11 +307,11 @@ export function Clients() {
                   onClick={() =>
                     show(
                       <Confirm
-                        title="删除 Client？"
+                        title="删除客户端？"
                         description={
                           c.local
                             ? "将关闭本机免密访问。重启不会重新添加 default。"
-                            : "这个 Client 的密钥和路由将失效。"
+                            : "这个客户端的密钥和路由将失效。"
                         }
                         onClose={close}
                         action={() =>
@@ -381,7 +400,7 @@ function ConnectionScript({
         address,
         model,
         platform,
-        "<Client Key 已隐藏>",
+        "<客户端密钥 已隐藏>",
       );
     }
   } catch (e) {
@@ -400,7 +419,7 @@ function ConnectionScript({
           0.8+；不需要启动本地服务。脚本会备份并修改 Agent 配置。
           {client.local
             ? "本机 default 无需 Key。"
-            : "脚本自动包含此 Client 的 Key，预览已隐藏；请只交给对应调用方。"}
+            : "脚本自动包含此客户端的 Key，预览已隐藏；请只交给对应调用方。"}
         </p>
         <div className="form-grid">
           <Field label="系统">
@@ -441,16 +460,16 @@ function ConnectionScript({
             </Select>
           </Field>
         )}
-        {keyLoading && <p className="muted">正在加载 Client Key…</p>}
+        {keyLoading && <p className="muted">正在加载客户端密钥…</p>}
         {keyError && <ErrorNote>{keyError}</ErrorNote>}
         {!client.local && !keyLoading && !apiKey && (
           <div className="form-body">
             <p className="muted">
-              旧 Client 只保存了 Key 的摘要。粘贴现有 Key
-              一次，以后脚本会自动包含它；如果已经遗失，可关闭此窗口，在 Client
+              旧客户端只保存了 Key 的摘要。粘贴现有 Key
+              一次，以后脚本会自动包含它；如果已经遗失，可关闭此窗口，在客户端
               下轮换密钥。
             </p>
-            <Field label="现有 Client Key">
+            <Field label="现有客户端密钥">
               <Input
                 type="password"
                 autoComplete="off"
@@ -628,12 +647,12 @@ function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
                       source,
                       models: targetPool ? [targetPool.model] : [],
                       defaultModel: targetPool?.model || "",
-                      fixed: !!targetPool,
+                      fixed: !!targetPool && !targetPool.multi_model,
                     });
                   }}
                 />
               </Field>
-              {selection.source && !pool && (
+              {selection.source && (!pool || pool.multi_model) && (
                 <Field label="模型选择方式">
                   <Select
                     value={selection.fixed ? "fixed" : "multiple"}
@@ -712,45 +731,68 @@ function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
         </>
       )}
       <div className="client-connection-actions actions">
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={
-            client.disabled ||
-            !existing.length ||
-            (!!client.local && !status.local_access)
-          }
-          onClick={() =>
-            show(
-              <ConnectionScript
-                client={client}
-                agent={agent}
-                onClose={close}
-              />,
-            )
-          }
-        >
-          <Terminal size={14} />
-          接入脚本
-        </Button>
-        {client.local && status.local_management && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              show(
-                <BackupPicker
-                  agent={agent}
-                  onClose={close}
-                  onApplied={() => {}}
-                />,
-              )
-            }
-          >
-            恢复配置
-          </Button>
+        {agent === "pacaroute" ? (
+          <>
+            {!client.local && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={client.disabled || !existing.length}
+                onClick={() =>
+                  show(<ClientQR client={client} onClose={close} />)
+                }
+              >
+                接入二维码
+              </Button>
+            )}
+            <small>
+              在下游 PacaRoute
+              添加账号，使用本客户端的地址与密钥；模型目录只公开这里配置的路由。
+            </small>
+          </>
+        ) : (
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={
+                client.disabled ||
+                !existing.length ||
+                (!!client.local && !status.local_access)
+              }
+              onClick={() =>
+                show(
+                  <ConnectionScript
+                    client={client}
+                    agent={agent}
+                    onClose={close}
+                  />,
+                )
+              }
+            >
+              <Terminal size={14} />
+              接入脚本
+            </Button>
+            {client.local && status.local_management && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  show(
+                    <BackupPicker
+                      agent={agent}
+                      onClose={close}
+                      onApplied={() => {}}
+                    />,
+                  )
+                }
+              >
+                恢复配置
+              </Button>
+            )}
+            <small>脚本使用已保存的配置</small>
+          </>
         )}
-        <small>脚本使用已保存的配置</small>
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
     </Panel>

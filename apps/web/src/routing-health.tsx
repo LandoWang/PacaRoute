@@ -1,29 +1,41 @@
 import { useApp } from "./state";
 import { Badge, Button } from "./components/ui";
-import { type Config, type Pool, type RoutingHealth } from "./api";
+import { type Config, type Pool, type RoutingHealth, memberModel } from "./api";
 
 export function poolAllocation(
   config: Config,
   pool: Pool,
   health?: RoutingHealth,
+  model?: string,
 ) {
-  return pool.members.map((member) => ({
-    ...member,
-    weight:
-      config.source_state.paused.includes(member.source_id) ||
-      health?.cooldowns.some(
-        (c) => c.source_id === member.source_id && c.model === member.model,
-      )
-        ? 0
-        : member.weight,
-  }));
+  return pool.members
+    .filter((m) => !model || memberModel(pool, m) === model)
+    .map((member) => ({
+      ...member,
+      weight:
+        config.source_state.paused.includes(member.source_id) ||
+        health?.cooldowns.some(
+          (c) => c.source_id === member.source_id && c.model === member.model,
+        )
+          ? 0
+          : member.weight,
+    }));
 }
 
 export function RoutingAlert() {
   const { config, status, navigate } = useApp();
   const health = status.routing;
   if (!health) return null;
-  const unavailable = health.pools.filter((p) => p.available === 0);
+  const unavailable = health.pools.flatMap((p) => {
+    const name = config.pools.find((v) => v.id === p.id)?.name || p.id;
+    return p.models?.length
+      ? p.models
+          .filter((m) => m.available === 0)
+          .map((m) => `${name} · ${m.model}`)
+      : p.available === 0
+        ? [name]
+        : [];
+  });
   if (!unavailable.length && !health.cooldowns.length) return null;
   return (
     <div
@@ -36,11 +48,8 @@ export function RoutingAlert() {
         </strong>
         <p>
           {unavailable.length
-            ? unavailable
-                .map(
-                  (p) => config.pools.find((v) => v.id === p.id)?.name || p.id,
-                )
-                .join("、") + " 无法接收新会话，请检查来源、冷却状态及权重。"
+            ? unavailable.join("、") +
+              " 无法接收新会话，请检查来源、冷却状态及权重。"
             : `${health.cooldowns.length} 个来源模型正在冷却，新会话将避开这些成员。`}
         </p>
       </div>
@@ -71,7 +80,7 @@ export function CooldownDetails({
         <div key={c.model}>
           <div className="title-line">
             <Badge tone="amber">
-              错误冷却 · 约{" "}
+              {c.kind === "throttle" ? "限流冷却" : "错误冷却"} · 约{" "}
               {Math.max(
                 0,
                 Math.ceil(
@@ -94,9 +103,16 @@ export function CooldownDetails({
   );
 }
 
-export function PoolAvailability({ id }: { id: string }) {
+export function PoolAvailability({
+  id,
+  model,
+}: {
+  id: string;
+  model?: string;
+}) {
   const { status } = useApp();
-  const pool = status.routing?.pools.find((p) => p.id === id);
+  const entry = status.routing?.pools.find((p) => p.id === id);
+  const pool = model ? entry?.models?.find((m) => m.model === model) : entry;
   if (!pool) return <p className="muted">路由状态暂不可用</p>;
   return (
     <div className="pool-availability">

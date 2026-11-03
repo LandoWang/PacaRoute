@@ -25,7 +25,7 @@ func runDesktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, po
 	port = desktopPort(a, s.Root, port)
 	appUnlock, e := fileLock(ctx, filepath.Join(s.Root, "app.lock"), 200*time.Millisecond)
 	if e != nil {
-		_ = openManagement(s.Root, port)
+		_ = openManagement(s.Root, readDesktopSettings(s.Root).AdminPort)
 		return fail(errors.New("a desktop application already owns this data directory"))
 	}
 	defer appUnlock()
@@ -35,8 +35,16 @@ func runDesktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, po
 	}
 	defer serviceUnlock()
 	auth.systemKeys = runtime.GOOS == "darwin"
-	control := &desktopControl{store: s, auth: auth, port: port}
-	_ = control.start()
+	settings := readDesktopSettings(s.Root)
+	control := &desktopControl{store: s, auth: auth, port: port, adminPort: settings.AdminPort, nativeTray: true}
+	if e := control.startManagement(); e != nil {
+		return fail(e)
+	}
+	if settings.Serving == nil || *settings.Serving {
+		_ = control.start()
+	} else {
+		_ = control.stop()
+	}
 	systray.Run(func() {
 		if runtime.GOOS == "windows" {
 			systray.SetIcon(trayICO)
@@ -47,7 +55,7 @@ func runDesktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, po
 		status := systray.AddMenuItem("PacaRoute", "")
 		status.Disable()
 		open := systray.AddMenuItem("打开管理界面…", "在浏览器中管理来源与路由")
-		toggle := systray.AddMenuItem("停止服务", "")
+		toggle := systray.AddMenuItem("关闭模型服务端口", "管理界面保持运行")
 		startup := systray.AddMenuItemCheckbox("登录时启动", "", startupEnabled())
 		systray.AddSeparator()
 		quit := systray.AddMenuItem("退出 PacaRoute", "")
@@ -61,9 +69,9 @@ func runDesktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, po
 				status.SetTitle(fmt.Sprintf("○ 已停止 · %d", p))
 			}
 			if running {
-				toggle.SetTitle("停止服务")
+				toggle.SetTitle("关闭模型服务端口")
 			} else {
-				toggle.SetTitle("启动服务")
+				toggle.SetTitle("打开模型服务端口")
 			}
 			if startupEnabled() {
 				startup.Check()
@@ -74,9 +82,7 @@ func runDesktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, po
 		update()
 		go func() {
 			if a.get("no-open", "") != "true" {
-				if e := control.start(); e == nil {
-					_ = openManagement(s.Root, control.portValue())
-				}
+				_ = openManagement(s.Root, control.managementPort())
 			}
 			tick := time.NewTicker(2 * time.Second)
 			defer tick.Stop()
@@ -89,24 +95,22 @@ func runDesktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, po
 					systray.Quit()
 					return
 				case <-open.ClickedCh:
-					if e := control.start(); e == nil {
-						if e = openManagement(s.Root, control.portValue()); e != nil {
-							control.mu.Lock()
-							control.lastError = "无法打开浏览器"
-							control.mu.Unlock()
-						}
+					if e = openManagement(s.Root, control.managementPort()); e != nil {
+						control.mu.Lock()
+						control.lastError = "无法打开浏览器"
+						control.mu.Unlock()
 					}
 					update()
 				case <-toggle.ClickedCh:
 					running, _, _ := control.state()
 					if running {
-						control.stop()
+						_ = control.stop()
 					} else {
 						_ = control.start()
 					}
 					update()
 				case <-startup.ClickedCh:
-					if e := setStartup(!startupEnabled(), s.Root, control.portValue(), auth.vault.root); e != nil {
+					if e := control.startup(!startupEnabled()); e != nil {
 						control.mu.Lock()
 						control.lastError = "开机启动设置失败"
 						control.mu.Unlock()
@@ -117,7 +121,7 @@ func runDesktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, po
 				}
 			}
 		}()
-		emit(map[string]any{"event": "desktop-ready", "port": port})
-	}, func() { control.stop() })
+		emit(map[string]any{"event": "desktop-ready", "port": port, "admin_port": control.managementPort()})
+	}, func() { control.close() })
 	return 0
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -122,20 +124,29 @@ func (r *Router) Targets(c *Config, client, agent, id, model, session string, co
 		if c.Paused(id) {
 			return nil, errors.New("source is paused")
 		}
+		r.mu.Lock()
+		cooldown := r.cooldown[s.ID+":"+model]
+		r.mu.Unlock()
+		if cooldown.Until.After(time.Now()) {
+			return nil, errors.New("source model is cooling until " + cooldown.Until.Format(time.RFC3339))
+		}
 		return []Target{{Source: s, Model: model}}, nil
 	}
 	p, ok := c.Pool(id)
-	if !ok || p.Agent != agent {
+	if !ok || p.Agent != agent || !p.HasModel(model) {
 		return nil, errors.New("pool does not match this Agent")
 	}
 	key := ""
 	if session != "" {
 		key = keyHash(client + "\x00" + agent + "\x00" + p.ID + "\x00" + session)
+		if p.MultiModel {
+			key = keyHash(client + "\x00" + agent + "\x00" + p.ID + "\x00" + model + "\x00" + session)
+		}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	prior, has := r.bindings[key]
-	if !has && client == "local" && session != "" {
+	if !has && !p.MultiModel && client == "local" && session != "" {
 		legacyKey := strings.ToUpper(keyHash(agent + "\n" + p.ID + "\n" + session))
 		if v, ok := r.legacy[legacyKey]; ok {
 			if source, found := c.Source(v.Source); found {
@@ -149,6 +160,9 @@ func (r *Router) Targets(c *Config, client, agent, id, model, session string, co
 	result := []Target{}
 	if has {
 		for _, m := range p.Members {
+			if p.MemberModel(m) != model {
+				continue
+			}
 			if m.ID == prior.Member && m.SourceID == prior.Source && m.Model == prior.Model {
 				if s, ok := c.Source(m.SourceID); ok && !c.Paused(s.ID) && prior.Endpoint == endpointIdentity(s) {
 					if !r.cooldown[s.ID+":"+m.Model].Until.After(time.Now()) {
@@ -174,7 +188,7 @@ func (r *Router) Targets(c *Config, client, agent, id, model, session string, co
 	}
 	candidates := []scored{}
 	for _, m := range p.Members {
-		if m.Weight == 0 {
+		if m.Weight == 0 || p.MemberModel(m) != model {
 			continue
 		}
 		s, ok := c.Source(m.SourceID)
@@ -281,17 +295,70 @@ func (r *Router) Fail(t Target, reason ...string) {
 	if t.Pool == nil {
 		return
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if len(r.cooldown) > 20000 {
-		clear(r.cooldown)
-	}
 	message := "upstream request failed"
 	if len(reason) > 0 && reason[0] != "" {
 		message = streamDetail(reason[0])
 	}
+	kind := "error"
+	if strings.Contains(message, "rate_limit_") {
+		kind = "throttle"
+	}
+	r.failCooldown(t, message, 30*time.Second, kind)
+}
+
+// Retry hints apply to the concrete source/model, never the whole account or
+// public alias. Parallel failures must not shorten a previously announced wait.
+func (r *Router) FailResponse(t Target, status int, headers http.Header) {
+	message := fmt.Sprintf("upstream returned HTTP %d", status)
+	if status != http.StatusTooManyRequests {
+		r.Fail(t, message)
+		return
+	}
+	delay := 30 * time.Second
+	if value, err := strconv.ParseFloat(headers.Get("retry-after-ms"), 64); err == nil && value > 0 {
+		delay = time.Duration(math.Min(value, 86400000) * float64(time.Millisecond))
+	} else if value, err := strconv.ParseFloat(headers.Get("x-ms-retry-after-ms"), 64); err == nil && value > 0 {
+		delay = time.Duration(math.Min(value, 86400000) * float64(time.Millisecond))
+	} else if value, err := strconv.ParseFloat(headers.Get("Retry-After"), 64); err == nil && value > 0 {
+		delay = time.Duration(math.Min(value, 86400) * float64(time.Second))
+	} else if at, err := http.ParseTime(headers.Get("Retry-After")); err == nil && at.After(time.Now()) {
+		delay = time.Until(at)
+	}
+	if delay > 24*time.Hour {
+		delay = 24 * time.Hour
+	}
+	if delay < time.Second {
+		delay = time.Second
+	}
+	r.failCooldown(t, message, delay, "throttle")
+}
+
+func (r *Router) failCooldown(t Target, message string, delay time.Duration, kind string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	now := time.Now().UTC()
-	r.cooldown[t.Source.ID+":"+t.Model] = Cooldown{SourceID: t.Source.ID, Model: t.Model, Error: message, FailedAt: now, Until: now.Add(30 * time.Second)}
+	key := t.Source.ID + ":" + t.Model
+	until := now.Add(delay)
+	if prior := r.cooldown[key]; prior.Until.After(until) {
+		until = prior.Until
+	}
+	if len(r.cooldown) >= 20000 {
+		oldestKey := ""
+		var oldest time.Time
+		for k, entry := range r.cooldown {
+			if !entry.Until.After(now) {
+				delete(r.cooldown, k)
+				continue
+			}
+			if oldestKey == "" || entry.Until.Before(oldest) {
+				oldestKey, oldest = k, entry.Until
+			}
+		}
+		if len(r.cooldown) >= 20000 {
+			delete(r.cooldown, oldestKey)
+		}
+	}
+	r.cooldown[key] = Cooldown{SourceID: t.Source.ID, Model: t.Model, Error: streamDetail(message), FailedAt: now, Until: until, Kind: kind}
 }
 
 var legacySession = regexp.MustCompile(`(?:^|_)session_([A-Za-z0-9-]{1,128})$`)
@@ -369,6 +436,12 @@ func (c *Config) Resolve(client *Client, agent, model, explicit string) (string,
 		p, ok := c.Pool(explicit)
 		if !ok || p.Agent != agent {
 			return "", "", errors.New("pool not found for Agent")
+		}
+		if p.MultiModel {
+			if !p.HasModel(model) {
+				return "", "", errors.New("model not exposed by pool")
+			}
+			return explicit, model, nil
 		}
 		return explicit, p.Model, nil
 	}

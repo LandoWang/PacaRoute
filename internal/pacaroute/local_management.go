@@ -92,7 +92,7 @@ func (s *Server) localAPI(w http.ResponseWriter, r *http.Request, path string) {
 	case path == "browser-ticket" && r.Method == "POST":
 		writeJSON(w, 200, map[string]string{"ticket": s.tickets.issue()})
 	case path == "agents" && r.Method == "GET":
-		writeJSON(w, 200, map[string]any{"clients": []any{clientState("codex", s.Port), clientState("claude-code", s.Port)}})
+		writeJSON(w, 200, map[string]any{"clients": []any{clientState("codex", s.servicePort()), clientState("claude-code", s.servicePort())}})
 	case path == "configure" && r.Method == "POST":
 		var v struct {
 			Client      string `json:"client"`
@@ -113,7 +113,7 @@ func (s *Server) localAPI(w http.ResponseWriter, r *http.Request, path string) {
 			problem(w, 400, e.Error())
 			return
 		}
-		plan, e := planClient(v.Client, v.Source, v.Model, s.Port)
+		plan, e := planClient(v.Client, v.Source, v.Model, s.servicePort())
 		if e != nil {
 			problem(w, 400, e.Error())
 			return
@@ -174,7 +174,7 @@ func (s *Server) localAPI(w http.ResponseWriter, r *http.Request, path string) {
 			problem(w, 400, "invalid startup preference")
 			return
 		}
-		if e := setStartup(v.Enabled, s.Store.Root, s.Desktop.portValue(), s.Auth.vault.root); e != nil {
+		if e := s.Desktop.startup(v.Enabled); e != nil {
 			problem(w, 400, e.Error())
 			return
 		}

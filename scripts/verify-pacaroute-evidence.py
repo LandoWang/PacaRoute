@@ -92,6 +92,42 @@ for argument in args.manifests:
                       complete_answer=complete, upstream_models=upstream_models,
                       expected_model=expected_model)
         passed &= len(transcript_calls & transcript_outputs) >= 3 and complete and expected_model
+    if manifest.get("peer"):
+        peer = Path(manifest["peer_root"])
+        peer_calls, peer_outputs = set(), set()
+        for trace in (peer / "traces").rglob("upstream-res.sse"):
+            for line in trace.read_text().splitlines():
+                if not line.startswith("data:"):
+                    continue
+                try:
+                    data = json.loads(line[5:].strip())
+                except ValueError:
+                    continue
+                for item in objects(data):
+                    if item.get("type") in ("function_call", "custom_tool_call"):
+                        peer_calls.add(item["call_id"])
+                    if item.get("type") == "tool_use":
+                        peer_calls.add(item["id"])
+        for trace in (peer / "traces").rglob("client-req.json"):
+            for item in objects(json.loads(trace.read_text())):
+                if item.get("type") in ("function_call_output", "custom_tool_call_output"):
+                    peer_outputs.add(item["call_id"])
+                if item.get("type") == "tool_result":
+                    peer_outputs.add(item["tool_use_id"])
+        activities = [json.loads(line) for log in (peer / "runtime/desktop-activity").glob("*.jsonl") for line in log.read_text().splitlines()]
+        success = [item for item in activities if item["status"] == 200]
+        usage = bool(success) and all(item.get("input_tokens") is not None and item.get("output_tokens") is not None for item in success)
+        checks.update(peer_wire_tool_roundtrips=len(peer_calls & peer_outputs), peer_usage_present=usage)
+        passed &= len(peer_calls & peer_outputs) >= 3 and usage
+    if manifest.get("billing"):
+        with sqlite3.connect("file:" + str(path.parent / "pacaroute.sqlite") + "?mode=ro", uri=True) as db:
+            ledger = db.execute("SELECT request_id,model,state,input_tokens,output_tokens,cost_microusd,price_json FROM quota_requests").fetchall()
+            event_counts = dict(db.execute("SELECT request_id,count(*) FROM billing_events GROUP BY request_id").fetchall())
+        finalized = bool(ledger) and all(row[2] != "reserved" and event_counts.get(row[0]) == 3 for row in ledger)
+        priced = [row for row in ledger if row[2] == "settled"]
+        exact = bool(priced) and all(row[1] == manifest["upstream_model"] and row[3] is not None and row[4] is not None and row[5] == row[3] + row[4] and json.loads(row[6])["input_usd"] == "1" for row in priced)
+        checks.update(billing_finalized=finalized, priced_requests=len(priced), exact_synthetic_rate=exact)
+        passed &= finalized and exact
     current_hash = hashlib.sha256(Path(manifest["binaryPath"]).read_bytes()).hexdigest()
     checks["unchanged_binary"] = current_hash == manifest["binarySHA256"]
     passed &= checks["unchanged_binary"]

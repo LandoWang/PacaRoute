@@ -1,5 +1,7 @@
+import { PricingEditor } from "./quota";
 import { CopilotQuotaDetails, type CopilotInfo } from "./copilot-quota";
 import { BrandIcon } from "./components/brand-icon";
+import pacaRouteMark from "./assets/pacaroute-mark.png";
 import {
   CooldownDetails,
   PoolAvailability,
@@ -26,6 +28,7 @@ import {
 } from "lucide-react";
 import {
   api,
+  peerCapabilities,
   generatedID,
   suggestedName,
   accountProvider,
@@ -37,6 +40,8 @@ import {
   sourceName,
   format,
   share,
+  poolModels,
+  memberModel,
   type Config,
   type Account,
   type Source,
@@ -122,7 +127,7 @@ export function Secret({
     [error, setError] = useState("");
   return (
     <Modal
-      title="保存 Client 密钥"
+      title="保存客户端密钥"
       description="密钥已加密保存，接入脚本会自动包含它。请只交给对应调用方。"
       onClose={onClose}
     >
@@ -178,7 +183,7 @@ export function Overview() {
   const steps = [
     ["账号", "连接 GitHub 或 Azure", "accounts"],
     ["来源", "选择资源、模型与网络", "sources"],
-    ["Client", "为 Agent 分配来源，生成接入脚本", "clients"],
+    ["客户端", "为 Agent 分配来源，生成接入脚本", "clients"],
   ];
   return (
     <>
@@ -193,15 +198,18 @@ export function Overview() {
           <p>账号、模型来源与请求路由，在一个地方管理。</p>
           <div className="actions">
             <Button onClick={() => navigate("clients")}>
-              配置 Client
+              配置客户端
               <ArrowRight size={16} />
             </Button>
             <Button variant="secondary" onClick={() => navigate("sources")}>
               查看来源
             </Button>
+            <Button variant="secondary" onClick={() => navigate("settings")}>
+              导入配置
+            </Button>
           </div>
         </div>
-        <img src="/mark.svg" alt="极光电子羊驼" />
+        <img src={pacaRouteMark} alt="戴霓虹眼镜的 PacaRoute 羊驼" />
       </div>
       <Stats total={usage.data?.total} />
       <div className="overview-split">
@@ -236,7 +244,7 @@ export function Overview() {
             </span>
             <span>
               <Users size={15} />
-              {config.clients.length} 个 Client
+              {config.clients.length} 个客户端
             </span>
           </div>
         </Panel>
@@ -440,6 +448,9 @@ function AddSource({ onClose }: { onClose: () => void }) {
       onClose={onClose}
     >
       <div className="form-body account-choices">
+        {accounts(config).length === 0 && (
+          <p className="muted">先添加并登录账号，再选择模型来源。</p>
+        )}
         {accounts(config).map((a) => (
           <Button
             key={a.id}
@@ -480,7 +491,7 @@ function AddSource({ onClose }: { onClose: () => void }) {
             navigate("accounts");
           }}
         >
-          添加其他账号
+          添加账号
         </Button>
       </div>
     </Modal>
@@ -722,6 +733,17 @@ function AzurePicker({
     </Editor>
   );
 }
+function NewAccountSource({ account }: { account: Account }) {
+  const { config, save, close } = useApp();
+  return (
+    <SourceEditor
+      config={config}
+      save={save}
+      close={close}
+      account={account.id}
+    />
+  );
+}
 export function Accounts() {
   const app = useApp(),
     { config, show, close, save, notice } = app;
@@ -736,7 +758,13 @@ export function Accounts() {
               <AccountEditor
                 {...common}
                 onConnect={(a) =>
-                  show(<DeviceLogin account={a} onClose={close} />)
+                  show(
+                    a.kind === "pacaroute" ? (
+                      <NewAccountSource account={a} />
+                    ) : (
+                      <DeviceLogin account={a} onClose={close} />
+                    ),
+                  )
                 }
               />,
             )
@@ -746,6 +774,11 @@ export function Accounts() {
           添加账号
         </Button>
       </div>
+      {accounts(config).length === 0 && (
+        <Empty title="还没有账号">
+          点击「添加账号」，选择提供方并登录或填写 Key。
+        </Empty>
+      )}
       <div className="cards-grid">
         {accounts(config).map((a) => (
           <Panel key={a.id}>
@@ -864,7 +897,7 @@ export function Accounts() {
                     退出
                   </Button>
                 )}
-                {!["copilot", "azure-local"].includes(a.id) && (
+                {
                   <Button
                     aria-label={"移除 " + a.name}
                     variant="ghost"
@@ -889,7 +922,7 @@ export function Accounts() {
                   >
                     <Trash2 size={15} />
                   </Button>
-                )}
+                }
               </div>
             </div>
           </Panel>
@@ -987,7 +1020,8 @@ function ModelList({
     }
   }
   useEffect(() => {
-    if (source.kind === "copilot") void discover();
+    if (source.kind === "copilot" || source.kind === "pacaroute")
+      void discover();
   }, []);
   const content = (
     <>
@@ -1066,6 +1100,11 @@ function ModelList({
               ? {
                   ...s,
                   deployments: selected,
+                  endpoint: result?.endpoint || s.endpoint,
+                  agent_models:
+                    s.kind === "pacaroute" && result
+                      ? peerCapabilities(result.models)
+                      : s.agent_models,
                   resource_id: result?.resource_id || s.resource_id,
                   subscription_id: result?.subscription_id || s.subscription_id,
                 }
@@ -1077,7 +1116,7 @@ function ModelList({
     >
       {content}
       <p className="muted">
-        取消勾选前请先修改引用该模型的 Client、Agent
+        取消勾选前请先修改引用该模型的客户端、Agent
         或来源池。更新立即用于后续请求。
       </p>
     </Editor>
@@ -1106,7 +1145,7 @@ export function Sources() {
   return (
     <>
       <div className="page-toolbar">
-        <p>只添加需要的资源和模型，每个来源独立选择 Proxy。</p>
+        <p>只添加需要的资源和模型，每个来源独立选择代理。</p>
         <div className="actions">
           <Button onClick={() => show(<AddSource onClose={close} />)}>
             <Plus size={16} />
@@ -1115,6 +1154,9 @@ export function Sources() {
         </div>
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
+      {sources(config).length === 0 && (
+        <Empty title="还没有来源">添加账号后，在这里选择资源和模型。</Empty>
+      )}
       <Panel className="source-list">
         {sources(config).map((s) => (
           <div className="source-row" key={s.id}>
@@ -1154,9 +1196,9 @@ export function Sources() {
                 </span>
                 <span>
                   <label className="source-proxy">
-                    Proxy{" "}
+                    代理{" "}
                     <Select
-                      aria-label={"Proxy · " + s.name}
+                      aria-label={"代理 · " + s.name}
                       value={config.proxies.bindings[s.id] || "system"}
                       disabled={!!busy}
                       onChange={async (e) => {
@@ -1200,6 +1242,15 @@ export function Sources() {
               <Button
                 variant="ghost"
                 size="sm"
+                onClick={() =>
+                  show(<PricingEditor source={s} onClose={close} />)
+                }
+              >
+                费率
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => show(<ModelList source={s} onClose={close} />)}
               >
                 模型
@@ -1231,7 +1282,7 @@ export function Sources() {
                   <Pause size={15} />
                 )}
               </Button>
-              {s.id !== "copilot" && (
+              {
                 <>
                   <Button
                     variant="ghost"
@@ -1251,7 +1302,7 @@ export function Sources() {
                       show(
                         <Confirm
                           title="删除来源？"
-                          description="请先解除 Client 和来源池的引用。正在进行的请求会继续完成。"
+                          description="请先解除客户端和来源池的引用。正在进行的请求会继续完成。"
                           onClose={close}
                           action={async () => {
                             const next = structuredClone(config);
@@ -1272,7 +1323,7 @@ export function Sources() {
                     <Trash2 size={15} />
                   </Button>
                 </>
-              )}
+              }
             </div>
           </div>
         ))}
@@ -1311,7 +1362,7 @@ export function Pools() {
             <Panel
               key={p.id}
               title={p.name}
-              description={`${p.agent} · 模型别名 ${p.model}`}
+              description={`${p.agent} · ${p.multi_model ? `${poolModels(p).length} 个模型` : `模型别名 ${p.model}`}`}
               actions={
                 <Button
                   variant="ghost"
@@ -1323,32 +1374,49 @@ export function Pools() {
                 </Button>
               }
             >
-              <PoolAvailability id={p.id} />
-              <div className="pool-members">
-                {p.members.map((m) => (
-                  <div key={m.id}>
-                    <div>
-                      <strong>{sourceName(config, m.source_id)}</strong>
-                      <small>
-                        {m.model}
-                        {config.source_state.paused.includes(m.source_id)
-                          ? " · 已暂停"
-                          : ""}
-                      </small>
-                      <CooldownDetails source={m.source_id} model={m.model} />
-                    </div>
-                    <span className="weight">
-                      {share(
-                        poolAllocation(config, p, status.routing).find(
-                          (member) => member.id === m.id,
-                        )?.weight || 0,
-                        poolAllocation(config, p, status.routing),
-                      )}
-                      <small>%</small>
-                    </span>
+              {poolModels(p).map((model) => (
+                <div className="pool-model-group" key={model}>
+                  {p.multi_model && <h3>{model}</h3>}
+                  <PoolAvailability
+                    id={p.id}
+                    model={p.multi_model ? model : undefined}
+                  />
+                  <div className="pool-members">
+                    {p.members
+                      .filter((m) => memberModel(p, m) === model)
+                      .map((m) => (
+                        <div key={m.id}>
+                          <div>
+                            <strong>{sourceName(config, m.source_id)}</strong>
+                            <small>
+                              {m.model}
+                              {config.source_state.paused.includes(m.source_id)
+                                ? " · 已暂停"
+                                : ""}
+                            </small>
+                            <CooldownDetails
+                              source={m.source_id}
+                              model={m.model}
+                            />
+                          </div>
+                          <span className="weight">
+                            {share(
+                              poolAllocation(
+                                config,
+                                p,
+                                status.routing,
+                                model,
+                              ).find((member) => member.id === m.id)?.weight ||
+                                0,
+                              poolAllocation(config, p, status.routing, model),
+                            )}
+                            <small>%</small>
+                          </span>
+                        </div>
+                      ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
               <div className="entity-footer">
                 <span>
                   {p.failover
@@ -1363,7 +1431,7 @@ export function Pools() {
                     show(
                       <Confirm
                         title="删除来源池？"
-                        description="请先解除 Client 对来源池的引用。"
+                        description="请先解除客户端对来源池的引用。"
                         onClose={close}
                         action={() =>
                           save({
@@ -1394,7 +1462,7 @@ export function Proxies() {
         <p>创建一次，在多个来源之间复用。更新后新请求立即生效。</p>
         <Button onClick={() => show(<ProxyEditor {...common} />)}>
           <Plus size={16} />
-          添加 Proxy
+          添加代理
         </Button>
       </div>
       <Panel
@@ -1449,8 +1517,8 @@ export function Proxies() {
                 onClick={() =>
                   show(
                     <Confirm
-                      title="删除 Proxy？"
-                      description="请先解除来源和账号登录对这个 Proxy 的引用。"
+                      title="删除代理？"
+                      description="请先解除来源和账号登录对这个代理的引用。"
                       onClose={close}
                       action={async () => {
                         if (
@@ -1459,7 +1527,7 @@ export function Proxies() {
                           ) ||
                           config.proxies.account_proxy_id === p.id
                         )
-                          throw Error("这个 Proxy 仍被引用");
+                          throw Error("这个代理仍被引用");
                         await save({
                           ...config,
                           proxies: {
@@ -1482,7 +1550,7 @@ export function Proxies() {
       </div>
       {!config.proxies.profiles.length && (
         <Panel>
-          <Empty title="还没有自定义 Proxy">
+          <Empty title="还没有自定义代理">
             来源仍可选择「直连」或「跟随系统环境」。
           </Empty>
         </Panel>
@@ -1502,7 +1570,7 @@ function AccountProxy({
   return (
     <>
       <Select
-        aria-label="账号登录 Proxy"
+        aria-label="账号登录代理"
         value={config.proxies.account_proxy_id || "system"}
         disabled={busy}
         onChange={async (e) => {
@@ -1621,9 +1689,9 @@ export function UsagePage() {
             ))}
           </Select>
         </Field>
-        <Field label="Client">
+        <Field label="客户端">
           <Select value={client} onChange={(e) => setClient(e.target.value)}>
-            <option value="">全部 Client</option>
+            <option value="">全部客户端</option>
             <option value="local">本机调用</option>
             {config.clients.map((c) => (
               <option key={c.id} value={c.id}>
@@ -1649,7 +1717,7 @@ export function UsagePage() {
               variant="ghost"
               onClick={() => navigate("clients")}
             >
-              到 Client 获取接入脚本 <ArrowRight size={14} />
+              到客户端获取接入脚本 <ArrowRight size={14} />
             </Button>
           </div>
         </div>

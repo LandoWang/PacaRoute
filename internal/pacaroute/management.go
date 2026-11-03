@@ -33,13 +33,13 @@ func (s *Server) web(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", mime.TypeByExtension(path.Ext(name)))
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(b)
 }
 func (s *Server) sameOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
-	if s.PublicURL != "" {
+	if s.PublicURL != "" && !(s.Desktop != nil && strings.HasPrefix(r.URL.Path, "/api/")) {
 		return origin == s.PublicURL
 	}
 	if origin == "" {
@@ -108,13 +108,21 @@ func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case path == "config/export" || path == "config/import":
+		s.configTransferAPI(w, r, strings.TrimPrefix(path, "config/"))
 	case strings.HasPrefix(path, "local/"):
 		s.localAPI(w, r, strings.TrimPrefix(path, "local/"))
 	case path == "logout" && r.Method == "POST":
 		http.SetCookie(w, &http.Cookie{Name: "pacaroute_admin", Value: "", Path: "/api", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 		writeJSON(w, 200, map[string]bool{"ok": true})
+	case path == "service":
+		s.serviceAPI(w, r)
 	case path == "status" && r.Method == "GET":
-		writeJSON(w, 200, map[string]any{"name": "PacaRoute", "version": Version, "uptime_seconds": int(time.Since(s.started).Seconds()), "config_error": s.Store.Error(), "routing": s.Router.Health(s.Store.Snapshot()), "local_access": s.AllowLocal, "local_management": s.localAllowed(r), "desktop": s.Desktop != nil && s.localAllowed(r), "port": s.Port, "api_version": 1, "gateway_url": s.requestOrigin(r), "startup": s.Desktop != nil && startupEnabled()})
+		service := map[string]any{"serving": true}
+		if s.Desktop != nil {
+			service = s.Desktop.status()
+		}
+		writeJSON(w, 200, map[string]any{"name": "PacaRoute", "version": Version, "uptime_seconds": int(time.Since(s.started).Seconds()), "config_error": s.Store.Error(), "routing": s.Router.Health(s.Store.Snapshot()), "local_access": s.AllowLocal, "local_management": s.localAllowed(r), "desktop": s.Desktop != nil && s.Desktop.nativeTray && s.localAllowed(r), "service_control": s.Desktop != nil, "service": service, "port": s.servicePort(), "api_version": 1, "gateway_url": s.gatewayOrigin(r), "startup": s.Desktop != nil && s.Desktop.nativeTray && startupEnabled()})
 	case path == "config" && r.Method == "GET":
 		writeJSON(w, 200, s.Store.Snapshot())
 	case path == "config" && r.Method == "PUT":
@@ -132,6 +140,19 @@ func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, 200, s.Store.Snapshot())
+	case strings.HasPrefix(path, "clients/") && strings.HasSuffix(path, "/quota") && r.Method == "GET":
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "clients/"), "/quota")
+		client, ok := s.Store.Snapshot().Client(id)
+		if !ok {
+			problem(w, 404, "Client not found")
+			return
+		}
+		value, e := s.Quotas.State(id, client.Quota, time.Now().UTC())
+		if e != nil {
+			problem(w, 503, "Client quota ledger unavailable")
+			return
+		}
+		writeJSON(w, 200, value)
 	case path == "clients" && r.Method == "POST":
 		var v Client
 		if decodeRequest(w, r, &v) != nil {
@@ -368,7 +389,11 @@ func newLoginJobs() *loginJobs { return &loginJobs{jobs: map[string]*loginJob{}}
 func (s *Server) accountAPI(w http.ResponseWriter, r *http.Request, path string) {
 	id, action, _ := strings.Cut(path, "/")
 	account, ok := s.Store.Snapshot().Account(id)
-	if !ok {
+	configured := false
+	for _, a := range s.Store.Snapshot().Accounts {
+		configured = configured || a.ID == id
+	}
+	if !ok || !configured {
 		problem(w, 404, "account not found")
 		return
 	}
@@ -463,7 +488,11 @@ func (a *Auth) Models(ctx context.Context, id string) ([]Model, error) {
 		if !ok {
 			return nil, errors.New("pool not found")
 		}
-		return []Model{{p.Model, p.Name, "Source pool", p.Agent == "claude-code", p.Agent == "codex"}}, nil
+		models := []Model{}
+		for _, name := range p.ModelNames() {
+			models = append(models, Model{name, name, "Source pool", p.Agent == "claude-code", p.Agent == "codex"})
+		}
+		return models, nil
 	}
 	s, ok := c.Source(id)
 	if !ok {
@@ -472,7 +501,7 @@ func (a *Auth) Models(ctx context.Context, id string) ([]Model, error) {
 	models := []Model{}
 	if s.Kind != "copilot" {
 		for _, m := range s.Deployments {
-			models = append(models, Model{m, m, s.Kind, true, true})
+			models = append(models, Model{m, m, s.Kind, s.SupportsAgentModel("claude-code", m), s.SupportsAgentModel("codex", m)})
 		}
 		return models, nil
 	}

@@ -79,7 +79,10 @@ func toolOutput(b json.RawMessage, to string) (json.RawMessage, error) {
 	}
 	return jsonBytes(result), nil
 }
-func (t Target) upstreamProtocol() string {
+func (t Target) upstreamProtocol(agent ...string) string {
+	if t.Source.Kind == "pacaroute" && len(agent) > 0 {
+		return incomingProtocol(agent[0])
+	}
 	if t.Source.Kind == "anthropic" || t.Source.Kind == "copilot" && strings.HasPrefix(t.Model, "claude-") {
 		return "messages"
 	}
@@ -98,8 +101,8 @@ func prepare(body object, t Target, agent string) ([]byte, *translation, error) 
 	wire["model"] = jsonBytes(t.Model)
 	var tr *translation
 	var e error
-	if incomingProtocol(agent) != t.upstreamProtocol() {
-		tr = &translation{from: incomingProtocol(agent), to: t.upstreamProtocol(), model: rawString(body["model"]), toolNames: map[string]toolIdentity{}}
+	if incomingProtocol(agent) != t.upstreamProtocol(agent) {
+		tr = &translation{from: incomingProtocol(agent), to: t.upstreamProtocol(agent), model: rawString(body["model"]), toolNames: map[string]toolIdentity{}}
 		if tr.to == "responses" {
 			wire, e = messagesToResponses(wire, tr)
 		} else {

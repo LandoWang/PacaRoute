@@ -6,6 +6,7 @@ its own alpaca branding. Microsoft artwork is used without changing its shape or
 - GitHub, GitHub Copilot, Anthropic: Simple Icons 16.36.0, CC0 1.0, https://simpleicons.org/.
 - OpenAI and Azure: SVG Logos via @iconify-json/logos 1.2.18, CC0 1.0, https://github.com/gilbarbara/logos.
 - Azure Foundry: Microsoft Azure Public Service Icons V24, `035746832-icon-service-AI-Foundry.svg`, https://learn.microsoft.com/en-us/azure/architecture/icons/.
+- Codex: Lobe Icons, MIT, https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/codex.svg. Used for the Client navigation item.
 
 Microsoft icon terms: Microsoft permits use in architectural diagrams, training
 materials, or documentation. Icons may be copied, distributed and displayed only

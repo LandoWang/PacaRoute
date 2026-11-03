@@ -13,7 +13,7 @@ const selection: ModelSelection = {
   defaultModel: "claude-opus-5.5",
   fixed: false,
 };
-describe("Client × Agent model selection", () => {
+describe("客户端 × Agent model selection", () => {
   it("routes each selected model exactly and never silently substitutes the default", () => {
     const rules = selectedModelRoutes("claude-code", "copilot", selection, []);
     const resolve = (model: string) =>
@@ -85,9 +85,20 @@ describe("Client × Agent model selection", () => {
         [],
       ).map((r) => r.match_model),
     ).not.toContain("claude-opus-5-5");
-    expect(() =>
-      selectedModelRoutes("codex", "", { ...selection, source: "pool:a" }, []),
-    ).toThrow();
+    const pooled = selectedModelRoutes(
+      "codex",
+      "",
+      { ...selection, source: "pool:a" },
+      [],
+    );
+    expect(readModelSelection(pooled, "")?.models).toEqual([
+      selection.defaultModel,
+      ...selection.models.filter((m) => m !== selection.defaultModel),
+    ]);
+    expect(readModelSelection(pooled, "")?.defaultModel).toBe(
+      selection.defaultModel,
+    );
+    expect(pooled.every((r) => r.source_id === "pool:a")).toBe(true);
     expect(() =>
       selectedModelRoutes("codex", "", { ...selection, models: [] }, []),
     ).toThrow();

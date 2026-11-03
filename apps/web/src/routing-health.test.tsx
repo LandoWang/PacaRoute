@@ -8,7 +8,7 @@ import {
   poolAllocation,
 } from "./routing-health";
 import { StateContext, type AppState } from "./state";
-import { type Config, type RoutingHealth } from "./api";
+import { type Config, type RoutingHealth, share } from "./api";
 
 const config: Config = {
   revision: "1",
@@ -61,6 +61,44 @@ function render(children: ReactNode, routing = health) {
   );
 }
 describe("routing health visibility", () => {
+  it("renormalizes only the throttled model group and exposes partial model exhaustion", () => {
+    const pool = {
+      ...config.pools[0],
+      multi_model: true,
+      model: "astra",
+      members: [
+        { id: "a", source_id: "a", model: "astra", weight: 50 },
+        { id: "b", source_id: "b", model: "astra", weight: 30 },
+        { id: "c", source_id: "c", model: "astra", weight: 20 },
+        { id: "sonnet", source_id: "c", model: "sonnet", weight: 1000 },
+      ],
+    };
+    const state = {
+      ...health,
+      cooldowns: [{ ...health.cooldowns[0], source_id: "c", model: "astra" }],
+    };
+    const astra = poolAllocation(config, pool, state, "astra");
+    expect(astra.map((m) => share(m.weight, astra))).toEqual([62.5, 37.5, 0]);
+    expect(poolAllocation(config, pool, state, "sonnet")[0].weight).toBe(1000);
+    const exhaustedModel = {
+      ...state,
+      pools: [
+        {
+          id: "astra",
+          available: 1,
+          total: 4,
+          models: [
+            { model: "astra", available: 0, total: 3 },
+            { model: "sonnet", available: 1, total: 1 },
+          ],
+        },
+      ],
+    };
+    expect(render(<RoutingAlert />, exhaustedModel)).toContain("critical");
+    expect(render(<RoutingAlert />, exhaustedModel)).toContain(
+      "Astra Pool · astra",
+    );
+  });
   it("shows cooldown reason, model and server-relative remaining time", () => {
     const html = render(<CooldownDetails source="azure" />);
     expect(html).toContain("20");

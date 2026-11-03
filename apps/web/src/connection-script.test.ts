@@ -12,7 +12,7 @@ const client: Client = {
   enabled_agents: ["codex"],
   routes: [],
 };
-describe("Client connection scripts", () => {
+describe("客户端 connection scripts", () => {
   it("rejects disabled Agents, unsafe URLs and remote local Clients", () => {
     expect(() =>
       connectionScript(
@@ -114,4 +114,8 @@ describe("Client connection scripts", () => {
     expect(text).toContain("'https://host/one''two'");
     expect(text).toContain("Remove-Variable pacaKey");
   });
+  it("keeps router onboarding separate from native Agent scripts", () => {
+    expect(() => connectionScript({ ...client, enabled_agents: ["pacaroute"] }, "pacaroute", "https://host", "coding", "shell", "synthetic-key")).toThrow("接入二维码");
+  });
+
 });
