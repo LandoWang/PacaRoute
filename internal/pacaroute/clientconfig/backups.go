@@ -15,12 +15,28 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-type configBackup struct {
-	ID        string `json:"id"`
-	CreatedAt string `json:"created_at"`
-	Missing   bool   `json:"missing_file"`
-	Connected bool   `json:"bridge_configured"`
-	Valid     bool   `json:"valid"`
+// Backup describes an available Agent configuration backup.
+type Backup struct {
+	ID        string
+	CreatedAt string
+	Missing   bool
+	Connected bool
+	Valid     bool
+}
+
+// BackupList contains the configuration path and its available backups.
+type BackupList struct {
+	Path    string
+	Backups []Backup
+}
+
+// RestoreResult describes a preview or completed backup restoration.
+type RestoreResult struct {
+	Path        string
+	Fingerprint string
+	Changes     []string
+	// BackupPath is set once the current configuration has been backed up.
+	BackupPath *string
 }
 
 func backupPath(target, id string) (string, bool, error) {
@@ -73,15 +89,15 @@ func validClientBytes(agent string, b []byte) bool {
 }
 
 // ListBackups lists current and legacy backups for the selected Agent.
-func ListBackups(agent string) (map[string]any, error) {
+func ListBackups(agent string) (BackupList, error) {
 	target, e := AgentConfigPath(agent)
 	if e != nil {
-		return nil, e
+		return BackupList{}, e
 	}
 	paths, _ := filepath.Glob(filepath.Join(filepath.Dir(target), ".pacaroute-backups", filepath.Base(target), "*"))
 	legacy, _ := filepath.Glob(target + ".bridge-*")
 	paths = append(paths, legacy...)
-	rows := []configBackup{}
+	rows := []Backup{}
 	for _, p := range paths {
 		id := filepath.Base(p)
 		if _, _, e = backupPath(target, id); e != nil {
@@ -93,14 +109,14 @@ func ListBackups(agent string) (map[string]any, error) {
 		}
 		b, missing, e := readBackup(agent, target, id)
 		connected := strings.Contains(string(b), "copilot-bridge") || strings.Contains(string(b), "pacaroute")
-		rows = append(rows, configBackup{id, f.ModTime().UTC().Format(time.RFC3339), missing, connected, e == nil})
+		rows = append(rows, Backup{id, f.ModTime().UTC().Format(time.RFC3339), missing, connected, e == nil})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].CreatedAt > rows[j].CreatedAt })
-	return map[string]any{"path": target, "backups": rows}, nil
+	return BackupList{Path: target, Backups: rows}, nil
 }
 
 // RestoreBackup previews or applies an exact configuration backup.
-func RestoreBackup(agent, id, expected string, apply bool) (map[string]any, error) {
+func RestoreBackup(agent, id, expected string, apply bool) (*RestoreResult, error) {
 	target, e := AgentConfigPath(agent)
 	if e != nil {
 		return nil, e
@@ -123,7 +139,7 @@ func RestoreBackup(agent, id, expected string, apply bool) (map[string]any, erro
 		return nil, e
 	}
 	fingerprint := fingerprint(target + "\x00" + id + "\x00" + string(old) + "\x00" + string(next) + boolText(oldMissing) + boolText(missing))
-	result := map[string]any{"path": target, "fingerprint": fingerprint, "changes": []string{"Restore the entire selected configuration backup", "Current configuration will first be backed up", "Open a new Agent session after restoring"}}
+	result := &RestoreResult{Path: target, Fingerprint: fingerprint, Changes: []string{"Restore the entire selected configuration backup", "Current configuration will first be backed up", "Open a new Agent session after restoring"}}
 	if !apply {
 		return result, nil
 	}
@@ -145,7 +161,7 @@ func RestoreBackup(agent, id, expected string, apply bool) (map[string]any, erro
 	} else {
 		e = atomicfile.Write(target, next, 0600)
 	}
-	result["backup_path"] = backup
+	result.BackupPath = &backup
 	return result, e
 }
 func boolText(b bool) string {

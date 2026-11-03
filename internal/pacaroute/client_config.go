@@ -29,5 +29,13 @@ func (p configPlan) apply(expected string) (string, error) {
 }
 
 func clientState(client string, port int) map[string]any {
-	return clientconfig.AgentState(client, port)
+	state := clientconfig.AgentState(client, port)
+	out := map[string]any{"id": state.Agent, "path": state.Path, "connected": state.Connected, "drifted": state.Drifted, "source": state.Source}
+	if state.Err != nil {
+		out["error"] = state.Err.Error()
+	}
+	if state.Model != nil {
+		out["model"] = *state.Model
+	}
+	return out
 }

@@ -209,12 +209,24 @@ func (p Plan) Apply(expected string) (string, error) {
 	return backup, atomicfile.Write(p.Path, p.next, 0600)
 }
 
+// State describes an Agent configuration and its connection to a local service.
+type State struct {
+	Agent     string
+	Path      string
+	Connected bool
+	Drifted   bool
+	Source    string
+	// Model is nil when the configuration could not be read or parsed.
+	Model *string
+	Err   error
+}
+
 // AgentState reports the current Agent connection and local port drift.
-func AgentState(agent string, port int) map[string]any {
+func AgentState(agent string, port int) State {
 	path, e := AgentConfigPath(agent)
-	out := map[string]any{"id": agent, "path": path, "connected": false, "drifted": false, "source": "copilot"}
+	out := State{Agent: agent, Path: path, Source: "copilot"}
 	if e != nil {
-		out["error"] = e.Error()
+		out.Err = e
 		return out
 	}
 	b, e := os.ReadFile(path)
@@ -222,14 +234,14 @@ func AgentState(agent string, port int) map[string]any {
 		return out
 	}
 	if e != nil {
-		out["error"] = e.Error()
+		out.Err = e
 		return out
 	}
 	base, model := "", ""
 	if agent == "codex" {
 		var m map[string]any
 		if toml.Unmarshal(b, &m) != nil {
-			out["error"] = "Invalid TOML"
+			out.Err = errors.New("Invalid TOML")
 			return out
 		}
 		model, _ = m["model"].(string)
@@ -242,7 +254,7 @@ func AgentState(agent string, port int) map[string]any {
 	} else {
 		var m map[string]any
 		if json.Unmarshal(b, &m) != nil {
-			out["error"] = "Invalid JSON"
+			out.Err = errors.New("Invalid JSON")
 			return out
 		}
 		if env, ok := m["env"].(map[string]any); ok {
@@ -250,7 +262,7 @@ func AgentState(agent string, port int) map[string]any {
 			model, _ = env["ANTHROPIC_MODEL"].(string)
 		}
 	}
-	out["model"] = model
+	out.Model = &model
 	source := "copilot"
 	parts := strings.Split(base, "/")
 	for i, p := range parts {
@@ -261,8 +273,8 @@ func AgentState(agent string, port int) map[string]any {
 			}
 		}
 	}
-	out["source"] = source
-	out["connected"] = base == baseURL(port, source, agent)
-	out["drifted"] = strings.Contains(base, "localhost:") && base != baseURL(port, source, agent)
+	out.Source = source
+	out.Connected = base == baseURL(port, source, agent)
+	out.Drifted = strings.Contains(base, "localhost:") && base != baseURL(port, source, agent)
 	return out
 }
