@@ -69,6 +69,7 @@ export function SourceEditor({
     .map((s) => s.trim())
     .filter(Boolean);
   const discoveredOnce = useRef(false);
+  const discoveryRequest = useRef<AbortController | undefined>(undefined);
   useEffect(() => {
     if (
       discoveredOnce.current ||
@@ -80,29 +81,46 @@ export function SourceEditor({
     discoveredOnce.current = true;
     void discover();
   }, []);
+  useEffect(() => () => discoveryRequest.current?.abort(), []);
+  // A discovery result describes the endpoint and account it was started
+  // with; editing either cancels it instead of letting it overwrite the draft.
+  function cancelDiscovery() {
+    discoveryRequest.current?.abort();
+    discoveryRequest.current = undefined;
+    setDiscovering(false);
+  }
   async function discover() {
+    discoveryRequest.current?.abort();
+    const controller = new AbortController();
+    discoveryRequest.current = controller;
     setDiscovering(true);
     setDiscoveryError("");
     try {
-      const result = await api<ModelDiscovery>("model-discovery", "POST", {
-        ...v,
-        proxy_id: proxy,
-      });
+      const result = await api<ModelDiscovery>(
+        "model-discovery",
+        "POST",
+        { ...v, proxy_id: proxy },
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
       setDiscovery(result);
-      set({
-        ...v,
-        endpoint: result.endpoint || v.endpoint,
+      set((current) => ({
+        ...current,
+        endpoint: result.endpoint || current.endpoint,
         agent_models:
-          v.kind === "pacaroute"
+          current.kind === "pacaroute"
             ? peerCapabilities(result.models)
-            : v.agent_models,
+            : current.agent_models,
         resource_id: result.resource_id,
-        subscription_id: result.subscription_id || v.subscription_id,
-      });
+        subscription_id: result.subscription_id || current.subscription_id,
+      }));
     } catch (e) {
-      setDiscoveryError((e as Error).message);
+      if (!controller.signal.aborted) setDiscoveryError((e as Error).message);
     } finally {
-      setDiscovering(false);
+      if (discoveryRequest.current === controller) {
+        discoveryRequest.current = undefined;
+        setDiscovering(false);
+      }
     }
   }
   return (
@@ -266,6 +284,7 @@ export function SourceEditor({
                     }
                   : {}),
               });
+              cancelDiscovery();
               setDiscovery(undefined);
               setDiscoveryError("");
             }}
@@ -292,6 +311,7 @@ export function SourceEditor({
                   resource_id: undefined,
                   agent_models: undefined,
                 });
+                cancelDiscovery();
                 setDiscovery(undefined);
               }}
             />
