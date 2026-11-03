@@ -1,24 +1,5 @@
+import { type CopilotInfo } from "../../api/types";
 import { Badge, ErrorNote } from "../../components/ui";
-type Quota = {
-  copilot_plan?: string;
-  quota_reset_date?: string;
-  quota_snapshots?: Record<
-    string,
-    {
-      unlimited?: boolean;
-      percent_remaining?: number;
-      remaining?: number;
-      quota_remaining?: number;
-      entitlement?: number;
-      token_based_billing?: boolean;
-    }
-  >;
-};
-export type CopilotInfo = {
-  quota?: Quota;
-  quota_error?: string;
-  login?: string;
-};
 const number = (v?: number) =>
   typeof v === "number" && Number.isFinite(v) ? v.toLocaleString("zh-CN") : "—";
 export function CopilotQuotaDetails({ info }: { info: CopilotInfo }) {

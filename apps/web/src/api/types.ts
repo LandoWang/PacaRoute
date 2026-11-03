@@ -10,32 +10,52 @@ export type ClientQuota = {
   input_tokens?: number;
   cost_usd?: string;
 };
-export type Agent = "codex" | "claude-code" | "pacaroute";
+// Native Agent protocol (pool members, source capabilities, local Agent configs).
+export type ProtocolAgent = "codex" | "claude-code";
+// What a Client may be granted: a native protocol or downstream PacaRoute.
+export type Grant = ProtocolAgent | "pacaroute";
+// Literal sets accepted by Config.Validate in internal/pacaroute/config.go.
+export type AccountKind =
+  | "github"
+  | "azure"
+  | "openai"
+  | "anthropic"
+  | "api-key"
+  | "pacaroute";
+export type LoginMode = "device" | "oauth-app" | "azure-cli";
+export type SourceKind =
+  | "copilot"
+  | "azure-openai"
+  | "openai"
+  | "anthropic"
+  | "pacaroute";
+export type SourceAuthMode = "api-key" | "azure-cli";
+export type ProxyMode = "custom" | "direct" | "system";
 export type Account = {
   id: string;
   name: string;
-  kind: string;
+  kind: AccountKind;
   endpoint?: string;
   oauth_client_id?: string;
-  login_mode?: string;
+  login_mode?: LoginMode | "";
 };
 export type Source = {
   prices?: Record<string, ModelPrice>;
   id: string;
   name: string;
-  kind: string;
-  account_id: string;
+  kind: SourceKind;
+  account_id?: string;
   endpoint: string;
-  auth_mode: string;
+  auth_mode: SourceAuthMode;
   subscription_id?: string;
   resource_id?: string;
   deployments: string[];
-  agent_models?: Partial<Record<Agent, string[]>>;
+  agent_models?: Partial<Record<ProtocolAgent, string[]>>;
 };
 export type Proxy = {
   id: string;
   name: string;
-  mode: string;
+  mode: ProxyMode;
   address?: string;
 };
 export type Member = {
@@ -49,14 +69,14 @@ export type Pool = {
   multi_model?: boolean;
   id: string;
   name: string;
-  agent: Agent;
+  agent: ProtocolAgent;
   model: string;
   failover: boolean;
   members: Member[];
 };
 export type Route = {
   id: string;
-  agent: Agent;
+  agent: Grant;
   match_model: string;
   source_id: string;
   model: string;
@@ -65,7 +85,9 @@ export type Client = {
   quota?: ClientQuota;
   local?: boolean;
   legacy_direct?: boolean;
-  enabled_agents?: Agent[];
+  // Omitted or null (legacy) means the default Codex + Claude Code grants;
+  // an empty list grants nothing. Keep the distinction when editing.
+  enabled_agents?: Grant[] | null;
   id: string;
   name: string;
   disabled: boolean;
@@ -73,7 +95,7 @@ export type Client = {
   routes: Route[];
 };
 export type Config = {
-  revision: string;
+  revision?: string;
   accounts: Account[];
   sources: Source[];
   pools: Pool[];
@@ -163,4 +185,88 @@ export type ModelDiscovery = {
   models: Model[];
   resource_id?: string;
   subscription_id?: string;
+};
+
+// Response bodies of management endpoints used by the UI.
+export type ClientKeyResponse = { api_key: string; available?: boolean };
+export type DeviceLoginStart = {
+  done?: boolean;
+  job_id: string;
+  verification_uri: string;
+  user_code: string;
+  expires_in: number;
+};
+export type LoginJob = { done: boolean; error?: string };
+export type ModelCatalog = { models: Model[] };
+export type ClientQuotaState = {
+  window_seconds: number;
+  requests: number;
+  input_tokens: number;
+  cost_usd: string;
+  pending: number;
+  unpriced: number;
+  missing_usage: number;
+  blocked?: string;
+  limits?: ClientQuota;
+};
+export type CopilotQuota = {
+  copilot_plan?: string;
+  quota_reset_date?: string;
+  quota_snapshots?: Record<
+    string,
+    {
+      unlimited?: boolean;
+      percent_remaining?: number;
+      remaining?: number;
+      quota_remaining?: number;
+      entitlement?: number;
+      token_based_billing?: boolean;
+    }
+  >;
+};
+export type CopilotInfo = {
+  quota?: CopilotQuota;
+  quota_error?: string;
+  login?: string;
+};
+export type AzureSubscriptions = {
+  subscriptions: { id: string; name: string; is_default?: boolean }[];
+};
+export type AzureResource = { id: string; name: string; endpoint: string };
+export type AzureDeployments = { models: { id: string }[] };
+export type LocalBackups = {
+  backups: {
+    id: string;
+    created_at: string;
+    missing_file: boolean;
+    valid: boolean;
+  }[];
+};
+export type RestorePlan = {
+  path: string;
+  fingerprint: string;
+  changes: string[];
+  backup_path?: string;
+};
+export type ImportKind =
+  | "accounts"
+  | "sources"
+  | "pools"
+  | "proxies"
+  | "clients";
+export type ImportPlan = {
+  mode: "add" | "replace";
+  revision: string;
+  namespace: string;
+  fingerprint: string;
+  added: Record<ImportKind, number>;
+  removed: Record<ImportKind, number>;
+  changes: {
+    kind: ImportKind;
+    from_id: string;
+    to_id: string;
+    from_name: string;
+    to_name: string;
+  }[];
+  issues: { code: string; id?: string; name?: string }[];
 };

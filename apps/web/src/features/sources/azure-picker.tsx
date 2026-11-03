@@ -1,12 +1,18 @@
 import { useEffect, useState, useRef } from "react";
 import { api } from "../../api/transport";
-import { type Account } from "../../api/types";
+import {
+  type Account,
+  type AzureDeployments,
+  type AzureResource,
+  type AzureSubscriptions,
+} from "../../api/types";
 import { useApp, useLoad, useDraftBase } from "../../app/state";
 import { Loading } from "../../components/feedback";
 import { identifier } from "../../components/identity";
 import { Button, Editor, Field, Input, Select } from "../../components/ui";
 import { generatedID, suggestedName } from "../../domain/config";
 import { SourceEditor } from "./source-editor";
+import { errorMessage } from "../../domain/errors";
 export function AzurePicker({
   account,
   onClose,
@@ -16,16 +22,14 @@ export function AzurePicker({
 }) {
   const { save, show, close } = useApp(),
     config = useDraftBase();
-  const subs = useLoad<{
-    subscriptions: { id: string; name: string; is_default?: boolean }[];
-  }>(`accounts/${account.id}/subscriptions`);
+  const subs = useLoad<AzureSubscriptions>(
+    `accounts/${account.id}/subscriptions`,
+  );
   const [subscription, setSubscription] = useState(""),
     [subscriptionFilter, setSubscriptionFilter] = useState(""),
     [resourceFilter, setResourceFilter] = useState(""),
     [resource, setResource] = useState(""),
-    [resources, setResources] = useState<
-      { id: string; name: string; endpoint: string }[]
-    >([]),
+    [resources, setResources] = useState<AzureResource[]>([]),
     [models, setModels] = useState<string[]>([]),
     [selected, setSelected] = useState<string[]>([]),
     [id, setID] = useState(() => generatedID("azure")),
@@ -53,12 +57,12 @@ export function AzurePicker({
     if (!value) return;
     setLoading(true);
     try {
-      const v = await api<{ resources: typeof resources }>(
+      const v = await api<{ resources: AzureResource[] }>(
         `accounts/${account.id}/resources?subscription=${encodeURIComponent(value)}`,
       );
       setResources(v.resources);
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -73,13 +77,13 @@ export function AzurePicker({
     setName(suggestedName(r.name, config.sources));
     setLoading(true);
     try {
-      const v = await api<{ models: { id: string }[] }>(
+      const v = await api<AzureDeployments>(
         `accounts/${account.id}/deployments?subscription=${encodeURIComponent(subscription)}&resource=${encodeURIComponent(value)}`,
       );
       setModels(v.models.map((m) => m.id));
       setSelected(v.models.map((m) => m.id));
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }

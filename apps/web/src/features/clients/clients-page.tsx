@@ -1,3 +1,4 @@
+import { type ClientKeyResponse } from "../../api/types";
 import { Plus, Pencil, Trash2, Terminal } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../api/transport";
@@ -12,7 +13,7 @@ import {
   Input,
 } from "../../components/ui";
 import { enabledAgents } from "../../domain/routing";
-import { ClientQR } from "../peers/peer-connection";
+import { ClientQR } from "../peers/client-qr";
 import { AdvancedRoutesEditor } from "./advanced-routes-editor";
 import { ClientEditor } from "./client-editor";
 import { QuotaMeter } from "./quota";
@@ -177,7 +178,7 @@ export function Clients() {
                           saveLabel="生成新密钥"
                           onClose={close}
                           onSave={async () => {
-                            const v = await api<{ api_key: string }>(
+                            const v = await api<ClientKeyResponse>(
                               `clients/${c.id}/rotate`,
                               "POST",
                               {},

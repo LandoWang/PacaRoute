@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { api } from "../../api/transport";
-import { type Account } from "../../api/types";
+import {
+  type Account,
+  type AccountKind,
+  type LoginMode,
+} from "../../api/types";
 import { type Common } from "../../app/editor-props";
 import { BrandIcon } from "../../components/brand-icon";
 import { identifier } from "../../components/identity";
@@ -11,7 +15,7 @@ import {
   sharedAzure,
 } from "../../domain/accounts";
 import { generatedID, suggestedName, accounts } from "../../domain/config";
-import { PeerScan } from "../peers/peer-connection";
+import { PeerScan } from "../peers/peer-scan";
 import {
   normalizePeerEndpoint,
   type PeerConnection,
@@ -78,7 +82,15 @@ export function AccountEditor({
       }}
     >
       <div className="provider-choices" role="group" aria-label="账号类型">
-        {["github", "openai", "anthropic", "azure", "pacaroute"].map((kind) => (
+        {(
+          [
+            "github",
+            "openai",
+            "anthropic",
+            "azure",
+            "pacaroute",
+          ] as AccountKind[]
+        ).map((kind) => (
           <Button
             key={kind}
             type="button"
@@ -138,7 +150,11 @@ export function AccountEditor({
               disabled={created}
               value={v.login_mode || "device"}
               onChange={(e) =>
-                set({ ...v, login_mode: e.target.value, oauth_client_id: "" })
+                set({
+                  ...v,
+                  login_mode: e.target.value as LoginMode,
+                  oauth_client_id: "",
+                })
               }
             >
               {v.kind === "azure" ? (

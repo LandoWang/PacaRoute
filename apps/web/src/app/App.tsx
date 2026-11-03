@@ -1,12 +1,4 @@
 import {
-  LayoutDashboard,
-  Users,
-  Server,
-  Layers,
-  ChartNoAxesCombined,
-  Network,
-  Settings2,
-  TriangleAlert,
   RefreshCw,
   LogOut,
   Menu,
@@ -17,45 +9,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api, APIError } from "../api/transport";
 import { type Config, type Status } from "../api/types";
 import pacaRouteMark from "../assets/pacaroute-mark.png";
-import { CodexIcon } from "../components/brand-icon";
 import { Button, ErrorNote } from "../components/ui";
-import { Accounts } from "../features/accounts/accounts-page";
-import { Clients } from "../features/clients/clients-page";
-import { Errors } from "../features/errors/errors-page";
-import { Overview } from "../features/overview/overview-page";
-import { Pools } from "../features/pools/pools-page";
 import { RoutingAlert } from "../features/pools/routing-health";
-import { Proxies } from "../features/proxies/proxies-page";
-import { Settings } from "../features/settings/settings-page";
-import { Sources } from "../features/sources/sources-page";
-import { UsagePage } from "../features/usage/usage-page";
 import { saveConfig } from "./config-save";
-import { startPolling } from "./polling";
+import { startPolling, STATUS_POLL_INTERVAL_MS } from "./polling";
 import { Login } from "./login";
+import { initialPage, pages } from "./pages";
 import { StateContext } from "./state";
-const pages = [
-  ["overview", "导览", LayoutDashboard, "你的模型网络，一目了然。"],
-  ["accounts", "账号", Users, "连接身份，管理授权。"],
-  ["sources", "来源", Server, "组合账号、模型和网络。"],
-  ["pools", "来源池", Layers, "按比例分配会话，按需切换来源。"],
-  ["proxies", "代理", Network, "独立配置网络，按来源复用。"],
-  ["clients", "客户端", CodexIcon, "管理调用方，为 Agent 分配来源并生成接入脚本。"],
-  ["usage", "用量", ChartNoAxesCombined, "从整体到来源，查看每一次调用。"],
-  ["settings", "服务配置", Settings2, "管理 PacaRoute 的运行方式。"],
-  ["errors", "错误", TriangleAlert, "定位失败请求与来源问题。"],
-] as const;
-const initialPage = () => {
-  const id = location.hash.replace("#/", "").split("?")[0];
-  if (id === "routes") {
-    history.replaceState(
-      null,
-      "",
-      location.href.replace("#/routes", "#/clients"),
-    );
-    return "clients";
-  }
-  return pages.some((p) => p[0] === id) ? id : "overview";
-};
+import { errorMessage } from "../domain/errors";
 let bootstrap: Promise<void> | undefined;
 function browserLogin() {
   if (!bootstrap) {
@@ -134,7 +95,7 @@ export function App() {
             if (!signal.aborted && !(e instanceof APIError && e.status === 401))
               setError("服务连接中断，请从托盘检查服务状态。");
           }),
-      5000,
+      STATUS_POLL_INTERVAL_MS,
       false,
     );
   }, [auth]);
@@ -160,18 +121,7 @@ export function App() {
         }}
       />
     );
-  const current = pages.find((p) => p[0] === page) || pages[0];
-  const views: Record<string, ReactNode> = {
-    overview: <Overview />,
-    accounts: <Accounts />,
-    sources: <Sources />,
-    pools: <Pools />,
-    clients: <Clients />,
-    usage: <UsagePage />,
-    proxies: <Proxies />,
-    settings: <Settings />,
-    errors: <Errors />,
-  };
+  const current = pages.find((p) => p.id === page) || pages[0];
   return (
     <StateContext.Provider
       value={{
@@ -203,7 +153,7 @@ export function App() {
           </a>
           <span className="nav-caption">工作空间</span>
           <nav>
-            {pages.map(([id, label, Icon]) => (
+            {pages.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 aria-current={page === id ? "page" : undefined}
@@ -250,7 +200,7 @@ export function App() {
                   setAuth(false);
                   setDialog(undefined);
                 } catch (e) {
-                  setError((e as Error).message);
+                  setError(errorMessage(e));
                 }
               }}
             >
@@ -272,8 +222,8 @@ export function App() {
                 <Menu size={20} />
               </Button>
               <div>
-                <h1>{current[1]}</h1>
-                <p>{current[3]}</p>
+                <h1>{current.label}</h1>
+                <p>{current.description}</p>
               </div>
             </div>
             <div className="actions">
@@ -300,7 +250,7 @@ export function App() {
                     await reload();
                     setMessage("状态已刷新");
                   } catch (e) {
-                    setError((e as Error).message);
+                    setError(errorMessage(e));
                   } finally {
                     setRefreshing(false);
                   }
@@ -329,7 +279,7 @@ export function App() {
             </div>
           )}
           <div className="page-content" key={page}>
-            {views[page] || views.overview}
+            <current.view />
           </div>
           <footer className="page-footer">
             PacaRoute · 你的模型，你的路由。

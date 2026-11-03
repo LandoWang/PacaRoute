@@ -1,7 +1,11 @@
 import { Download, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/transport";
-import { type Client, type Agent } from "../../api/types";
+import {
+  type Client,
+  type ProtocolAgent,
+  type ClientKeyResponse,
+} from "../../api/types";
 import { useApp } from "../../app/state";
 import {
   Button,
@@ -19,13 +23,14 @@ import {
   type ScriptPlatform,
 } from "./connection-script";
 import { connectionModelRoutes } from "./model-routes";
+import { errorMessage } from "../../domain/errors";
 export function ConnectionScript({
   client,
   agent,
   onClose,
 }: {
   client: Client;
-  agent: Agent;
+  agent: ProtocolAgent;
   onClose: () => void;
 }) {
   const { status, config } = useApp();
@@ -41,7 +46,7 @@ export function ConnectionScript({
   useEffect(() => {
     active.current = true;
     if (!client.local) {
-      api<{ api_key: string }>(`clients/${client.id}/key`)
+      api<ClientKeyResponse>(`clients/${client.id}/key`)
         .then((v) => {
           if (active.current) setApiKey(v.api_key);
         })
@@ -86,7 +91,7 @@ export function ConnectionScript({
       );
     }
   } catch (e) {
-    error = (e as Error).message;
+    error = errorMessage(e);
   }
   const filename = `pacaroute-${client.id}-${agent}.${platform === "shell" ? "sh" : "ps1"}`;
   return (
@@ -173,7 +178,7 @@ export function ConnectionScript({
                     setImportKey("");
                   }
                 } catch (e) {
-                  if (active.current) setKeyError((e as Error).message);
+                  if (active.current) setKeyError(errorMessage(e));
                 }
               }}
             >

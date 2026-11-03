@@ -20,6 +20,7 @@ import { KeyEditor } from "./key-editor";
 import { ModelList } from "./model-list";
 import { PricingEditor } from "./pricing-editor";
 import { SourceEditor } from "./source-editor";
+import { errorMessage } from "../../domain/errors";
 export function Sources() {
   const { config, status, save, show, close, reload } = useApp();
   const [error, setError] = useState(""),
@@ -35,7 +36,7 @@ export function Sources() {
       });
       await reload();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setBusy("");
     }
@@ -115,7 +116,7 @@ export function Sources() {
                             },
                           });
                         } catch (e) {
-                          setError((e as Error).message);
+                          setError(errorMessage(e));
                         } finally {
                           setBusy("");
                         }

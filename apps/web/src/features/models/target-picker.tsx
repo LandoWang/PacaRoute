@@ -1,6 +1,7 @@
-import { type Config, type Agent } from "../../api/types";
+import { type Config, type Grant } from "../../api/types";
+import { isProtocolAgent } from "../../domain/routing";
 import { Select } from "../../components/ui";
-import { sources } from "../../domain/config";
+import { sources, poolTarget } from "../../domain/config";
 export function TargetPicker({
   config,
   agent,
@@ -9,7 +10,7 @@ export function TargetPicker({
   includePools = true,
 }: {
   config: Config;
-  agent?: Agent;
+  agent?: Grant;
   value: string;
   onChange: (v: string) => void;
   includePools?: boolean;
@@ -27,15 +28,15 @@ export function TargetPicker({
       </optgroup>
       {includePools &&
         config.pools.some(
-          (p) => !agent || agent === "pacaroute" || p.agent === agent,
+          (p) => !agent || !isProtocolAgent(agent) || p.agent === agent,
         ) && (
           <optgroup label="来源池">
             {config.pools
               .filter(
-                (p) => !agent || agent === "pacaroute" || p.agent === agent,
+                (p) => !agent || !isProtocolAgent(agent) || p.agent === agent,
               )
               .map((p) => (
-                <option key={p.id} value={"pool:" + p.id}>
+                <option key={p.id} value={poolTarget(p.id)}>
                   {p.name}
                 </option>
               ))}

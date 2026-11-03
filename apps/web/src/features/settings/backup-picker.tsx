@@ -1,34 +1,25 @@
 import { useState } from "react";
 import { api } from "../../api/transport";
-import { type Agent } from "../../api/types";
+import {
+  type ProtocolAgent,
+  type LocalBackups,
+  type RestorePlan,
+} from "../../api/types";
 import { useLoad } from "../../app/state";
 import { Loading } from "../../components/feedback";
 import { Editor, Field, Select } from "../../components/ui";
-type Plan = {
-  path: string;
-  fingerprint: string;
-  changes: string[];
-  backup_path?: string;
-};
 export function BackupPicker({
   agent,
   onClose,
   onApplied,
 }: {
-  agent: Agent;
+  agent: ProtocolAgent;
   onClose: () => void;
   onApplied: () => void;
 }) {
-  const list = useLoad<{
-    backups: {
-      id: string;
-      created_at: string;
-      missing_file: boolean;
-      valid: boolean;
-    }[];
-  }>("local/backups?agent=" + agent);
+  const list = useLoad<LocalBackups>("local/backups?agent=" + agent);
   const [selected, setSelected] = useState(""),
-    [plan, setPlan] = useState<Plan>();
+    [plan, setPlan] = useState<RestorePlan>();
   return (
     <Editor
       title="恢复 Agent 配置"
@@ -38,7 +29,7 @@ export function BackupPicker({
         if (!selected) throw Error("请选择备份");
         if (!plan) {
           setPlan(
-            await api<Plan>("local/restore", "POST", {
+            await api<RestorePlan>("local/restore", "POST", {
               agent,
               backup: selected,
             }),

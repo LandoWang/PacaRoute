@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { api } from "../../api/transport";
-import { type Client, type Agent } from "../../api/types";
+import {
+  type Client,
+  type Grant,
+  type ClientKeyResponse,
+} from "../../api/types";
 import { useApp, useDraftBase } from "../../app/state";
 import { Identity } from "../../components/identity";
 import { Editor, Field } from "../../components/ui";
@@ -42,7 +46,7 @@ export function ClientEditor({
           });
           onClose();
         } else {
-          const result = await api<{ api_key: string }>("clients", "POST", v);
+          const result = await api<ClientKeyResponse>("clients", "POST", v);
           onKey(result.api_key, v.id);
         }
       }}
@@ -55,7 +59,7 @@ export function ClientEditor({
         onName={(name) => set({ ...v, name })}
       />
       <Field label="启用的 Agent">
-        {(["codex", "claude-code", "pacaroute"] as Agent[]).map((agent) => (
+        {(["codex", "claude-code", "pacaroute"] as Grant[]).map((agent) => (
           <label className="switch-row" key={agent}>
             <span>{agentNames[agent]}</span>
             <input

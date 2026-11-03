@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { type Client, type Route, type Agent } from "../../api/types";
+import { type Client, type Route, type Grant } from "../../api/types";
 import { type Common } from "../../app/editor-props";
 import {
   Button,
@@ -110,7 +110,7 @@ export function AdvancedRoutesEditor({
               <Select
                 value={r.agent}
                 onChange={(e) =>
-                  update(i, routeAgent(r, e.target.value as Agent, config))
+                  update(i, routeAgent(r, e.target.value as Grant, config))
                 }
               >
                 <option value="codex">Codex</option>

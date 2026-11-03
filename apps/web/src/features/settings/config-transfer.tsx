@@ -1,3 +1,4 @@
+import { type ImportKind, type ImportPlan } from "../../api/types";
 import { Download, Upload } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../api/transport";
@@ -11,30 +12,18 @@ import {
   Panel,
   Select,
 } from "../../components/ui";
-const labels = {
+import { errorMessage } from "../../domain/errors";
+const labels: Record<ImportKind, string> = {
   accounts: "账号",
   sources: "来源",
   pools: "来源池",
   proxies: "代理",
   clients: "客户端",
 };
-type Counts = Record<keyof typeof labels, number>;
-export type ImportPlan = {
-  mode: "add" | "replace";
-  revision: string;
-  namespace: string;
-  fingerprint: string;
-  added: Counts;
-  removed: Counts;
-  changes: {
-    kind: keyof Counts;
-    from_id: string;
-    to_id: string;
-    from_name: string;
-    to_name: string;
-  }[];
-  issues: { code: string; id?: string; name?: string }[];
-};
+// Matches the server's 24 MiB bundle limit (configBundleLimit in
+// config_transfer.go). The import request may be up to 32 MiB only to leave
+// room for its JSON envelope around the bundle.
+const MAX_IMPORT_FILE_BYTES = 24 * 1024 * 1024;
 const issueLabels: Record<string, string> = {
   account_credentials_required: "需要重新登录或填写账号 Key",
   source_key_required: "需要填写资源 Key，或使用账号 Key",
@@ -50,7 +39,7 @@ export function ImportSummary({ plan }: { plan: ImportPlan }) {
   return (
     <div className="transfer-preview">
       <div className="transfer-counts">
-        {(Object.keys(labels) as (keyof Counts)[]).map((kind) => (
+        {(Object.keys(labels) as ImportKind[]).map((kind) => (
           <div key={kind}>
             <span>{labels[kind]}</span>
             <strong>{plan.added[kind]}</strong>
@@ -135,7 +124,7 @@ export function ConfigTransfer() {
                   "已导出配置，不含账号凭据、客户端密钥、用量或错误记录。",
                 );
               } catch (e) {
-                setError((e as Error).message);
+                setError(errorMessage(e));
               } finally {
                 setBusy(false);
               }
@@ -244,7 +233,7 @@ function ImportConfig({ onClose }: { onClose: () => void }) {
                 setFilename(file?.name || "");
                 setFileError("");
                 if (!file) return;
-                if (file.size > 24 * 1024 * 1024) {
+                if (file.size > MAX_IMPORT_FILE_BYTES) {
                   setFileError("配置文件不能超过 24 MiB");
                   return;
                 }

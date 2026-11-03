@@ -1,14 +1,15 @@
 import { Terminal } from "lucide-react";
-import { useState, type SetStateAction } from "react";
-import { type Client, type Agent } from "../../api/types";
+import { useState } from "react";
+import { type Client, type Grant } from "../../api/types";
+import { useEntityDraft } from "../../app/entity-draft";
 import { useApp } from "../../app/state";
 import { Button, Panel, Field, Select, ErrorNote } from "../../components/ui";
-import { sourceName, sources } from "../../domain/config";
+import { sourceName, sources, targetPool } from "../../domain/config";
 import { agentNames } from "../../domain/routing";
 import { ModelInput } from "../models/model-input";
 import { ModelMultiSelect } from "../models/model-multiselect";
 import { TargetPicker } from "../models/target-picker";
-import { ClientQR } from "../peers/peer-connection";
+import { ClientQR } from "../peers/client-qr";
 import { BackupPicker } from "../settings/backup-picker";
 import { ConnectionScript } from "./connection-script-dialog";
 import {
@@ -16,31 +17,31 @@ import {
   selectedModelRoutes,
   type ModelSelection,
 } from "./model-routes";
-import { reconcileRouteDraft, routeDraft } from "./route-draft";
-export function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
+import { errorMessage } from "../../domain/errors";
+const emptySelection: ModelSelection = {
+  source: "",
+  models: [],
+  defaultModel: "",
+  fixed: false,
+};
+export function RouteCard({ client, agent }: { client: Client; agent: Grant }) {
   const { config, status, save, show, close } = useApp();
   const existing = client.routes.filter((r) => r.agent === agent);
   const kind = (id: string) =>
     sources(config).find((s) => s.id === id)?.kind || "";
   const initial = readModelSelection(existing, kind(existing[0]?.source_id));
-  const [stored, setDraft] = useState(() => routeDraft(existing, initial));
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const { draft, conflict } = reconcileRouteDraft(
-    stored,
+  const draft = useEntityDraft<ModelSelection>(
     existing,
-    initial,
+    () => initial || emptySelection,
     busy,
   );
-  if (draft !== stored) setDraft(draft);
-  const selection = draft.selection;
-  const setSelection = (next: SetStateAction<ModelSelection>) =>
-    setDraft((d) => ({
-      ...d,
-      selection: typeof next === "function" ? next(d.selection) : next,
-    }));
+  const selection = draft.value,
+    setSelection = draft.set,
+    conflict = draft.conflict;
   const complex = initial === null;
-  const pool = config.pools.find((p) => "pool:" + p.id === selection.source);
+  const pool = targetPool(config, selection.source);
   function selectModels(models: string[]) {
     setSelection((v) => ({
       ...v,
@@ -82,9 +83,9 @@ export function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
             : c,
         ),
       });
-      setDraft((d) => ({ ...d, base: undefined }));
+      draft.markSaved();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -123,14 +124,12 @@ export function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
                   agent={agent}
                   value={selection.source}
                   onChange={(source) => {
-                    const targetPool = config.pools.find(
-                      (p) => "pool:" + p.id === source,
-                    );
+                    const picked = targetPool(config, source);
                     setSelection({
                       source,
-                      models: targetPool ? [targetPool.model] : [],
-                      defaultModel: targetPool?.model || "",
-                      fixed: !!targetPool && !targetPool.multi_model,
+                      models: picked ? [picked.model] : [],
+                      defaultModel: picked?.model || "",
+                      fixed: !!picked && !picked.multi_model,
                     });
                   }}
                 />
@@ -214,7 +213,7 @@ export function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
               <Button
                 variant="ghost"
                 onClick={() => {
-                  setDraft(routeDraft(existing, initial));
+                  draft.reset();
                   setError("");
                 }}
               >

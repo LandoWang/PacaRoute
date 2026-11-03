@@ -1,9 +1,14 @@
 import { ExternalLink, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { api } from "../../api/transport";
-import { type Account } from "../../api/types";
+import {
+  type Account,
+  type DeviceLoginStart,
+  type LoginJob,
+} from "../../api/types";
 import { useApp } from "../../app/state";
 import { Button, Modal, ErrorNote } from "../../components/ui";
+import { errorMessage } from "../../domain/errors";
 export function DeviceLogin({
   account,
   onClose,
@@ -12,19 +17,10 @@ export function DeviceLogin({
   onClose: () => void;
 }) {
   const { reload } = useApp();
-  const [device, setDevice] = useState<{
-      verification_uri: string;
-      user_code: string;
-    }>(),
+  const [device, setDevice] = useState<DeviceLoginStart>(),
     [done, setDone] = useState(false),
     [error, setError] = useState("");
-  const job = useRef<Promise<{
-    done?: boolean;
-    job_id: string;
-    verification_uri: string;
-    user_code: string;
-    expires_in: number;
-  }> | null>(null);
+  const job = useRef<Promise<DeviceLoginStart> | null>(null);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -46,9 +42,7 @@ export function DeviceLogin({
         const until = Date.now() + d.expires_in * 1000;
         const poll = async () => {
           try {
-            const result = await api<{ done: boolean; error?: string }>(
-              "logins/" + d.job_id,
-            );
+            const result = await api<LoginJob>("logins/" + d.job_id);
             if (!active) return;
             if (result.done) {
               if (result.error) throw Error(result.error);
@@ -59,7 +53,7 @@ export function DeviceLogin({
             if (Date.now() > until) throw Error("验证码已过期，请重新登录");
             timer = setTimeout(poll, 3000);
           } catch (e) {
-            if (active) setError((e as Error).message);
+            if (active) setError(errorMessage(e));
           }
         };
         void poll();

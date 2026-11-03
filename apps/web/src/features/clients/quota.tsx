@@ -1,7 +1,12 @@
-import { type Client, type ClientQuota } from "../../api/types";
+import {
+  type Client,
+  type ClientQuota,
+  type ClientQuotaState,
+} from "../../api/types";
 import { useLoad } from "../../app/state";
 import { Field, Input, Select, ErrorNote } from "../../components/ui";
 import { format } from "../../domain/format";
+import { POLL_INTERVAL_MS } from "../../app/polling";
 export function QuotaFields({
   value,
   onChange,
@@ -88,19 +93,11 @@ export function QuotaFields({
     </details>
   );
 }
-type QuotaState = {
-  window_seconds: number;
-  requests: number;
-  input_tokens: number;
-  cost_usd: string;
-  pending: number;
-  unpriced: number;
-  missing_usage: number;
-  blocked?: string;
-  limits?: ClientQuota;
-};
 export function QuotaMeter({ client }: { client: Client }) {
-  const load = useLoad<QuotaState>(`clients/${client.id}/quota`, 15000),
+  const load = useLoad<ClientQuotaState>(
+      `clients/${client.id}/quota`,
+      POLL_INTERVAL_MS,
+    ),
     v = load.data;
   if (load.error) return <ErrorNote>配额统计暂时不可用</ErrorNote>;
   if (!v) return null;

@@ -3,9 +3,10 @@ import { useApp, useLoad } from "../../app/state";
 import { Loading } from "../../components/feedback";
 import { Badge, Panel, Empty } from "../../components/ui";
 import { sourceName } from "../../domain/config";
+import { POLL_INTERVAL_MS } from "../../app/polling";
 export function Errors() {
   const { config } = useApp();
-  const result = useLoad<Activity[]>("errors", 15000);
+  const result = useLoad<Activity[]>("errors", POLL_INTERVAL_MS);
   return (
     <>
       <Loading loading={result.loading} error={result.error} />

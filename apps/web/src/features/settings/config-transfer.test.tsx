@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect } from "vitest";
-import { type Config } from "../../api/types";
+import { type Config, type ImportPlan } from "../../api/types";
 import { accounts, sources } from "../../domain/config";
-import { ImportSummary, type ImportPlan } from "./config-transfer";
+import { ImportSummary } from "./config-transfer";
 describe("configuration transfer preview", () => {
   const plan: ImportPlan = {
     mode: "replace",
