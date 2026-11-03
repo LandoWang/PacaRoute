@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // A downstream disconnect must not penalize the source selected by the pool.
@@ -129,6 +130,53 @@ func (s *sseReader) next() ([]byte, []byte, error) {
 		}
 		if len(trim) == 0 {
 			return frame.Bytes(), data.Bytes(), nil
+		}
+	}
+}
+
+func relaySSE(w io.Writer, r io.Reader, u *Usage, protocol string) error {
+	rd := newSSE(r)
+	last := "none"
+	var pending error
+	var errorDeadline *time.Timer
+	defer func() {
+		if errorDeadline != nil {
+			errorDeadline.Stop()
+		}
+	}()
+	for {
+		frame, data, e := rd.next()
+		if e != nil {
+			if pending != nil {
+				return pending
+			}
+			return streamReadError(e, "response.completed or message_stop", last)
+		}
+		u.observe(data)
+		m := obj(data)
+		typ := rawString(m["type"])
+		if typ != "" {
+			last = typ
+		}
+		if e = writeStreamFrame(w, frame); e != nil {
+			return e
+		}
+		// The client may close as soon as the terminal frame is delivered. Do not
+		// wait for transport EOF and misclassify its cancellation as a failed turn.
+		if typ == "response.completed" || typ == "response.incomplete" || typ == "message_stop" {
+			return nil
+		}
+		if typ == "response.failed" || (typ == "error" && protocol == "messages") {
+			return streamEventError(m, true)
+		}
+		if typ == "error" {
+			pending = streamEventError(m, false)
+			// Azure can emit error followed by response.failed. Codex ignores the
+			// first event, so preserve the actual terminal failure when present.
+			// Bound the wait for providers that leave the errored connection open.
+			if closer, ok := r.(io.Closer); ok && errorDeadline == nil {
+				errorDeadline = time.AfterFunc(time.Second, func() { _ = closer.Close() })
+			}
 		}
 	}
 }
