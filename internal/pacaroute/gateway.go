@@ -288,6 +288,13 @@ func (s *Server) attempt(x *gatewayExchange, i int, t Target) bool {
 	s.trace(activity.ID, fmt.Sprintf("upstream-%d-req.json", i), wire)
 	res, e := s.send(x, t, wire, protocol, upstreamPath(t, agent, protocol, operation))
 	if e != nil || res == nil {
+		if x.r.Context().Err() != nil {
+			// The Client left before any upstream response. This is not a
+			// source failure: do not cool the member or try another target.
+			activity.Status = 499
+			activity.Error = "client disconnected before upstream response"
+			return false
+		}
 		activity.Status = 502
 		activity.Error = "upstream connection or authentication failed"
 		if e != nil && !strings.Contains(e.Error(), "https://") {

@@ -96,7 +96,7 @@ func (r *Router) Bind(t Target) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now().UTC()
-	if old, ok := r.bindings[t.Affinity]; ok && old.Member == t.Member && old.Source == t.Source.ID && old.Model == t.Model && now.Sub(old.At) < 24*time.Hour {
+	if old, ok := r.bindings[t.Affinity]; ok && old.Member == t.Member && old.Source == t.Source.ID && old.Model == t.Model && old.Endpoint == endpointIdentity(t.Source) && now.Sub(old.At) < 24*time.Hour {
 		return nil
 	}
 	value := binding{t.Affinity, t.Member, t.Source.ID, t.Model, endpointIdentity(t.Source), now}
