@@ -19,6 +19,12 @@ export function connectionScript(
     );
   if (client.disabled || !enabledAgents(client).includes(agent))
     throw Error("这个客户端尚未启用此 Agent。");
+  // The ID is embedded in script comments; do not rely on server validation.
+  if (!/^[a-z][a-z0-9-]{0,62}$/.test(client.id))
+    throw Error("客户端 ID 无效。");
+  // new URL() strips tab/CR/LF, but the raw address is embedded in the script.
+  if (/[\x00-\x1f\x7f]/.test(address))
+    throw Error("请输入服务的 HTTP(S) 地址，不要包含密钥或查询参数。");
   const url = new URL(address);
   if (
     !["http:", "https:"].includes(url.protocol) ||

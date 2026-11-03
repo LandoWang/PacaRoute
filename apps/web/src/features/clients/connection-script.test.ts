@@ -177,6 +177,49 @@ describe("客户端 connection scripts", () => {
       }
     },
   );
+  it("rejects control characters in the address and invalid Client IDs", () => {
+    for (const platform of ["shell", "powershell"] as const) {
+      for (const url of [
+        "https://host/a\nrm -rf x",
+        "https://host/a\rb",
+        "https://host/a\tb",
+        "https://host/a\x00b",
+        "https://host/a\x1bb",
+        "https://host/a\x7fb",
+      ])
+        expect(() =>
+          connectionScript(client, "codex", url, "coding", platform, "k"),
+        ).toThrow();
+      for (const id of [
+        "alice\ntouch never",
+        "Alice",
+        "1alice",
+        "alice;x",
+        "",
+        "a" + "b".repeat(63),
+      ])
+        expect(() =>
+          connectionScript(
+            { ...client, id },
+            "codex",
+            "https://host",
+            "coding",
+            platform,
+            "k",
+          ),
+        ).toThrow();
+      expect(
+        connectionScript(
+          { ...client, id: "a" + "b-9".repeat(20) },
+          "codex",
+          "https://host",
+          "coding",
+          platform,
+          "k",
+        ),
+      ).toContain("--apply");
+    }
+  });
   it("keeps router onboarding separate from native Agent scripts", () => {
     expect(() => connectionScript({ ...client, enabled_agents: ["pacaroute"] }, "pacaroute", "https://host", "coding", "shell", "synthetic-key")).toThrow("接入二维码");
   });
