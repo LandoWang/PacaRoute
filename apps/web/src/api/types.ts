@@ -14,22 +14,39 @@ export type ClientQuota = {
 export type ProtocolAgent = "codex" | "claude-code";
 // What a Client may be granted: a native protocol or downstream PacaRoute.
 export type Grant = ProtocolAgent | "pacaroute";
+// Literal sets accepted by Config.Validate in internal/pacaroute/config.go.
+export type AccountKind =
+  | "github"
+  | "azure"
+  | "openai"
+  | "anthropic"
+  | "api-key"
+  | "pacaroute";
+export type LoginMode = "device" | "oauth-app" | "azure-cli";
+export type SourceKind =
+  | "copilot"
+  | "azure-openai"
+  | "openai"
+  | "anthropic"
+  | "pacaroute";
+export type SourceAuthMode = "api-key" | "azure-cli";
+export type ProxyMode = "custom" | "direct" | "system";
 export type Account = {
   id: string;
   name: string;
-  kind: string;
+  kind: AccountKind;
   endpoint?: string;
   oauth_client_id?: string;
-  login_mode?: string;
+  login_mode?: LoginMode | "";
 };
 export type Source = {
   prices?: Record<string, ModelPrice>;
   id: string;
   name: string;
-  kind: string;
-  account_id: string;
+  kind: SourceKind;
+  account_id?: string;
   endpoint: string;
-  auth_mode: string;
+  auth_mode: SourceAuthMode;
   subscription_id?: string;
   resource_id?: string;
   deployments: string[];
@@ -38,7 +55,7 @@ export type Source = {
 export type Proxy = {
   id: string;
   name: string;
-  mode: string;
+  mode: ProxyMode;
   address?: string;
 };
 export type Member = {
@@ -68,7 +85,9 @@ export type Client = {
   quota?: ClientQuota;
   local?: boolean;
   legacy_direct?: boolean;
-  enabled_agents?: Grant[];
+  // Omitted or null (legacy) means the default Codex + Claude Code grants;
+  // an empty list grants nothing. Keep the distinction when editing.
+  enabled_agents?: Grant[] | null;
   id: string;
   name: string;
   disabled: boolean;
@@ -76,7 +95,7 @@ export type Client = {
   routes: Route[];
 };
 export type Config = {
-  revision: string;
+  revision?: string;
   accounts: Account[];
   sources: Source[];
   pools: Pool[];

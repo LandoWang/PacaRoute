@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type Proxy } from "../../api/types";
+import { type Proxy, type ProxyMode } from "../../api/types";
 import { type Common } from "../../app/editor-props";
 import { Identity } from "../../components/identity";
 import { Input, Select, Field, Editor } from "../../components/ui";
@@ -45,7 +45,7 @@ export function ProxyEditor({
       <Field label="模式">
         <Select
           value={v.mode}
-          onChange={(e) => set({ ...v, mode: e.target.value })}
+          onChange={(e) => set({ ...v, mode: e.target.value as ProxyMode })}
         >
           <option value="custom">自定义代理</option>
           <option value="direct">直连</option>

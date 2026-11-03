@@ -1,7 +1,11 @@
 import { RefreshCw } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../../api/transport";
-import { type ModelDiscovery, type Source } from "../../api/types";
+import {
+  type ModelDiscovery,
+  type Source,
+  type SourceAuthMode,
+} from "../../api/types";
 import { type Common } from "../../app/editor-props";
 import { BrandIcon } from "../../components/brand-icon";
 import { identifier } from "../../components/identity";
@@ -322,7 +326,9 @@ export function SourceEditor({
             <Field label="认证方式">
               <Select
                 value={v.auth_mode}
-                onChange={(e) => set({ ...v, auth_mode: e.target.value })}
+                onChange={(e) =>
+                  set({ ...v, auth_mode: e.target.value as SourceAuthMode })
+                }
               >
                 <option value="azure-cli">Azure CLI 登录</option>
                 <option value="api-key">API Key</option>

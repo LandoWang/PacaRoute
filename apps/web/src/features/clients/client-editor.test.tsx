@@ -48,3 +48,27 @@ describe("client editor after a revision conflict", () => {
     expect(save.mock.calls.map(([next]) => next.revision)).toEqual(["1", "1"]);
   });
 });
+
+describe("client editor serialization", () => {
+  it("keeps a legacy client's omitted enabled_agents omitted when only the name changes", async () => {
+    const save = vi.fn<AppState["save"]>().mockResolvedValue(undefined);
+    render(
+      <StateContext.Provider
+        value={{ config: config("1", "Alice"), save } as unknown as AppState}
+      >
+        <ClientEditor
+          original={{ id: "alice", name: "Alice", disabled: false, routes: [] }}
+          onClose={() => {}}
+          onKey={() => {}}
+        />
+      </StateContext.Provider>,
+    );
+    fireEvent.change(screen.getByLabelText("名称"), {
+      target: { value: "Alice renamed" },
+    });
+    await act(async () => fireEvent.submit(document.querySelector("form")!));
+    const saved = save.mock.calls[0][0].clients[0];
+    expect(saved.name).toBe("Alice renamed");
+    expect("enabled_agents" in saved).toBe(false);
+  });
+});
