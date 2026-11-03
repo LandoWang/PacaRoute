@@ -22,7 +22,7 @@ type Server struct {
 	AllowLocal      bool
 	LocalManagement bool
 	Port            int
-	Desktop         *desktopControl
+	Desktop         serviceControl
 	tickets         browserTickets
 	AdminKey        string
 	PublicURL       string

@@ -33,6 +33,11 @@ type desktopControl struct {
 	lastError  string
 }
 
+var _ serviceControl = (*desktopControl)(nil)
+
+func (d *desktopControl) hasNativeTray() bool  { return d.nativeTray }
+func (d *desktopControl) startupEnabled() bool { return startupEnabled() }
+
 func (d *desktopControl) portValue() int      { d.mu.Lock(); defer d.mu.Unlock(); return d.port }
 func (d *desktopControl) managementPort() int { d.mu.Lock(); defer d.mu.Unlock(); return d.adminPort }
 func (d *desktopControl) state() (bool, int, string) {

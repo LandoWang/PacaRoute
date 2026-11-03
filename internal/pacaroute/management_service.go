@@ -6,6 +6,18 @@ import (
 	"strconv"
 )
 
+// serviceControl is the listener control needed by management and local setup.
+type serviceControl interface {
+	status() map[string]any
+	start() error
+	stop() error
+	changePort(port int) (string, error)
+	portValue() int
+	startup(enabled bool) error
+	hasNativeTray() bool
+	startupEnabled() bool
+}
+
 func (s *Server) servicePort() int {
 	if s.Desktop != nil {
 		return s.Desktop.portValue()

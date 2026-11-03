@@ -144,7 +144,7 @@ func (s *Server) statusAPI(w http.ResponseWriter, r *http.Request) {
 	if s.Desktop != nil {
 		service = s.Desktop.status()
 	}
-	writeJSON(w, 200, map[string]any{"name": "PacaRoute", "version": Version, "uptime_seconds": int(time.Since(s.started).Seconds()), "config_error": s.Store.Error(), "routing": s.Router.Health(s.Store.Snapshot()), "local_access": s.AllowLocal, "local_management": s.localAllowed(r), "desktop": s.Desktop != nil && s.Desktop.nativeTray && s.localAllowed(r), "service_control": s.Desktop != nil, "service": service, "port": s.servicePort(), "api_version": 1, "gateway_url": s.gatewayOrigin(r), "startup": s.Desktop != nil && s.Desktop.nativeTray && startupEnabled()})
+	writeJSON(w, 200, map[string]any{"name": "PacaRoute", "version": Version, "uptime_seconds": int(time.Since(s.started).Seconds()), "config_error": s.Store.Error(), "routing": s.Router.Health(s.Store.Snapshot()), "local_access": s.AllowLocal, "local_management": s.localAllowed(r), "desktop": s.Desktop != nil && s.Desktop.hasNativeTray() && s.localAllowed(r), "service_control": s.Desktop != nil, "service": service, "port": s.servicePort(), "api_version": 1, "gateway_url": s.gatewayOrigin(r), "startup": s.Desktop != nil && s.Desktop.hasNativeTray() && s.Desktop.startupEnabled()})
 }
 
 // saveConfig commits a full graph edit under its expected revision.
