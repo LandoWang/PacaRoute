@@ -81,12 +81,12 @@ func serve(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, port in
 			return fail(err)
 		}
 		defer control.close()
-		if a.get("no-serve", "") == "true" {
-			err = control.stop()
-		} else {
-			err = control.start()
-		}
 		// A gateway bind failure must not prevent repairing configuration in management.
+		if a.get("no-serve", "") == "true" {
+			_ = control.stop()
+		} else {
+			_ = control.start()
+		}
 		emit(map[string]any{"ok": true, "event": "ready", "name": "PacaRoute", "version": Version, "address": fmt.Sprintf("127.0.0.1:%d", adminPort), "service": control.status()})
 		<-ctx.Done()
 		return 0

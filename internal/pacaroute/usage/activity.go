@@ -61,7 +61,6 @@ type ActivityStore struct {
 	buckets map[string]map[activityDimension]Totals
 	recent  []Activity
 	offsets map[string]int64
-	err     string
 }
 
 type activityDimension struct{ Source, Agent, Model string }
