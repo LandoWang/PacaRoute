@@ -1,6 +1,10 @@
 package pacaroute
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
+)
 
 // A translated non-streaming Messages response uses the same usage mapping as the
 // translated stream, so Messages observers (for example a downstream PacaRoute
@@ -11,9 +15,9 @@ func TestTranslatedMessagesJSONUsageCountsCacheOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u := Usage{}
-	u.observe(body)
-	if v := u.totalInput(true); v == nil || *v != 100 || u.Output == nil || *u.Output != 5 {
+	u := usage.Usage{}
+	u.Observe(body)
+	if v := u.TotalInput(true); v == nil || *v != 100 || u.Output == nil || *u.Output != 5 {
 		t.Fatalf("Messages observer of translated response saw usage %s", obj(body)["usage"])
 	}
 	for _, upstream := range []string{`{"status":"completed","output":[]}`, `{"status":"completed","output":[],"usage":null}`} {

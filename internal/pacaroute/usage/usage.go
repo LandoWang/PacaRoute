@@ -1,10 +1,10 @@
-package pacaroute
+package usage
 
 import "encoding/json"
 
 type Usage struct{ Input, Output, CacheRead, CacheWrite *int64 }
 
-func number(m map[string]json.RawMessage, k string) *int64 {
+func Number(m map[string]json.RawMessage, k string) *int64 {
 	b, ok := m[k]
 	if !ok || string(b) == "null" {
 		return nil
@@ -15,7 +15,7 @@ func number(m map[string]json.RawMessage, k string) *int64 {
 	}
 	return &v
 }
-func (u *Usage) observe(b []byte) { u.observeLevel(b, true) }
+func (u *Usage) Observe(b []byte) { u.observeLevel(b, true) }
 
 // Events carry usage at the top level or in one response/message envelope.
 // Do not recurse further: each level would re-parse the remaining frame.
@@ -39,13 +39,13 @@ func (u *Usage) observeLevel(b []byte, envelope bool) {
 	if json.Unmarshal(v, &values) != nil {
 		return
 	}
-	input := number(values, "input_tokens")
+	input := Number(values, "input_tokens")
 	if input == nil {
-		input = number(values, "prompt_tokens")
+		input = Number(values, "prompt_tokens")
 	}
-	output := number(values, "output_tokens")
+	output := Number(values, "output_tokens")
 	if output == nil {
-		output = number(values, "completion_tokens")
+		output = Number(values, "completion_tokens")
 	}
 	if input != nil {
 		u.Input = input
@@ -53,21 +53,21 @@ func (u *Usage) observeLevel(b []byte, envelope bool) {
 	if output != nil {
 		u.Output = output
 	}
-	if v := number(values, "cache_read_input_tokens"); v != nil {
+	if v := Number(values, "cache_read_input_tokens"); v != nil {
 		u.CacheRead = v
 	}
-	if v := number(values, "cache_creation_input_tokens"); v != nil {
+	if v := Number(values, "cache_creation_input_tokens"); v != nil {
 		u.CacheWrite = v
 	}
 	for _, k := range []string{"input_tokens_details", "prompt_tokens_details"} {
 		var d map[string]json.RawMessage
 		_ = json.Unmarshal(values[k], &d)
-		if v := number(d, "cached_tokens"); v != nil {
+		if v := Number(d, "cached_tokens"); v != nil {
 			u.CacheRead = v
 		}
 	}
 }
-func (u *Usage) totalInput(messages bool) *int64 {
+func (u *Usage) TotalInput(messages bool) *int64 {
 	if !messages || u.Input == nil {
 		return u.Input
 	}
@@ -80,8 +80,8 @@ func (u *Usage) totalInput(messages bool) *int64 {
 	}
 	return &total
 }
-func (u *Usage) responsesUsage() any {
-	input := u.totalInput(true)
+func (u *Usage) ResponsesUsage() any {
+	input := u.TotalInput(true)
 	if input == nil || u.Output == nil {
 		return nil
 	}

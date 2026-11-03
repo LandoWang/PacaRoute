@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -169,7 +171,7 @@ func TestSessionIdentityClaudeAndCodex(t *testing.T) {
 func TestNativeSSEUsageAndWireFidelity(t *testing.T) {
 	input := "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"usage\":{\"input_tokens\":10,\"output_tokens\":0}}}\n\nevent: future.event\ndata: {\"type\":\"future.event\",\"text\":\"羊驼\"}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":100,\"output_tokens\":23,\"input_tokens_details\":{\"cached_tokens\":70}}}}\n\n"
 	var out bytes.Buffer
-	u := Usage{}
+	u := usage.Usage{}
 	if e := relaySSE(&out, strings.NewReader(input), &u, "responses"); e != nil {
 		t.Fatal(e)
 	}
@@ -179,7 +181,7 @@ func TestNativeSSEUsageAndWireFidelity(t *testing.T) {
 	if u.Input == nil || *u.Input != 100 || u.Output == nil || *u.Output != 23 || u.CacheRead == nil || *u.CacheRead != 70 {
 		t.Fatalf("usage=%+v", u)
 	}
-	if relaySSE(io.Discard, strings.NewReader("data: {\"type\":\"response.created\"}\n\n"), &Usage{}, "responses") == nil {
+	if relaySSE(io.Discard, strings.NewReader("data: {\"type\":\"response.created\"}\n\n"), &usage.Usage{}, "responses") == nil {
 		t.Fatal("truncated stream treated as success")
 	}
 }
@@ -270,7 +272,7 @@ func TestClientAuthorizationRouteAndHotPause(t *testing.T) {
 		t.Fatal("pause did not block next request")
 	}
 	summary := s.Activity.Summary(time.Now().UTC().Truncate(time.Hour), time.Now().Add(time.Hour), "", "")
-	total := summary["total"].(Totals)
+	total := summary["total"].(usage.Totals)
 	if total.Requests != 1 || total.Input != 50 || total.Output != 9 {
 		t.Fatalf("summary=%+v", total)
 	}
@@ -447,7 +449,7 @@ data: {"type":"response.completed","response":{"usage":{"input_tokens":12,"outpu
 `
 	var out bytes.Buffer
 	tr := translation{from: "messages", to: "responses", model: "alias"}
-	if e := tr.streamResponses(&out, strings.NewReader(stream), &Usage{}); e != nil {
+	if e := tr.streamResponses(&out, strings.NewReader(stream), &usage.Usage{}); e != nil {
 		t.Fatal(e)
 	}
 	rd := newSSE(&out)
@@ -506,13 +508,13 @@ func TestRestoreBackupPreservesExactBytesAndRejectsTraversal(t *testing.T) {
 }
 
 func TestMessagesUsageIncludesCachedPromptOnce(t *testing.T) {
-	u := Usage{}
-	u.observe([]byte(`{"message":{"usage":{"input_tokens":10,"output_tokens":1,"cache_read_input_tokens":70,"cache_creation_input_tokens":5}}}`))
-	u.observe([]byte(`{"usage":{"output_tokens":12}}`))
-	if v := u.totalInput(true); v == nil || *v != 85 || *u.Output != 12 {
+	u := usage.Usage{}
+	u.Observe([]byte(`{"message":{"usage":{"input_tokens":10,"output_tokens":1,"cache_read_input_tokens":70,"cache_creation_input_tokens":5}}}`))
+	u.Observe([]byte(`{"usage":{"output_tokens":12}}`))
+	if v := u.TotalInput(true); v == nil || *v != 85 || *u.Output != 12 {
 		t.Fatal("cross-provider total omitted cache or double-counted snapshots")
 	}
-	if *u.totalInput(false) != 10 {
+	if *u.TotalInput(false) != 10 {
 		t.Fatal("Responses input was incorrectly inflated")
 	}
 }
@@ -635,9 +637,9 @@ func TestNonStreamingMessagesUsageNormalizesCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u := Usage{}
-	u.observe(body)
-	if total := number(obj(obj(body)["usage"]), "total_tokens"); total == nil || *total != 134 {
+	u := usage.Usage{}
+	u.Observe(body)
+	if total := usage.Number(obj(obj(body)["usage"]), "total_tokens"); total == nil || *total != 134 {
 		t.Fatalf("missing Responses total_tokens: %s", body)
 	}
 	if u.Input == nil || *u.Input != 130 || u.Output == nil || *u.Output != 4 || u.CacheRead == nil || *u.CacheRead != 100 {
@@ -703,7 +705,7 @@ func TestTerminalFrameDoesNotWaitForTransportEOF(t *testing.T) {
 		tail := &terminalReadFailure{}
 		wire := "data: " + frame + "\n\n"
 		var output bytes.Buffer
-		if err := relaySSE(&output, io.MultiReader(strings.NewReader(wire), tail), &Usage{}, "responses"); err != nil {
+		if err := relaySSE(&output, io.MultiReader(strings.NewReader(wire), tail), &usage.Usage{}, "responses"); err != nil {
 			t.Fatal("completed response counted as failure", err)
 		}
 		if tail.calls != 0 || output.String() != wire {

@@ -9,18 +9,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func tokenCount(v int64) *int64 { return &v }
 func TestPricingConfirmedUsageAndSnapshots(t *testing.T) {
 	p := domain.ModelPrice{Input: "2", Cached: "0.2", Output: "8", CacheWrite: "2.5"}
-	v := Activity{Input: tokenCount(1000), CacheRead: tokenCount(200), CacheWrite: tokenCount(100), Output: tokenCount(100)}
-	cost, reason := priceUsage(v, &p, false)
+	v := usage.Activity{Input: tokenCount(1000), CacheRead: tokenCount(200), CacheWrite: tokenCount(100), Output: tokenCount(100)}
+	cost, reason := usage.PriceUsage(v, &p, false)
 	if reason != "" || cost == nil || *cost != 2440 {
 		t.Fatal(cost, reason)
 	}
-	cost, reason = priceUsage(v, &p, true)
+	cost, reason = usage.PriceUsage(v, &p, true)
 	if reason != "" || cost == nil || *cost != 2490 {
 		t.Fatal(cost, reason)
 	}
@@ -30,14 +32,14 @@ func TestPricingConfirmedUsageAndSnapshots(t *testing.T) {
 		}
 	}
 	v.CacheRead = nil
-	if cost, reason = priceUsage(v, &p, false); cost != nil || reason != "missing_cache_usage" {
+	if cost, reason = usage.PriceUsage(v, &p, false); cost != nil || reason != "missing_cache_usage" {
 		t.Fatal("missing cache billed as zero")
 	}
 	v.Input = nil
-	if cost, reason = priceUsage(v, &p, false); cost != nil || reason != "missing_usage" {
+	if cost, reason = usage.PriceUsage(v, &p, false); cost != nil || reason != "missing_usage" {
 		t.Fatal("missing input billed as zero")
 	}
-	if cost, reason = priceUsage(v, nil, false); cost != nil || reason != "missing_price" {
+	if cost, reason = usage.PriceUsage(v, nil, false); cost != nil || reason != "missing_price" {
 		t.Fatal("unconfigured price billed as zero")
 	}
 }
@@ -54,7 +56,7 @@ func TestQuotaConcurrentAdmissionRestartAndIdempotentSettlement(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, e := q.Admit(Activity{ID: domain.NewID(), ClientID: "alice", Agent: "codex", Timestamp: now}, limit)
+			_, e := q.Admit(usage.Activity{ID: domain.NewID(), ClientID: "alice", Agent: "codex", Timestamp: now}, limit)
 			if e != nil {
 				t.Error(e)
 				return
@@ -71,7 +73,7 @@ func TestQuotaConcurrentAdmissionRestartAndIdempotentSettlement(t *testing.T) {
 		t.Fatal(e)
 	}
 	p := domain.ModelPrice{Input: "2", Cached: "0.2", Output: "8"}
-	v := Activity{ID: id, ClientID: "alice", Source: "actual-source", Model: "deployed", Input: tokenCount(1000), CacheRead: tokenCount(200), Output: tokenCount(100), Status: 200}
+	v := usage.Activity{ID: id, ClientID: "alice", Source: "actual-source", Model: "deployed", Input: tokenCount(1000), CacheRead: tokenCount(200), Output: tokenCount(100), Status: 200}
 	if e = q.Settle(v, &p, false); e != nil {
 		t.Fatal(e)
 	}

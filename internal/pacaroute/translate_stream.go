@@ -8,6 +8,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -23,7 +25,7 @@ func emitSSE(w io.Writer, event string, v any) error {
 }
 
 // Responses->Messages state machine opens each content block exactly once and closes it before message_stop.
-func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *Usage) error {
+func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *usage.Usage) error {
 	rd := newSSE(r)
 	last := "none"
 	id := "msg_" + strings.ReplaceAll(domain.NewID(), "-", "")
@@ -63,7 +65,7 @@ func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *Usage) error
 		if len(data) == 0 || bytes.Equal(data, []byte("[DONE]")) {
 			continue
 		}
-		u.observe(data)
+		u.Observe(data)
 		m := obj(data)
 		typ := rawString(m["type"])
 		if typ != "" {
@@ -113,8 +115,8 @@ func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *Usage) error
 			if typ == "response.incomplete" {
 				reason = "max_tokens"
 			}
-			usage := map[string]any{"input_tokens": u.Input, "output_tokens": u.Output}
-			e = emitSSE(w, "message_delta", map[string]any{"type": "message_delta", "delta": map[string]any{"stop_reason": reason, "stop_sequence": nil}, "usage": usage})
+			reported := map[string]any{"input_tokens": u.Input, "output_tokens": u.Output}
+			e = emitSSE(w, "message_delta", map[string]any{"type": "message_delta", "delta": map[string]any{"stop_reason": reason, "stop_sequence": nil}, "usage": reported})
 			if e != nil {
 				return e
 			}
@@ -127,7 +129,7 @@ func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *Usage) error
 		}
 	}
 }
-func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error {
+func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *usage.Usage) error {
 	rd := newSSE(r)
 	last := "none"
 	id := "resp_" + domain.NewID()
@@ -146,7 +148,7 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 		return emitSSE(w, typ, v)
 	}
 	response := func(status string) map[string]any {
-		v := map[string]any{"id": id, "object": "response", "status": status, "model": tr.model, "output": output, "usage": u.responsesUsage()}
+		v := map[string]any{"id": id, "object": "response", "status": status, "model": tr.model, "output": output, "usage": u.ResponsesUsage()}
 		if status == "incomplete" {
 			v["incomplete_details"] = map[string]string{"reason": "max_output_tokens"}
 		}
@@ -160,7 +162,7 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 		if len(data) == 0 {
 			continue
 		}
-		u.observe(data)
+		u.Observe(data)
 		m := obj(data)
 		typ := rawString(m["type"])
 		if typ != "" {

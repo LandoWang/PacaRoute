@@ -66,7 +66,7 @@ func (s *Server) relayJSON(x *gatewayExchange, tr *translation, res *http.Respon
 	if err != nil || len(data) > maxUpstreamJSON {
 		e = errors.New("upstream response incomplete or too large")
 	} else {
-		x.usage.observe(data)
+		x.usage.Observe(data)
 		s.trace(activity.ID, "upstream-res.json", data)
 		if tr != nil && x.operation != "messages/count_tokens" {
 			data, e = tr.responseJSON(data)

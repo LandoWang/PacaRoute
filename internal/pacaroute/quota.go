@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -80,7 +82,7 @@ func billingEvent(tx *sql.Tx, id, phase string, at time.Time, payload any) error
 
 // Requests reserve a slot atomically. Token/cost admission uses confirmed usage;
 // no monetary reservation is enforced in this first soft-quota version.
-func (q *QuotaStore) Admit(v Activity, limit *domain.ClientQuota) (QuotaState, error) {
+func (q *QuotaStore) Admit(v usage.Activity, limit *domain.ClientQuota) (QuotaState, error) {
 	tx, e := q.db.Begin()
 	if e != nil {
 		return QuotaState{}, e
@@ -108,8 +110,8 @@ func (q *QuotaStore) Admit(v Activity, limit *domain.ClientQuota) (QuotaState, e
 	}
 	return state, tx.Commit()
 }
-func (q *QuotaStore) Settle(v Activity, p *domain.ModelPrice, messages bool) error {
-	cost, reason := priceUsage(v, p, messages)
+func (q *QuotaStore) Settle(v usage.Activity, p *domain.ModelPrice, messages bool) error {
+	cost, reason := usage.PriceUsage(v, p, messages)
 	state := "settled"
 	if cost == nil {
 		state = "unresolved"

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -38,13 +40,13 @@ func (tr *translation) responseJSON(body []byte) ([]byte, error) {
 		}
 		// Map usage exactly as the translated stream's message_delta does, so
 		// Messages observers do not add Responses cached tokens a second time.
-		var usage any
+		var reported any
 		if m["usage"] != nil && string(m["usage"]) != "null" {
-			u := Usage{}
-			u.observe(jsonBytes(m))
-			usage = map[string]any{"input_tokens": u.Input, "output_tokens": u.Output}
+			u := usage.Usage{}
+			u.Observe(jsonBytes(m))
+			reported = map[string]any{"input_tokens": u.Input, "output_tokens": u.Output}
 		}
-		return json.Marshal(map[string]any{"id": "msg_" + domain.NewID(), "type": "message", "role": "assistant", "model": tr.model, "content": blocks, "stop_reason": reason, "stop_sequence": nil, "usage": usage})
+		return json.Marshal(map[string]any{"id": "msg_" + domain.NewID(), "type": "message", "role": "assistant", "model": tr.model, "content": blocks, "stop_reason": reason, "stop_sequence": nil, "usage": reported})
 	}
 	return tr.messagesJSON(m)
 }
@@ -65,10 +67,10 @@ func (tr *translation) messagesJSON(m object) ([]byte, error) {
 		status = "incomplete"
 		incomplete = map[string]string{"reason": "max_output_tokens"}
 	}
-	u := Usage{}
-	u.observe(jsonBytes(m))
-	usage := u.responsesUsage()
-	return json.Marshal(map[string]any{"id": "resp_" + domain.NewID(), "object": "response", "status": status, "model": tr.model, "output": output, "usage": usage, "incomplete_details": incomplete})
+	u := usage.Usage{}
+	u.Observe(jsonBytes(m))
+	reported := u.ResponsesUsage()
+	return json.Marshal(map[string]any{"id": "resp_" + domain.NewID(), "object": "response", "status": status, "model": tr.model, "output": output, "usage": reported, "incomplete_details": incomplete})
 }
 func (tr *translation) toolItem(b object) map[string]any {
 	name := rawString(b["name"])

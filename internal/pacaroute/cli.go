@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -187,10 +189,10 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 		return 0
 	case "usage":
 		to := time.Now().UTC().Truncate(time.Hour).Add(time.Hour)
-		emit(NewActivityStore(root).Summary(to.Add(-24*time.Hour), to, a.get("source", ""), a.get("client", "")))
+		emit(usage.NewActivityStore(root).Summary(to.Add(-24*time.Hour), to, a.get("source", ""), a.get("client", "")))
 		return 0
 	case "errors":
-		emit(NewActivityStore(root).Recent(true))
+		emit(usage.NewActivityStore(root).Recent(true))
 		return 0
 	case "key":
 		if action != "set" {

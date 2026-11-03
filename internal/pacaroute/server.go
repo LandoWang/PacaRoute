@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
 )
 
 const Version = "0.9.0"
@@ -18,7 +20,7 @@ type Server struct {
 	Auth            *Auth
 	Catalog         *catalog
 	Router          *Router
-	Activity        *ActivityStore
+	Activity        *usage.ActivityStore
 	Quotas          *QuotaStore
 	AllowLocal      bool
 	LocalManagement bool
@@ -62,7 +64,7 @@ func NewServer(store *ConfigStore, auth *Auth) (*Server, error) {
 	if auth != nil {
 		models = newCatalog(auth.config, auth, &auth.http)
 	}
-	return &Server{Quotas: quotas, Store: store, Auth: auth, Catalog: models, Router: r, Activity: NewActivityStore(store.Root), AdminKey: string(key), started: time.Now(), loginJobs: newLoginJobs()}, nil
+	return &Server{Quotas: quotas, Store: store, Auth: auth, Catalog: models, Router: r, Activity: usage.NewActivityStore(store.Root), AdminKey: string(key), started: time.Now(), loginJobs: newLoginJobs()}, nil
 }
 func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

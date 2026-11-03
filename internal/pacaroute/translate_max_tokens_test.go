@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
 )
 
 func maxTokensSSE(events ...string) string {
@@ -62,7 +64,7 @@ func TestTranslatedMaxTokensToolUseIsNotUpstreamFailure(t *testing.T) {
 func TestTranslatedTruncatedToolCallIsNotCompleted(t *testing.T) {
 	tr := &translation{from: "responses", to: "messages", model: "coding", toolNames: map[string]toolIdentity{}}
 	var out bytes.Buffer
-	if err := tr.streamMessages(&out, strings.NewReader(truncatedToolTurn("max_tokens")), &Usage{}); err != nil {
+	if err := tr.streamMessages(&out, strings.NewReader(truncatedToolTurn("max_tokens")), &usage.Usage{}); err != nil {
 		t.Fatalf("max_tokens turn failed: %v", err)
 	}
 	body := out.String()
@@ -96,7 +98,7 @@ func TestTranslatedToolCallStopReasonsUnchanged(t *testing.T) {
 	var out bytes.Buffer
 	for _, reason := range []string{"end_turn", "tool_use"} {
 		out.Reset()
-		if err := tr.streamMessages(&out, strings.NewReader(truncatedToolTurn(reason)), &Usage{}); err == nil || !strings.Contains(err.Error(), "invalid streamed tool arguments") {
+		if err := tr.streamMessages(&out, strings.NewReader(truncatedToolTurn(reason)), &usage.Usage{}); err == nil || !strings.Contains(err.Error(), "invalid streamed tool arguments") {
 			t.Fatalf("stop_reason %s with invalid arguments: err=%v", reason, err)
 		}
 		if strings.Contains(out.String(), `"type":"response.output_item.done"`) {
@@ -105,7 +107,7 @@ func TestTranslatedToolCallStopReasonsUnchanged(t *testing.T) {
 	}
 	out.Reset()
 	complete := strings.Replace(truncatedToolTurn("tool_use"), `{\"patch\":\"*** Begin`, `{\"patch\":\"*** Begin\"}`, 1)
-	if err := tr.streamMessages(&out, strings.NewReader(complete), &Usage{}); err != nil {
+	if err := tr.streamMessages(&out, strings.NewReader(complete), &usage.Usage{}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), `"type":"response.output_item.done"`) || !strings.Contains(out.String(), `"type":"response.completed"`) {

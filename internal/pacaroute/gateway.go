@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -45,8 +47,8 @@ type gatewayExchange struct {
 	body             object
 	session          string
 	targets          []Target
-	activity         Activity
-	usage            Usage
+	activity         usage.Activity
+	usage            usage.Usage
 	upstreamMessages bool
 	start            time.Time
 }
@@ -203,7 +205,7 @@ func (s *Server) admitQuota(x *gatewayExchange) bool {
 	if client != nil {
 		clientID = client.ID
 	}
-	x.activity = Activity{ID: strings.ReplaceAll(domain.NewID(), "-", ""), Timestamp: time.Now().UTC(), Kind: "request", Agent: string(x.agent), ClientID: clientID}
+	x.activity = usage.Activity{ID: strings.ReplaceAll(domain.NewID(), "-", ""), Timestamp: time.Now().UTC(), Kind: "request", Agent: string(x.agent), ClientID: clientID}
 	quota, err := s.Quotas.Admit(x.activity, client.Quota)
 	if err != nil {
 		problem(w, 503, "Client quota ledger unavailable")
@@ -221,12 +223,12 @@ func (s *Server) admitQuota(x *gatewayExchange) bool {
 // finishExchange settles the admitted request against the actual source/model
 // price and records its activity exactly once.
 func (s *Server) finishExchange(x *gatewayExchange) {
-	activity, usage := &x.activity, &x.usage
+	activity, observed := &x.activity, &x.usage
 	activity.Duration = time.Since(x.start).Milliseconds()
-	activity.Input = usage.totalInput(x.upstreamMessages)
-	activity.Output = usage.Output
-	activity.CacheRead = usage.CacheRead
-	activity.CacheWrite = usage.CacheWrite
+	activity.Input = observed.TotalInput(x.upstreamMessages)
+	activity.Output = observed.Output
+	activity.CacheRead = observed.CacheRead
+	activity.CacheWrite = observed.CacheWrite
 	var price *domain.ModelPrice
 	if source, ok := x.config.Source(activity.Source); ok {
 		if p, exists := source.Prices[activity.Model]; exists {

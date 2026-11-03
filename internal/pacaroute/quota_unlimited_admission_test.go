@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -32,7 +34,7 @@ func TestUnlimitedAdmissionDoesNotScanHistory(t *testing.T) {
 		start := time.Now()
 		for i := 0; i < 16; i++ {
 			sequence++
-			state, err := q.Admit(Activity{ID: fmt.Sprintf("admit-%d", sequence), ClientID: client, Agent: "codex", Timestamp: now}, limit)
+			state, err := q.Admit(usage.Activity{ID: fmt.Sprintf("admit-%d", sequence), ClientID: client, Agent: "codex", Timestamp: now}, limit)
 			if err != nil || state.Blocked != "" {
 				t.Fatalf("unlimited admission: %+v %v", state, err)
 			}

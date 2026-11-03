@@ -1,4 +1,4 @@
-package pacaroute
+package usage
 
 import (
 	"bufio"

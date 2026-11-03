@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -139,7 +141,7 @@ func (s *sseReader) next() ([]byte, []byte, error) {
 	}
 }
 
-func relaySSE(w io.Writer, r io.Reader, u *Usage, protocol string) error {
+func relaySSE(w io.Writer, r io.Reader, u *usage.Usage, protocol string) error {
 	rd := newSSE(r)
 	last := "none"
 	var pending error
@@ -157,7 +159,7 @@ func relaySSE(w io.Writer, r io.Reader, u *Usage, protocol string) error {
 			}
 			return streamReadError(e, "response.completed or message_stop", last)
 		}
-		u.observe(data)
+		u.Observe(data)
 		m := obj(data)
 		typ := rawString(m["type"])
 		if typ != "" {

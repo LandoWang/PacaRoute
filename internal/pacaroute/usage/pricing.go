@@ -1,4 +1,4 @@
-package pacaroute
+package usage
 
 import (
 	"math/big"
@@ -6,7 +6,7 @@ import (
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
-func priceUsage(v Activity, p *domain.ModelPrice, messages bool) (*int64, string) {
+func PriceUsage(v Activity, p *domain.ModelPrice, messages bool) (*int64, string) {
 	if p == nil {
 		return nil, "missing_price"
 	}
