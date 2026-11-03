@@ -1,13 +1,17 @@
 package pacaroute
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
+)
 
 // A successful full-history request after an endpoint edit must establish the
 // new endpoint binding, so its own subsequent source-bound continuation works.
 func TestEndpointEditRebindsSuccessfulSession(t *testing.T) {
 	c := fixtureConfig()
 	c.Pools[0].Members = c.Pools[0].Members[1:]
-	c.Accounts = []Account{{ID: "api", Name: "API", Kind: "api-key"}}
+	c.Accounts = []domain.Account{{ID: "api", Name: "API", Kind: "api-key"}}
 	c.Sources[0].Kind = "openai"
 	c.Sources[0].AuthMode = "api-key"
 	c.Sources[0].AccountID = "api"

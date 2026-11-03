@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 type loginJob struct {
@@ -30,7 +32,7 @@ func (s *Server) accountAPI(w http.ResponseWriter, r *http.Request, path string)
 		problem(w, 404, "account not found")
 		return
 	}
-	if account.Kind == AccountAzure {
+	if account.Kind == domain.AccountAzure {
 		switch {
 		case action == "login" && r.Method == "POST":
 			s.startAccountLogin(w, r, account)
@@ -57,7 +59,7 @@ func (s *Server) accountAPI(w http.ResponseWriter, r *http.Request, path string)
 		}
 		return
 	}
-	if accountUsesAPIKey(account.Kind) {
+	if domain.AccountUsesAPIKey(account.Kind) {
 		switch {
 		case action == "key" && r.Method == "PUT":
 			var v struct {
@@ -102,7 +104,7 @@ func (s *Server) accountAPI(w http.ResponseWriter, r *http.Request, path string)
 		problem(w, 404, "account action not found")
 	}
 }
-func (s *Server) startAccountLogin(w http.ResponseWriter, r *http.Request, account Account) {
+func (s *Server) startAccountLogin(w http.ResponseWriter, r *http.Request, account domain.Account) {
 	s.loginJobs.mu.Lock()
 	active := 0
 	for key, j := range s.loginJobs.jobs {
@@ -118,7 +120,7 @@ func (s *Server) startAccountLogin(w http.ResponseWriter, r *http.Request, accou
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-	jobID := newID()
+	jobID := domain.NewID()
 	job := &loginJob{cancel: cancel}
 	s.loginJobs.jobs[jobID] = job
 	s.loginJobs.mu.Unlock()
@@ -131,7 +133,7 @@ func (s *Server) startAccountLogin(w http.ResponseWriter, r *http.Request, accou
 		}
 		s.loginJobs.mu.Unlock()
 	}
-	if account.Kind == AccountGitHub {
+	if account.Kind == domain.AccountGitHub {
 		d, e := s.Auth.BeginLogin(r.Context(), account.ID)
 		if e != nil {
 			finish(e)

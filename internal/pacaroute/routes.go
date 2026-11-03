@@ -2,9 +2,11 @@ package pacaroute
 
 import (
 	"errors"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
-func resolveRoute(c *Config, client *Client, agent AgentProtocol, model, explicit string) (string, string, error) {
+func resolveRoute(c *domain.Config, client *domain.Client, agent domain.AgentProtocol, model, explicit string) (string, string, error) {
 	if !client.AgentEnabled(agent.Grant()) {
 		return "", "", errors.New("Agent is not enabled for this Client")
 	}
@@ -22,7 +24,7 @@ func resolveRoute(c *Config, client *Client, agent AgentProtocol, model, explici
 	if explicit == "" {
 		explicit = "copilot"
 	}
-	if isPoolTarget(explicit) {
+	if domain.IsPoolTarget(explicit) {
 		p, ok := c.Pool(explicit)
 		if !ok || p.Agent != agent {
 			return "", "", errors.New("pool not found for Agent")
@@ -35,7 +37,7 @@ func resolveRoute(c *Config, client *Client, agent AgentProtocol, model, explici
 		}
 		return explicit, p.Model, nil
 	}
-	if e := c.validateTarget(explicit, model, agent.Grant()); e != nil {
+	if e := c.ValidateTarget(explicit, model, agent.Grant()); e != nil {
 		return "", "", e
 	}
 	return explicit, model, nil
@@ -43,13 +45,13 @@ func resolveRoute(c *Config, client *Client, agent AgentProtocol, model, explici
 
 // Project only peer grants onto the wire protocol requested by a downstream router.
 // Direct Agent grants remain independent, including their sticky-session scope.
-func peerClientView(c *Config, client *Client, agent AgentProtocol) *Client {
+func peerClientView(c *domain.Config, client *domain.Client, agent domain.AgentProtocol) *domain.Client {
 	copy := *client
 	copy.LegacyDirect = false
-	copy.EnabledAgents = []GrantKind{agent.Grant()}
+	copy.EnabledAgents = []domain.GrantKind{agent.Grant()}
 	copy.Routes = nil
 	for _, route := range client.Routes {
-		if route.Agent == GrantPeer && c.validateTarget(route.SourceID, route.Model, agent.Grant()) == nil {
+		if route.Agent == domain.GrantPeer && c.ValidateTarget(route.SourceID, route.Model, agent.Grant()) == nil {
 			route.Agent = agent.Grant()
 			copy.Routes = append(copy.Routes, route)
 		}

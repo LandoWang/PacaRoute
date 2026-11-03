@@ -8,17 +8,19 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
-func transferFixture(t *testing.T) Config {
+func transferFixture(t *testing.T) domain.Config {
 	t.Helper()
-	c := Config{
-		Accounts:    []Account{{ID: "api", Name: "Work", Kind: "openai"}},
-		Sources:     []Source{{ID: "resource", Name: "Models", Kind: "openai", AccountID: "api", AuthMode: "api-key", Endpoint: "https://example.com/v1", Deployments: []string{"astra", "sonnet"}}},
-		Proxies:     Proxies{Profiles: []Proxy{{ID: "office", Name: "Office", Mode: "custom", Address: "http://localhost:8888"}}, Bindings: map[string]string{"resource": "office", "copilot": "direct"}, AccountProxyID: "office"},
-		Pools:       []Pool{{ID: "combined", Name: "Models", Agent: "codex", Model: "astra", MultiModel: true, Failover: true, Members: []Member{{ID: "first", SourceID: "resource", Model: "astra", Weight: 3}, {ID: "second", SourceID: "copilot", Model: "gpt-6-astra", Alias: "astra", Weight: 2}, {ID: "third", SourceID: "resource", Model: "sonnet", Weight: 1}}}},
-		Clients:     []Client{{ID: "default", Name: "Local", Local: true, Routes: []Route{{ID: "main", Agent: "codex", MatchModel: "*", SourceID: "pool:combined", Model: "astra"}}}, {ID: "team", Name: "Team", KeyHash: keyHash("synthetic-old-client"), Routes: []Route{{ID: "sonnet", Agent: "codex", MatchModel: "sonnet", SourceID: "pool:combined", Model: "sonnet"}}}},
-		SourceState: SourceState{Paused: []string{"resource"}},
+	c := domain.Config{
+		Accounts:    []domain.Account{{ID: "api", Name: "Work", Kind: "openai"}},
+		Sources:     []domain.Source{{ID: "resource", Name: "Models", Kind: "openai", AccountID: "api", AuthMode: "api-key", Endpoint: "https://example.com/v1", Deployments: []string{"astra", "sonnet"}}},
+		Proxies:     domain.Proxies{Profiles: []domain.Proxy{{ID: "office", Name: "Office", Mode: "custom", Address: "http://localhost:8888"}}, Bindings: map[string]string{"resource": "office", "copilot": "direct"}, AccountProxyID: "office"},
+		Pools:       []domain.Pool{{ID: "combined", Name: "Models", Agent: "codex", Model: "astra", MultiModel: true, Failover: true, Members: []domain.Member{{ID: "first", SourceID: "resource", Model: "astra", Weight: 3}, {ID: "second", SourceID: "copilot", Model: "gpt-6-astra", Alias: "astra", Weight: 2}, {ID: "third", SourceID: "resource", Model: "sonnet", Weight: 1}}}},
+		Clients:     []domain.Client{{ID: "default", Name: "Local", Local: true, Routes: []domain.Route{{ID: "main", Agent: "codex", MatchModel: "*", SourceID: "pool:combined", Model: "astra"}}}, {ID: "team", Name: "Team", KeyHash: keyHash("synthetic-old-client"), Routes: []domain.Route{{ID: "sonnet", Agent: "codex", MatchModel: "sonnet", SourceID: "pool:combined", Model: "sonnet"}}}},
+		SourceState: domain.SourceState{Paused: []string{"resource"}},
 	}
 	materializeLegacyIdentities(&c)
 	if err := c.Validate(); err != nil {
@@ -151,7 +153,7 @@ func TestConfigTransferReplaceAndRevisionGuard(t *testing.T) {
 
 func TestConfigTransferAPIRequiresReviewedFileAndAdmin(t *testing.T) {
 	s := localTestServer(t)
-	bundle := ExportConfig(func() *Config { c := transferFixture(t); return &c }())
+	bundle := ExportConfig(func() *domain.Config { c := transferFixture(t); return &c }())
 	request := func(value any, authorized bool) (int, []byte) {
 		w := localRequest(s, "POST", "/api/config/import", string(jsonBytes(value)), "127.0.0.1:42", "localhost:18766", authorized)
 		return w.Code, w.Body.Bytes()
@@ -204,7 +206,7 @@ func TestFreshAccountsEmptyAndLegacyIdentityMigration(t *testing.T) {
 		t.Fatal("fresh management exposed a phantom account")
 	}
 	c := cloneConfig(s.Store.Snapshot())
-	c.Clients[0].Routes = []Route{{ID: "main", Agent: "codex", MatchModel: "*", SourceID: "copilot", Model: "gpt-6-astra"}}
+	c.Clients[0].Routes = []domain.Route{{ID: "main", Agent: "codex", MatchModel: "*", SourceID: "copilot", Model: "gpt-6-astra"}}
 	saveTest(t, s.Store, c)
 	c = cloneConfig(s.Store.Snapshot())
 	if len(c.Accounts) != 1 || c.Accounts[0].ID != "copilot" || len(c.Sources) != 1 {

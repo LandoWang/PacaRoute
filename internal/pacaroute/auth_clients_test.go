@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // Contract: only management can recover the current Client key; encrypted keys
@@ -92,7 +94,7 @@ func TestClientKeyLifecycle(t *testing.T) {
 // A misplaced encrypted record must never yield a different or stale key.
 func TestClientKeyImportAndIsolation(t *testing.T) {
 	s := localTestServer(t)
-	client := Client{ID: "legacy", Name: "Legacy", KeyHash: keyHash("synthetic-current")}
+	client := domain.Client{ID: "legacy", Name: "Legacy", KeyHash: keyHash("synthetic-current")}
 	c := cloneConfig(s.Store.Snapshot())
 	c.Clients = append(c.Clients, client)
 	saveTest(t, s.Store, c)
@@ -133,7 +135,7 @@ func TestClientKeyImportAndIsolation(t *testing.T) {
 	if key, err := s.Auth.ClientKey(client); err == nil || key != "" {
 		t.Fatal("returned mismatched encrypted key")
 	}
-	local := Client{ID: "default", Local: true}
+	local := domain.Client{ID: "default", Local: true}
 	if key, err := s.Auth.ClientKey(local); err != nil || key != "" {
 		t.Fatal("local Client needs a key")
 	}

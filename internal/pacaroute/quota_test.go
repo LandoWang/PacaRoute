@@ -8,11 +8,13 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func tokenCount(v int64) *int64 { return &v }
 func TestPricingConfirmedUsageAndSnapshots(t *testing.T) {
-	p := ModelPrice{Input: "2", Cached: "0.2", Output: "8", CacheWrite: "2.5"}
+	p := domain.ModelPrice{Input: "2", Cached: "0.2", Output: "8", CacheWrite: "2.5"}
 	v := Activity{Input: tokenCount(1000), CacheRead: tokenCount(200), CacheWrite: tokenCount(100), Output: tokenCount(100)}
 	cost, reason := priceUsage(v, &p, false)
 	if reason != "" || cost == nil || *cost != 2440 {
@@ -23,7 +25,7 @@ func TestPricingConfirmedUsageAndSnapshots(t *testing.T) {
 		t.Fatal(cost, reason)
 	}
 	for _, value := range []string{"-1", "NaN", "1e3", "0.0000001", "1000000000"} {
-		if _, e := moneyMicros(value); e == nil {
+		if _, e := domain.MoneyMicros(value); e == nil {
 			t.Fatal("invalid amount accepted", value)
 		}
 	}
@@ -46,13 +48,13 @@ func TestQuotaConcurrentAdmissionRestartAndIdempotentSettlement(t *testing.T) {
 		t.Fatal(e)
 	}
 	now := time.Now().UTC()
-	limit := &ClientQuota{WindowSeconds: 60, Requests: 5}
+	limit := &domain.ClientQuota{WindowSeconds: 60, Requests: 5}
 	var wg sync.WaitGroup
 	for i := 0; i < 32; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, e := q.Admit(Activity{ID: newID(), ClientID: "alice", Agent: "codex", Timestamp: now}, limit)
+			_, e := q.Admit(Activity{ID: domain.NewID(), ClientID: "alice", Agent: "codex", Timestamp: now}, limit)
 			if e != nil {
 				t.Error(e)
 				return
@@ -68,7 +70,7 @@ func TestQuotaConcurrentAdmissionRestartAndIdempotentSettlement(t *testing.T) {
 	if e = store.db.QueryRow("SELECT request_id FROM quota_requests LIMIT 1").Scan(&id); e != nil {
 		t.Fatal(e)
 	}
-	p := ModelPrice{Input: "2", Cached: "0.2", Output: "8"}
+	p := domain.ModelPrice{Input: "2", Cached: "0.2", Output: "8"}
 	v := Activity{ID: id, ClientID: "alice", Source: "actual-source", Model: "deployed", Input: tokenCount(1000), CacheRead: tokenCount(200), Output: tokenCount(100), Status: 200}
 	if e = q.Settle(v, &p, false); e != nil {
 		t.Fatal(e)
@@ -108,8 +110,8 @@ func TestGatewayClientQuotaUsesActualTargetAndConfirmedTotals(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"output": []any{}, "usage": map[string]any{"input_tokens": 1000, "output_tokens": 100, "input_tokens_details": map[string]int{"cached_tokens": 200}}})
 	})
 	c := cloneConfig(store.Snapshot())
-	c.Clients[0].Quota = &ClientQuota{WindowSeconds: 60, InputTokens: 1000, Cost: "0.003"}
-	c.Sources[0].Prices = map[string]ModelPrice{"deployed": {Input: "2", Cached: "0.2", Output: "8"}, "coding": {Input: "999", Cached: "999", Output: "999"}}
+	c.Clients[0].Quota = &domain.ClientQuota{WindowSeconds: 60, InputTokens: 1000, Cost: "0.003"}
+	c.Sources[0].Prices = map[string]domain.ModelPrice{"deployed": {Input: "2", Cached: "0.2", Output: "8"}, "coding": {Input: "999", Cached: "999", Output: "999"}}
 	saveTest(t, store, c)
 	res := requestTest(t, front, "/codex/responses", "alice-key", `{"model":"coding"}`)
 	io.Copy(io.Discard, res.Body)
@@ -135,7 +137,7 @@ func TestGatewayClientQuotaUsesActualTargetAndConfirmedTotals(t *testing.T) {
 		t.Fatal(v, e)
 	}
 	c = cloneConfig(store.Snapshot())
-	c.Clients[0].Quota = &ClientQuota{WindowSeconds: 60, Cost: "0.002"}
+	c.Clients[0].Quota = &domain.ClientQuota{WindowSeconds: 60, Cost: "0.002"}
 	saveTest(t, store, c)
 	res = requestTest(t, front, "/codex/responses", "alice-key", `{"model":"coding"}`)
 	b, _ = io.ReadAll(res.Body)

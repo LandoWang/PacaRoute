@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 const maxJSONBody = 8 << 20
@@ -21,7 +23,7 @@ type transports struct {
 	values map[string]*http.Client
 }
 
-func (t *transports) client(p Proxy) *http.Client {
+func (t *transports) client(p domain.Proxy) *http.Client {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.values == nil {
@@ -50,7 +52,7 @@ func (t *transports) client(p Proxy) *http.Client {
 	t.values[key] = c
 	return c
 }
-func proxyEnv(p Proxy) []string {
+func proxyEnv(p domain.Proxy) []string {
 	env := os.Environ()
 	keys := map[string]bool{"HTTP_PROXY": true, "HTTPS_PROXY": true, "ALL_PROXY": true, "http_proxy": true, "https_proxy": true, "all_proxy": true}
 	if p.Mode == "system" {

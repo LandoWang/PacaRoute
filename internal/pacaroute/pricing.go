@@ -2,24 +2,26 @@ package pacaroute
 
 import (
 	"math/big"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
-func priceUsage(v Activity, p *ModelPrice, messages bool) (*int64, string) {
+func priceUsage(v Activity, p *domain.ModelPrice, messages bool) (*int64, string) {
 	if p == nil {
 		return nil, "missing_price"
 	}
 	if v.Input == nil || v.Output == nil {
 		return nil, "missing_usage"
 	}
-	inputRate, e := moneyMicros(p.Input)
+	inputRate, e := domain.MoneyMicros(p.Input)
 	if e != nil {
 		return nil, "invalid_price"
 	}
-	cachedRate, e := moneyMicros(p.Cached)
+	cachedRate, e := domain.MoneyMicros(p.Cached)
 	if e != nil {
 		return nil, "invalid_price"
 	}
-	outputRate, e := moneyMicros(p.Output)
+	outputRate, e := domain.MoneyMicros(p.Output)
 	if e != nil {
 		return nil, "invalid_price"
 	}
@@ -39,7 +41,7 @@ func priceUsage(v Activity, p *ModelPrice, messages bool) (*int64, string) {
 			if p.CacheWrite == "" {
 				return nil, "missing_cache_write_price"
 			}
-			writeRate, e = moneyMicros(p.CacheWrite)
+			writeRate, e = domain.MoneyMicros(p.CacheWrite)
 			if e != nil {
 				return nil, "invalid_price"
 			}

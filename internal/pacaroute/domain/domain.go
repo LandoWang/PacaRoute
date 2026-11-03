@@ -1,4 +1,4 @@
-package pacaroute
+package domain
 
 import (
 	"crypto/rand"
@@ -126,9 +126,9 @@ type Config struct {
 }
 
 var identifier = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
-var modelIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$`)
+var ModelIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$`)
 
-func validID(v string) bool { return identifier.MatchString(v) }
+func ValidID(v string) bool { return identifier.MatchString(v) }
 func (c *Config) Account(id string) (Account, bool) {
 	for _, a := range c.Accounts {
 		if a.ID == id {
@@ -156,7 +156,7 @@ func (c *Config) Source(id string) (Source, bool) {
 }
 func (c *Config) Pool(id string) (Pool, bool) {
 	for _, p := range c.Pools {
-		if name, _ := poolID(id); p.ID == name {
+		if name, _ := PoolID(id); p.ID == name {
 			return p, true
 		}
 	}
@@ -200,7 +200,7 @@ func (c *Client) AgentEnabled(agent GrantKind) bool {
 		return false
 	}
 	if c.EnabledAgents == nil {
-		return agentValid(AgentProtocol(agent))
+		return AgentValid(AgentProtocol(agent))
 	}
 	for _, value := range c.EnabledAgents {
 		if value == agent {
@@ -221,7 +221,7 @@ type ModelPrice struct {
 
 var moneyPattern = regexp.MustCompile(`^[0-9]{1,9}(\.[0-9]{1,6})?$`)
 
-func moneyMicros(value string) (int64, error) {
+func MoneyMicros(value string) (int64, error) {
 	if !moneyPattern.MatchString(value) {
 		return 0, errors.New("USD amounts need at most six decimal places")
 	}
@@ -232,15 +232,15 @@ func moneyMicros(value string) (int64, error) {
 	}
 	return strconv.ParseInt(parts[0]+fraction+strings.Repeat("0", 6-len(fraction)), 10, 64)
 }
-func moneyText(micros int64) string { return fmt.Sprintf("%d.%06d", micros/1000000, micros%1000000) }
+func MoneyText(micros int64) string { return fmt.Sprintf("%d.%06d", micros/1000000, micros%1000000) }
 func (p ModelPrice) validate() error {
 	for _, v := range []string{p.Input, p.Cached, p.Output} {
-		if _, e := moneyMicros(v); e != nil {
+		if _, e := MoneyMicros(v); e != nil {
 			return e
 		}
 	}
 	if p.CacheWrite != "" {
-		_, e := moneyMicros(p.CacheWrite)
+		_, e := MoneyMicros(p.CacheWrite)
 		return e
 	}
 	return nil
@@ -261,20 +261,20 @@ func (q *ClientQuota) validate() error {
 		return errors.New("invalid Client quota window or limit")
 	}
 	if q.Cost != "" {
-		_, e := moneyMicros(q.Cost)
+		_, e := MoneyMicros(q.Cost)
 		return e
 	}
 	return nil
 }
-func (q *ClientQuota) enforced() bool {
+func (q *ClientQuota) Enforced() bool {
 	if q == nil {
 		return false
 	}
-	cost, _ := moneyMicros(q.Cost)
+	cost, _ := MoneyMicros(q.Cost)
 	return q.Requests > 0 || q.InputTokens > 0 || cost > 0
 }
 
-func newID() string {
+func NewID() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])
 	b[6] = (b[6] & 15) | 64
@@ -283,7 +283,7 @@ func newID() string {
 	return h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
 }
 
-func sharedAzure(c *Config, id string) bool {
+func SharedAzure(c *Config, id string) bool {
 	account, _ := c.Account(id)
 	return id == "" || id == "azure-local" || account.LoginMode == "azure-cli"
 }
@@ -292,14 +292,14 @@ func sharedAzure(c *Config, id string) bool {
 const poolTargetPrefix = "pool:"
 
 // poolTarget is the route target naming the pool with this ID.
-func poolTarget(id string) string { return poolTargetPrefix + id }
+func PoolTarget(id string) string { return poolTargetPrefix + id }
 
 // poolID returns the pool ID named by a route target; a target without the
 // pool prefix is returned unchanged with ok false.
-func poolID(target string) (id string, ok bool) { return strings.CutPrefix(target, poolTargetPrefix) }
+func PoolID(target string) (id string, ok bool) { return strings.CutPrefix(target, poolTargetPrefix) }
 
 // isPoolTarget reports whether a route target names a pool.
-func isPoolTarget(target string) bool { return strings.HasPrefix(target, poolTargetPrefix) }
+func IsPoolTarget(target string) bool { return strings.HasPrefix(target, poolTargetPrefix) }
 
 type Model struct {
 	ID     string `json:"id"`

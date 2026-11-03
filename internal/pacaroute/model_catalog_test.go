@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // Contract: enabled native Messages models are selectable by Claude Code;
@@ -37,7 +39,7 @@ func TestCopilotCatalogIncludesNativeMessagesModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := map[string]Model{}
+	found := map[string]domain.Model{}
 	for _, model := range models {
 		found[model.ID] = model
 	}
@@ -65,7 +67,7 @@ func TestCopilotCatalogIncludesNativeMessagesModels(t *testing.T) {
 // existing Opus default and independent Codex pool remain unchanged.
 func TestExplicitSonnetRoutePrecedesDefaultModel(t *testing.T) {
 	c := fixtureConfig()
-	client := Client{ID: "default", Local: true, EnabledAgents: []GrantKind{"claude-code", "codex"}, Routes: []Route{
+	client := domain.Client{ID: "default", Local: true, EnabledAgents: []domain.GrantKind{"claude-code", "codex"}, Routes: []domain.Route{
 		{ID: "sonnet-55", Agent: "claude-code", MatchModel: "claude-sonnet-5-5", SourceID: "copilot", Model: "claude-sonnet-5.5"},
 		{ID: "sonnet", Agent: "claude-code", MatchModel: "claude-sonnet-5", SourceID: "copilot", Model: "claude-sonnet-5"},
 		{ID: "opus-default", Agent: "claude-code", MatchModel: "*", SourceID: "copilot", Model: "claude-opus-5.5"},
@@ -77,7 +79,7 @@ func TestExplicitSonnetRoutePrecedesDefaultModel(t *testing.T) {
 		{"claude-code", "claude-opus-5-5", "copilot", "claude-opus-5.5"},
 		{"codex", "gpt-6-astra", "pool:balanced", "coding"},
 	} {
-		source, model, err := resolveRoute(&c, &client, AgentProtocol(test.agent), test.request, "")
+		source, model, err := resolveRoute(&c, &client, domain.AgentProtocol(test.agent), test.request, "")
 		if err != nil || source != test.source || model != test.model {
 			t.Errorf("%s: wrong route (%s, %s, %v)", test.request, source, model, err)
 		}
@@ -86,7 +88,7 @@ func TestExplicitSonnetRoutePrecedesDefaultModel(t *testing.T) {
 
 func TestSelectedModelsRejectUnselectedRequests(t *testing.T) {
 	c := fixtureConfig()
-	client := Client{ID: "selected", EnabledAgents: []GrantKind{"claude-code", "codex"}, Routes: []Route{
+	client := domain.Client{ID: "selected", EnabledAgents: []domain.GrantKind{"claude-code", "codex"}, Routes: []domain.Route{
 		{ID: "opus", Agent: "claude-code", MatchModel: "claude-opus-5.5", SourceID: "copilot", Model: "claude-opus-5.5"},
 		{ID: "sonnet", Agent: "claude-code", MatchModel: "claude-sonnet-5.5", SourceID: "copilot", Model: "claude-sonnet-5.5"},
 		{ID: "sonnet-alias", Agent: "claude-code", MatchModel: "claude-sonnet-5-5", SourceID: "copilot", Model: "claude-sonnet-5.5"},

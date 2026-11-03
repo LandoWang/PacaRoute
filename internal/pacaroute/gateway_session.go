@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // peerSessionHeader carries a router-derived session identity between PacaRoute
@@ -18,9 +20,9 @@ var (
 
 var legacySession = regexp.MustCompile(`(?:^|_)session_([A-Za-z0-9-]{1,128})$`)
 
-func sessionID(agent AgentProtocol, h http.Header, body map[string]json.RawMessage) string {
+func sessionID(agent domain.AgentProtocol, h http.Header, body map[string]json.RawMessage) string {
 	names := []string{peerSessionHeader, "X-AgentLink-Session"}
-	if agent == AgentCodex {
+	if agent == domain.AgentCodex {
 		names = append(names, codexSessionHeaders...)
 	} else {
 		names = append(names, claudeSessionHeaders...)

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // retryHintHeaders are the upstream retry hints relayed to the Agent and read
@@ -43,7 +45,7 @@ type RoutingHealth struct {
 
 // Health reports admission eligibility, not a successful upstream probe. It
 // reads bounded in-memory state; polling never scans request or session logs.
-func (r *Router) Health(c *Config) RoutingHealth {
+func (r *Router) Health(c *domain.Config) RoutingHealth {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now().UTC()

@@ -9,19 +9,21 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // Credentials are versioned by the committed hash. Failed config commits and
 // concurrent rotations cannot overwrite the key for the active snapshot.
-func (a *Auth) clientKeyPath(c Client) (string, error) {
+func (a *Auth) clientKeyPath(c domain.Client) (string, error) {
 	h, err := hex.DecodeString(c.KeyHash)
-	if !validID(c.ID) || c.Local || err != nil || len(h) != 32 {
+	if !domain.ValidID(c.ID) || c.Local || err != nil || len(h) != 32 {
 		return "", errors.New("invalid network Client credential")
 	}
 	return filepath.Join(a.vault.root, "client-keys", c.ID, c.KeyHash+".dat"), nil
 }
 
-func (a *Auth) SaveClientKey(ctx context.Context, c Client, key string) error {
+func (a *Auth) SaveClientKey(ctx context.Context, c domain.Client, key string) error {
 	path, err := a.clientKeyPath(c)
 	if err != nil {
 		return err
@@ -37,7 +39,7 @@ func (a *Auth) SaveClientKey(ctx context.Context, c Client, key string) error {
 	return a.vault.write(path, map[string]string{"key": key})
 }
 
-func (a *Auth) ClientKey(c Client) (string, error) {
+func (a *Auth) ClientKey(c domain.Client) (string, error) {
 	if c.Local {
 		return "", nil
 	}

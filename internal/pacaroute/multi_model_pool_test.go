@@ -5,19 +5,21 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
-func multiModelFixture(t *testing.T) (*Router, Config) {
+func multiModelFixture(t *testing.T) (*Router, domain.Config) {
 	t.Helper()
 	r, err := NewRouter(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := Config{Accounts: []Account{{ID: "gh", Name: "GitHub", Kind: "github"}}, Proxies: Proxies{Bindings: map[string]string{}}}
+	c := domain.Config{Accounts: []domain.Account{{ID: "gh", Name: "GitHub", Kind: "github"}}, Proxies: domain.Proxies{Bindings: map[string]string{}}}
 	for _, id := range []string{"a", "b", "c"} {
-		c.Sources = append(c.Sources, Source{ID: id, Name: id, Kind: "copilot", AccountID: "gh"})
+		c.Sources = append(c.Sources, domain.Source{ID: id, Name: id, Kind: "copilot", AccountID: "gh"})
 	}
-	c.Pools = []Pool{{ID: "big", Name: "Big Source", Agent: "codex", Model: "astra", MultiModel: true, Failover: true, Members: []Member{
+	c.Pools = []domain.Pool{{ID: "big", Name: "Big Source", Agent: "codex", Model: "astra", MultiModel: true, Failover: true, Members: []domain.Member{
 		{ID: "a-astra", SourceID: "a", Model: "gpt-6-astra", Alias: "astra", Weight: 50},
 		{ID: "b-astra", SourceID: "b", Model: "gpt-6-astra", Alias: "astra", Weight: 30},
 		{ID: "c-astra", SourceID: "c", Model: "gpt-6-astra", Alias: "astra", Weight: 20},
@@ -109,7 +111,7 @@ func TestMultiModelPoolThrottleWeightsAndStickyScope(t *testing.T) {
 func TestMultiModelPoolAliasesValidationAndDirectThrottle(t *testing.T) {
 	r, c := multiModelFixture(t)
 	pool := c.Pools[0]
-	pool.Members = append(pool.Members, Member{ID: "a-alias", SourceID: "a", Model: "gpt-6-astra", Alias: "same-deployment", Weight: 1})
+	pool.Members = append(pool.Members, domain.Member{ID: "a-alias", SourceID: "a", Model: "gpt-6-astra", Alias: "same-deployment", Weight: 1})
 	c.Pools[0] = pool
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)

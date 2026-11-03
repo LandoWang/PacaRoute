@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // maxToolArguments bounds the streamed arguments of one translated tool call.
@@ -24,7 +26,7 @@ func emitSSE(w io.Writer, event string, v any) error {
 func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *Usage) error {
 	rd := newSSE(r)
 	last := "none"
-	id := "msg_" + strings.ReplaceAll(newID(), "-", "")
+	id := "msg_" + strings.ReplaceAll(domain.NewID(), "-", "")
 	started := false
 	next := 0
 	indices := map[string]int{}
@@ -128,7 +130,7 @@ func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *Usage) error
 func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error {
 	rd := newSSE(r)
 	last := "none"
-	id := "resp_" + newID()
+	id := "resp_" + domain.NewID()
 	sequence := 0
 	output := []map[string]any{}
 	blocks := map[int]object{}
@@ -181,7 +183,7 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 			case "text":
 				i := len(output)
 				itemIndices[n] = i
-				item := map[string]any{"id": "msg_" + newID(), "type": "message", "role": "assistant", "status": "in_progress", "content": []any{}}
+				item := map[string]any{"id": "msg_" + domain.NewID(), "type": "message", "role": "assistant", "status": "in_progress", "content": []any{}}
 				output = append(output, item)
 				if e = send("response.output_item.added", map[string]any{"output_index": i, "item": item}); e != nil {
 					return e

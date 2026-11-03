@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // A downstream router has its own grant and model routes. Native Agent paths
@@ -16,8 +18,8 @@ func TestPacaRouteAgentGrantAndDisabledPaths(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"id": "response", "output": []any{}, "usage": map[string]int{"input_tokens": 3, "output_tokens": 1}})
 	})
 	c := cloneConfig(store.Snapshot())
-	c.Clients[0].EnabledAgents = []GrantKind{"pacaroute"}
-	c.Clients[0].Routes = []Route{
+	c.Clients[0].EnabledAgents = []domain.GrantKind{"pacaroute"}
+	c.Clients[0].Routes = []domain.Route{
 		{ID: "peer", Agent: "pacaroute", MatchModel: "shared", SourceID: "test", Model: "deployed"},
 		{ID: "direct", Agent: "codex", MatchModel: "direct-only", SourceID: "test", Model: "deployed"},
 	}
@@ -60,7 +62,7 @@ func TestPacaRouteAgentGrantAndDisabledPaths(t *testing.T) {
 		t.Fatalf("peer route catalog: %d %s", code, body)
 	}
 	c = cloneConfig(store.Snapshot())
-	c.Clients[0].EnabledAgents = []GrantKind{"codex"}
+	c.Clients[0].EnabledAgents = []domain.GrantKind{"codex"}
 	saveTest(t, store, c)
 	for _, path := range []string{"/pacaroute/codex/responses", "/pacaroute/cc/messages", "/pacaroute/v1/models", "/v1/models"} {
 		if code, _ := request(path, "alice-key", "shared"); code != 404 {
@@ -79,11 +81,11 @@ func TestPacaRouteAgentGrantAndDisabledPaths(t *testing.T) {
 func TestKnownClientAgentKindsOnly(t *testing.T) {
 	store := storeForTest(t)
 	c := cloneConfig(store.Snapshot())
-	c.Clients[0].EnabledAgents = []GrantKind{"codex", "claude-code", "pacaroute"}
+	c.Clients[0].EnabledAgents = []domain.GrantKind{"codex", "claude-code", "pacaroute"}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	c.Clients[0].EnabledAgents = []GrantKind{"unknown-agent"}
+	c.Clients[0].EnabledAgents = []domain.GrantKind{"unknown-agent"}
 	if c.Validate() == nil {
 		t.Fatal("unimplemented Agent accepted")
 	}

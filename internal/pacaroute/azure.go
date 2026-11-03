@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func (a *Auth) AzureAction(ctx context.Context, id, action, subscription, resource string) (map[string]any, error) {
@@ -65,11 +67,11 @@ func (a *Auth) AzureAction(ctx context.Context, id, action, subscription, resour
 		}
 		out["resources"] = list
 	case "azure-deployments":
-		list := []Model{}
+		list := []domain.Model{}
 		for _, v := range items {
 			if rawString(obj(obj(v["properties"])["model"])["format"]) == "OpenAI" {
 				id := rawString(v["name"])
-				list = append(list, Model{id, id, "Azure OpenAI", true, true})
+				list = append(list, domain.Model{ID: id, Name: id, Vendor: "Azure OpenAI", Claude: true, Codex: true})
 			}
 		}
 		out["models"] = list
@@ -77,7 +79,7 @@ func (a *Auth) AzureAction(ctx context.Context, id, action, subscription, resour
 	return out, nil
 }
 func (a *Auth) AzureLogin(ctx context.Context, id string, logout bool, emit func(any)) error {
-	if sharedAzure(a.config.Snapshot(), id) {
+	if domain.SharedAzure(a.config.Snapshot(), id) {
 		return errors.New("use az login in your terminal for the shared Azure CLI account, or add an isolated Azure account")
 	}
 	c := a.config.Snapshot()
@@ -112,8 +114,8 @@ func (a *Auth) AzureLogin(ctx context.Context, id string, logout bool, emit func
 
 var _ = json.Valid
 
-func (a *Auth) azureDirectory(c *Config, id string) string {
-	if !sharedAzure(c, id) {
+func (a *Auth) azureDirectory(c *domain.Config, id string) string {
+	if !domain.SharedAzure(c, id) {
 		return filepath.Join(a.vault.root, "accounts", id)
 	}
 	if dir := os.Getenv("AZURE_CONFIG_DIR"); dir != "" {
@@ -122,7 +124,7 @@ func (a *Auth) azureDirectory(c *Config, id string) string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".azure")
 }
-func (a *Auth) azureEnv(c *Config, id string, p Proxy) []string {
+func (a *Auth) azureEnv(c *domain.Config, id string, p domain.Proxy) []string {
 	env := proxyEnv(p)
 	for i := len(env) - 1; i >= 0; i-- {
 		if strings.HasPrefix(env[i], "AZURE_CONFIG_DIR=") {

@@ -20,6 +20,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // Compatible with the existing Unix encrypted store. Never exports plaintext records.
@@ -65,7 +67,7 @@ func (v *vault) init() {
 			defer unlock()
 			b, e := os.ReadFile(path)
 			if os.IsNotExist(e) {
-				b = []byte(newID())
+				b = []byte(domain.NewID())
 				e = atomicWrite(path, b, 0600)
 			}
 			if e != nil {

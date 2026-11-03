@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // maxLegacyConfigFile bounds each split legacy configuration file.
@@ -17,7 +19,7 @@ var configFiles = []string{"accounts.json", "sources.json", "source-pools.json",
 // that relied on implicit identities are made explicit once, preserving IDs so
 // Auth keeps ownership of the original credentials and locks.
 func (s *ConfigStore) materializeLegacyIdentities() error {
-	var c Config
+	var c domain.Config
 	var revision int64
 	var version int
 	var document string
@@ -53,7 +55,7 @@ func (s *ConfigStore) materializeLegacyIdentities() error {
 	}
 	return nil
 }
-func materializeLegacyIdentities(c *Config) bool {
+func materializeLegacyIdentities(c *domain.Config) bool {
 	changed, needsCopilot := false, false
 	for _, client := range c.Clients {
 		needsCopilot = needsCopilot || client.LegacyDirect
@@ -75,14 +77,14 @@ func materializeLegacyIdentities(c *Config) bool {
 		}
 	}
 	if needsCopilot {
-		c.Sources = append(c.Sources, Source{ID: "copilot", Name: "GitHub Copilot", Kind: SourceCopilot, AccountID: "copilot", Deployments: []string{}})
+		c.Sources = append(c.Sources, domain.Source{ID: "copilot", Name: "GitHub Copilot", Kind: domain.SourceCopilot, AccountID: "copilot", Deployments: []string{}})
 		changed = true
 	}
 	for i := range c.Sources {
 		source := &c.Sources[i]
 		if source.AccountID == "" {
 			source.AccountID = "azure-local"
-			if source.Kind == SourceCopilot {
+			if source.Kind == domain.SourceCopilot {
 				source.AccountID = "copilot"
 			}
 			changed = true
@@ -95,9 +97,9 @@ func materializeLegacyIdentities(c *Config) bool {
 			found = found || account.ID == source.AccountID
 		}
 		if !found {
-			account := Account{ID: "copilot", Name: "GitHub", Kind: AccountGitHub, LoginMode: "device"}
+			account := domain.Account{ID: "copilot", Name: "GitHub", Kind: domain.AccountGitHub, LoginMode: "device"}
 			if source.AccountID == "azure-local" {
-				account = Account{ID: "azure-local", Name: "Azure CLI", Kind: AccountAzure, LoginMode: "azure-cli"}
+				account = domain.Account{ID: "azure-local", Name: "Azure CLI", Kind: domain.AccountAzure, LoginMode: "azure-cli"}
 			}
 			c.Accounts = append(c.Accounts, account)
 			changed = true
@@ -105,8 +107,8 @@ func materializeLegacyIdentities(c *Config) bool {
 	}
 	return changed
 }
-func (s *ConfigStore) importLegacy() (Config, error) {
-	c := Config{Proxies: Proxies{AccountProxyID: "system", Bindings: map[string]string{}}}
+func (s *ConfigStore) importLegacy() (domain.Config, error) {
+	c := domain.Config{Proxies: domain.Proxies{AccountProxyID: "system", Bindings: map[string]string{}}}
 	legacy := false
 	parts := []any{&c.Accounts, &c.Sources, &c.Pools, &c.Proxies, &c.Clients, &c.SourceState}
 	// The old journal denotes a committed transaction; use it in preference to
@@ -140,7 +142,7 @@ func (s *ConfigStore) importLegacy() (Config, error) {
 		}
 	}
 	if _, exists := c.Client("default"); !exists {
-		c.Clients = append([]Client{{ID: "default", Name: "本机", Local: true, LegacyDirect: legacy, EnabledAgents: []GrantKind{GrantCodex, GrantClaudeCode}, Routes: []Route{}}}, c.Clients...)
+		c.Clients = append([]domain.Client{{ID: "default", Name: "本机", Local: true, LegacyDirect: legacy, EnabledAgents: []domain.GrantKind{domain.GrantCodex, domain.GrantClaudeCode}, Routes: []domain.Route{}}}, c.Clients...)
 	}
 	c.Revision = ""
 	return c, c.Validate()

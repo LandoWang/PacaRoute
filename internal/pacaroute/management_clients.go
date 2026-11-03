@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func (s *Server) clientQuota(w http.ResponseWriter, r *http.Request, path string) {
@@ -23,7 +25,7 @@ func (s *Server) clientQuota(w http.ResponseWriter, r *http.Request, path string
 
 // createClient issues the Client key through Auth before committing the Client.
 func (s *Server) createClient(w http.ResponseWriter, r *http.Request) {
-	var v Client
+	var v domain.Client
 	if decodeRequest(w, r, &v) != nil {
 		problem(w, 400, "invalid Client")
 		return

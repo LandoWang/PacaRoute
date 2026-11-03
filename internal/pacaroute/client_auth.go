@@ -4,6 +4,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func bearer(r *http.Request) string {
@@ -13,7 +15,7 @@ func bearer(r *http.Request) string {
 	}
 	return r.Header.Get("x-api-key")
 }
-func (s *Server) authenticate(r *http.Request, c *Config) (*Client, bool) {
+func (s *Server) authenticate(r *http.Request, c *domain.Config) (*domain.Client, bool) {
 	key := bearer(r)
 	for _, v := range c.Clients {
 		if !v.Local && key != "" && keyEqual(v.KeyHash, key) {

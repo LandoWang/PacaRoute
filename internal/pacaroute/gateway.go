@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 const (
@@ -31,11 +33,11 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request) { s.gatewayFor(
 type gatewayExchange struct {
 	w                http.ResponseWriter
 	r                *http.Request
-	config           *Config
-	client           *Client
+	config           *domain.Config
+	client           *domain.Client
 	peer             bool
 	hops             int
-	agent            AgentProtocol
+	agent            domain.AgentProtocol
 	explicit         string
 	operation        string
 	affinityScope    string
@@ -95,7 +97,7 @@ func (s *Server) openExchange(w http.ResponseWriter, r *http.Request, peer bool)
 	agent, explicit, operation := parseGatewayPath(r.URL.Path)
 	grant := agent.Grant()
 	if peer {
-		grant = GrantPeer
+		grant = domain.GrantPeer
 	}
 	if !client.AgentEnabled(grant) {
 		problem(w, 404, "endpoint not found")
@@ -138,9 +140,9 @@ func (s *Server) agentModels(x *gatewayExchange) {
 	}
 	// Management shows the full catalog; legacy Agent discovery retains
 	// the compatible subset rather than advertising unsupported protocols.
-	compatible := []Model{}
+	compatible := []domain.Model{}
 	for _, model := range models {
-		if agent == AgentCodex && model.Codex || agent == AgentClaudeCode && model.Claude {
+		if agent == domain.AgentCodex && model.Codex || agent == domain.AgentClaudeCode && model.Claude {
 			compatible = append(compatible, model)
 		}
 	}
@@ -201,7 +203,7 @@ func (s *Server) admitQuota(x *gatewayExchange) bool {
 	if client != nil {
 		clientID = client.ID
 	}
-	x.activity = Activity{ID: strings.ReplaceAll(newID(), "-", ""), Timestamp: time.Now().UTC(), Kind: "request", Agent: string(x.agent), ClientID: clientID}
+	x.activity = Activity{ID: strings.ReplaceAll(domain.NewID(), "-", ""), Timestamp: time.Now().UTC(), Kind: "request", Agent: string(x.agent), ClientID: clientID}
 	quota, err := s.Quotas.Admit(x.activity, client.Quota)
 	if err != nil {
 		problem(w, 503, "Client quota ledger unavailable")
@@ -225,7 +227,7 @@ func (s *Server) finishExchange(x *gatewayExchange) {
 	activity.Output = usage.Output
 	activity.CacheRead = usage.CacheRead
 	activity.CacheWrite = usage.CacheWrite
-	var price *ModelPrice
+	var price *domain.ModelPrice
 	if source, ok := x.config.Source(activity.Source); ok {
 		if p, exists := source.Prices[activity.Model]; exists {
 			price = &p
@@ -314,7 +316,7 @@ func (s *Server) attempt(x *gatewayExchange, i int, t Target) bool {
 			return false
 		}
 	}
-	if agent == AgentCodex && protocol == "responses" && (t.Source.Kind == SourceCopilot || t.Source.Kind == SourcePeer && res.Header.Get("X-Reasoning-Included") == "true") {
+	if agent == domain.AgentCodex && protocol == "responses" && (t.Source.Kind == domain.SourceCopilot || t.Source.Kind == domain.SourcePeer && res.Header.Get("X-Reasoning-Included") == "true") {
 		w.Header().Set("X-Reasoning-Included", "true")
 	}
 	w.Header().Set("X-PacaRoute-Request", activity.ID)
@@ -334,7 +336,7 @@ func retryable(status int) bool {
 }
 
 // Keep imported local affinity stable without merging any network Client scope.
-func affinityClient(client *Client) string {
+func affinityClient(client *domain.Client) string {
 	if client.Local && client.ID == "default" {
 		return "local"
 	}

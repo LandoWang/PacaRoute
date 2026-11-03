@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
+
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -31,7 +33,7 @@ func TestSQLiteMigrationDefaultDeletionAndInvalidSave(t *testing.T) {
 	saveTest(t, s, c)
 	revision := s.Snapshot().Revision
 	invalid := cloneConfig(s.Snapshot())
-	invalid.Sources = []Source{{ID: "bad", Name: "Bad", AccountID: "missing"}}
+	invalid.Sources = []domain.Source{{ID: "bad", Name: "Bad", AccountID: "missing"}}
 	if s.Save(invalid, revision) == nil || s.Snapshot().Revision != revision {
 		t.Fatal("invalid write committed")
 	}
@@ -68,8 +70,8 @@ func TestSQLiteConcurrentWritersAndImmutableSnapshot(t *testing.T) {
 	old := s.Snapshot()
 	one := cloneConfig(old)
 	two := cloneConfig(old)
-	one.Accounts = []Account{{ID: "one", Name: "One", Kind: "github"}}
-	two.Accounts = []Account{{ID: "two", Name: "Two", Kind: "github"}}
+	one.Accounts = []domain.Account{{ID: "one", Name: "One", Kind: "github"}}
+	two.Accounts = []domain.Account{{ID: "two", Name: "Two", Kind: "github"}}
 	results := make(chan error, 2)
 	var wg sync.WaitGroup
 	for i, store := range []*ConfigStore{s, other} {
@@ -105,9 +107,9 @@ func TestSQLiteConcurrentWritersAndImmutableSnapshot(t *testing.T) {
 func TestClientAgentGateAndDefaultAuthorization(t *testing.T) {
 	s := localTestServer(t)
 	c := cloneConfig(s.Store.Snapshot())
-	c.Clients[0].EnabledAgents = []GrantKind{"codex"}
-	c.Clients[0].Routes = []Route{{ID: "main", Agent: "codex", MatchModel: "*", SourceID: "copilot", Model: "gpt-6-astra"}}
-	c.Clients = append(c.Clients, Client{ID: "alice", Name: "Alice", KeyHash: keyHash("synthetic-key"), EnabledAgents: []GrantKind{}, Routes: []Route{{ID: "old", Agent: "codex", MatchModel: "*", SourceID: "copilot", Model: "gpt-6-astra"}}})
+	c.Clients[0].EnabledAgents = []domain.GrantKind{"codex"}
+	c.Clients[0].Routes = []domain.Route{{ID: "main", Agent: "codex", MatchModel: "*", SourceID: "copilot", Model: "gpt-6-astra"}}
+	c.Clients = append(c.Clients, domain.Client{ID: "alice", Name: "Alice", KeyHash: keyHash("synthetic-key"), EnabledAgents: []domain.GrantKind{}, Routes: []domain.Route{{ID: "old", Agent: "codex", MatchModel: "*", SourceID: "copilot", Model: "gpt-6-astra"}}})
 	saveTest(t, s.Store, c)
 	for _, path := range []string{"/cc/messages", "/cc/models", "/sources/copilot/cc/models", "/pools/nope/cc/messages"} {
 		method := "POST"
@@ -164,7 +166,7 @@ func TestSharedAzureIdentityAndIsolatedEnvironment(t *testing.T) {
 	s := storeForTest(t)
 	a := NewAuth(s, "")
 	c := cloneConfig(s.Snapshot())
-	c.Accounts = []Account{{ID: "shared", Name: "Shared", Kind: "azure", LoginMode: "azure-cli"}, {ID: "isolated", Name: "Isolated", Kind: "azure", LoginMode: "device"}}
+	c.Accounts = []domain.Account{{ID: "shared", Name: "Shared", Kind: "azure", LoginMode: "azure-cli"}, {ID: "isolated", Name: "Isolated", Kind: "azure", LoginMode: "device"}}
 	t.Setenv("AZURE_CONFIG_DIR", filepath.Join(t.TempDir(), "cli"))
 	if a.azureDirectory(&c, "shared") != os.Getenv("AZURE_CONFIG_DIR") {
 		t.Fatal("CLI identity not reused")
@@ -172,10 +174,10 @@ func TestSharedAzureIdentityAndIsolatedEnvironment(t *testing.T) {
 	if a.azureDirectory(&c, "isolated") == os.Getenv("AZURE_CONFIG_DIR") {
 		t.Fatal("isolated account shares cache")
 	}
-	if !sharedAzure(&c, "shared") || sharedAzure(&c, "isolated") {
+	if !domain.SharedAzure(&c, "shared") || domain.SharedAzure(&c, "isolated") {
 		t.Fatal("shared identity policy")
 	}
-	env := a.azureEnv(&c, "shared", Proxy{Mode: "direct"})
+	env := a.azureEnv(&c, "shared", domain.Proxy{Mode: "direct"})
 	count := 0
 	for _, v := range env {
 		if strings.HasPrefix(v, "AZURE_CONFIG_DIR=") {
@@ -265,8 +267,8 @@ func TestConnectCreatesMissingClaudeConfiguration(t *testing.T) {
 }
 
 func TestDefaultAffinityCannotCollideWithNamedNetworkClient(t *testing.T) {
-	local := &Client{ID: "default", Local: true}
-	remote := &Client{ID: "local"}
+	local := &domain.Client{ID: "default", Local: true}
+	remote := &domain.Client{ID: "local"}
 	if affinityClient(local) == affinityClient(remote) {
 		t.Fatal("local and network Clients share sticky scope")
 	}

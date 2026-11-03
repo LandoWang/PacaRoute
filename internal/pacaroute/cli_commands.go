@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"os"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func desktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, action string, port int, emit func(any)) (map[string]any, error) {
@@ -28,7 +30,7 @@ func desktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, actio
 	case "configure":
 		client := a.get("client", "")
 		model := a.get("model", "")
-		if e := s.Snapshot().validateTarget(source, model, GrantKind(client)); e != nil {
+		if e := s.Snapshot().ValidateTarget(source, model, domain.GrantKind(client)); e != nil {
 			return nil, e
 		}
 		p, e := planClient(client, source, model, port)
@@ -52,10 +54,10 @@ func desktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, actio
 	if !ok {
 		return nil, errors.New("account not found")
 	}
-	if accountUsesAPIKey(account.Kind) {
+	if domain.AccountUsesAPIKey(account.Kind) {
 		return map[string]any{"has_key": auth.HasAccountKey(accountID), "kind": account.Kind}, nil
 	}
-	if account.Kind == AccountAzure {
+	if account.Kind == domain.AccountAzure {
 		if action == "login" || action == "logout" {
 			e := auth.AzureLogin(ctx, accountID, action == "logout", emit)
 			return map[string]any{"logged_in": action == "login"}, e

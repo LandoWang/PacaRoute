@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 const completedStream = "data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":2}}}\n\n"
@@ -30,7 +32,7 @@ func TestConnectionFailureFailsOverOnlyBeforeCommit(t *testing.T) {
 			dead.ID = "dead"
 			dead.Endpoint = "https://127.0.0.1:1"
 			c.Sources = append(c.Sources, dead)
-			c.Pools = []Pool{{ID: "pool", Name: "Pool", Agent: "codex", Model: "coding", Failover: failover, Members: []Member{{ID: "dead", SourceID: "dead", Model: "deployed", Weight: 1}, {ID: "live", SourceID: "test", Model: "deployed", Weight: 1}}}}
+			c.Pools = []domain.Pool{{ID: "pool", Name: "Pool", Agent: "codex", Model: "coding", Failover: failover, Members: []domain.Member{{ID: "dead", SourceID: "dead", Model: "deployed", Weight: 1}, {ID: "live", SourceID: "test", Model: "deployed", Weight: 1}}}}
 			c.Clients[0].Routes[0].SourceID = "pool:pool"
 			c.Clients[0].Routes[0].Model = "coding"
 			saveTest(t, store, c)
@@ -83,7 +85,7 @@ func TestGatewayBindingSurvivesRestartAtZeroWeight(t *testing.T) {
 	second := c.Sources[0]
 	second.ID = "second"
 	c.Sources = append(c.Sources, second)
-	c.Pools = []Pool{{ID: "pool", Name: "Pool", Agent: "codex", Model: "coding", Failover: true, Members: []Member{{ID: "one", SourceID: "test", Model: "deployed", Weight: 1}, {ID: "two", SourceID: "second", Model: "deployed", Weight: 1}}}}
+	c.Pools = []domain.Pool{{ID: "pool", Name: "Pool", Agent: "codex", Model: "coding", Failover: true, Members: []domain.Member{{ID: "one", SourceID: "test", Model: "deployed", Weight: 1}, {ID: "two", SourceID: "second", Model: "deployed", Weight: 1}}}}
 	c.Clients[0].Routes[0].SourceID = "pool:pool"
 	c.Clients[0].Routes[0].Model = "coding"
 	saveTest(t, store, c)
@@ -127,7 +129,7 @@ func TestGatewayBindingSurvivesRestartAtZeroWeight(t *testing.T) {
 // response is relayed; the Agent never sees the first 401.
 func TestCopilotRejectedLeaseRefreshesOnce(t *testing.T) {
 	store := storeForTest(t)
-	c := Config{Clients: []Client{{ID: "alice", Name: "Alice", KeyHash: keyHash("alice-key"), Routes: []Route{{ID: "main", Agent: "codex", MatchModel: "coding", SourceID: "copilot", Model: "gpt-synthetic"}}}}}
+	c := domain.Config{Clients: []domain.Client{{ID: "alice", Name: "Alice", KeyHash: keyHash("alice-key"), Routes: []domain.Route{{ID: "main", Agent: "codex", MatchModel: "coding", SourceID: "copilot", Model: "gpt-synthetic"}}}}}
 	saveTest(t, store, c)
 	auth := NewAuth(store, "")
 	if err := auth.vault.write(auth.vault.githubPath("copilot"), credential{Version: 1, AccessToken: "synthetic-github", CredentialID: "test"}); err != nil {

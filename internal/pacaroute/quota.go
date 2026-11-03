@@ -4,21 +4,23 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 type QuotaStore struct{ db *sql.DB }
 type QuotaState struct {
-	WindowSeconds int64        `json:"window_seconds"`
-	Requests      int64        `json:"requests"`
-	InputTokens   int64        `json:"input_tokens"`
-	CostMicros    int64        `json:"cost_microusd"`
-	Cost          string       `json:"cost_usd"`
-	Pending       int64        `json:"pending"`
-	Unpriced      int64        `json:"unpriced"`
-	MissingUsage  int64        `json:"missing_usage"`
-	Blocked       string       `json:"blocked,omitempty"`
-	RetryAfter    int64        `json:"retry_after_seconds,omitempty"`
-	Limits        *ClientQuota `json:"limits"`
+	WindowSeconds int64               `json:"window_seconds"`
+	Requests      int64               `json:"requests"`
+	InputTokens   int64               `json:"input_tokens"`
+	CostMicros    int64               `json:"cost_microusd"`
+	Cost          string              `json:"cost_usd"`
+	Pending       int64               `json:"pending"`
+	Unpriced      int64               `json:"unpriced"`
+	MissingUsage  int64               `json:"missing_usage"`
+	Blocked       string              `json:"blocked,omitempty"`
+	RetryAfter    int64               `json:"retry_after_seconds,omitempty"`
+	Limits        *domain.ClientQuota `json:"limits"`
 }
 
 func newQuotaStore(db *sql.DB) (*QuotaStore, error) {
@@ -36,7 +38,7 @@ func newQuotaStore(db *sql.DB) (*QuotaStore, error) {
 
 type quotaQuery interface{ QueryRow(string, ...any) *sql.Row }
 
-func quotaState(q quotaQuery, client string, limit *ClientQuota, now time.Time) (QuotaState, error) {
+func quotaState(q quotaQuery, client string, limit *domain.ClientQuota, now time.Time) (QuotaState, error) {
 	window := int64(86400)
 	if limit != nil {
 		window = limit.WindowSeconds
@@ -44,9 +46,9 @@ func quotaState(q quotaQuery, client string, limit *ClientQuota, now time.Time) 
 	v := QuotaState{WindowSeconds: window, Limits: limit}
 	var first sql.NullInt64
 	e := q.QueryRow(`SELECT COUNT(*),COALESCE(SUM(input_tokens),0),COALESCE(SUM(cost_microusd),0),COALESCE(SUM(state='reserved'),0),COALESCE(SUM(state='unresolved'),0),COALESCE(SUM(finished_ms IS NOT NULL AND input_tokens IS NULL),0),MIN(started_ms) FROM quota_requests WHERE client_id=? AND started_ms>?`, client, now.UnixMilli()-window*1000).Scan(&v.Requests, &v.InputTokens, &v.CostMicros, &v.Pending, &v.Unpriced, &v.MissingUsage, &first)
-	v.Cost = moneyText(v.CostMicros)
+	v.Cost = domain.MoneyText(v.CostMicros)
 	if limit != nil {
-		cost, _ := moneyMicros(limit.Cost)
+		cost, _ := domain.MoneyMicros(limit.Cost)
 		switch {
 		case limit.Requests > 0 && v.Requests >= limit.Requests:
 			v.Blocked = "requests"
@@ -64,7 +66,7 @@ func quotaState(q quotaQuery, client string, limit *ClientQuota, now time.Time) 
 	}
 	return v, e
 }
-func (q *QuotaStore) State(client string, limit *ClientQuota, now time.Time) (QuotaState, error) {
+func (q *QuotaStore) State(client string, limit *domain.ClientQuota, now time.Time) (QuotaState, error) {
 	return quotaState(q.db, client, limit, now)
 }
 func billingEvent(tx *sql.Tx, id, phase string, at time.Time, payload any) error {
@@ -78,14 +80,14 @@ func billingEvent(tx *sql.Tx, id, phase string, at time.Time, payload any) error
 
 // Requests reserve a slot atomically. Token/cost admission uses confirmed usage;
 // no monetary reservation is enforced in this first soft-quota version.
-func (q *QuotaStore) Admit(v Activity, limit *ClientQuota) (QuotaState, error) {
+func (q *QuotaStore) Admit(v Activity, limit *domain.ClientQuota) (QuotaState, error) {
 	tx, e := q.db.Begin()
 	if e != nil {
 		return QuotaState{}, e
 	}
 	defer tx.Rollback()
 	var state QuotaState
-	if limit.enforced() {
+	if limit.Enforced() {
 		state, e = quotaState(tx, v.ClientID, limit, v.Timestamp)
 	} else {
 		// Without an enforced limit nothing can block; skip aggregating history.
@@ -106,7 +108,7 @@ func (q *QuotaStore) Admit(v Activity, limit *ClientQuota) (QuotaState, error) {
 	}
 	return state, tx.Commit()
 }
-func (q *QuotaStore) Settle(v Activity, p *ModelPrice, messages bool) error {
+func (q *QuotaStore) Settle(v Activity, p *domain.ModelPrice, messages bool) error {
 	cost, reason := priceUsage(v, p, messages)
 	state := "settled"
 	if cost == nil {

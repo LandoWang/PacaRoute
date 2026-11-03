@@ -5,10 +5,12 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 type leaseProvider interface {
-	Lease(context.Context, *Config, Source, bool) (lease, error)
+	Lease(context.Context, *domain.Config, domain.Source, bool) (lease, error)
 	ApplyProviderHeaders(*http.Request, lease, bool)
 	AzureAction(context.Context, string, string, string, string) (map[string]any, error)
 }
@@ -23,19 +25,19 @@ func newCatalog(config configReader, leases leaseProvider, http *transports) *ca
 	return &catalog{config: config, leases: leases, http: http}
 }
 
-func (a *catalog) Models(ctx context.Context, id string) ([]Model, error) {
+func (a *catalog) Models(ctx context.Context, id string) ([]domain.Model, error) {
 	if id == "" {
 		id = "copilot"
 	}
 	c := a.config.Snapshot()
-	if isPoolTarget(id) {
+	if domain.IsPoolTarget(id) {
 		p, ok := c.Pool(id)
 		if !ok {
 			return nil, errors.New("pool not found")
 		}
-		models := []Model{}
+		models := []domain.Model{}
 		for _, name := range p.ModelNames() {
-			models = append(models, Model{name, name, "Source pool", p.Agent == AgentClaudeCode, p.Agent == AgentCodex})
+			models = append(models, domain.Model{ID: name, Name: name, Vendor: "Source pool", Claude: p.Agent == domain.AgentClaudeCode, Codex: p.Agent == domain.AgentCodex})
 		}
 		return models, nil
 	}
@@ -43,10 +45,10 @@ func (a *catalog) Models(ctx context.Context, id string) ([]Model, error) {
 	if !ok {
 		return nil, errors.New("source not found")
 	}
-	models := []Model{}
-	if s.Kind != SourceCopilot {
+	models := []domain.Model{}
+	if s.Kind != domain.SourceCopilot {
 		for _, m := range s.Deployments {
-			models = append(models, Model{m, m, string(s.Kind), s.SupportsAgentModel(AgentClaudeCode, m), s.SupportsAgentModel(AgentCodex, m)})
+			models = append(models, domain.Model{ID: m, Name: m, Vendor: string(s.Kind), Claude: s.SupportsAgentModel(domain.AgentClaudeCode, m), Codex: s.SupportsAgentModel(domain.AgentCodex, m)})
 		}
 		return models, nil
 	}
@@ -101,7 +103,7 @@ func (a *catalog) Models(ctx context.Context, id string) ([]Model, error) {
 		if name == "" {
 			name = m.ID
 		}
-		models = append(models, Model{m.ID, name, m.Vendor, claude, codex})
+		models = append(models, domain.Model{ID: m.ID, Name: name, Vendor: m.Vendor, Claude: claude, Codex: codex})
 	}
 	return models, nil
 }

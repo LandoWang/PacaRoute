@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -24,7 +26,7 @@ type ConfigStore struct {
 	Root      string
 	mu        sync.Mutex
 	db        *sql.DB
-	current   *Config
+	current   *domain.Config
 	nextRead  time.Time
 	lastError string
 }
@@ -82,7 +84,7 @@ func NewConfigStore(root string) (*ConfigStore, error) {
 }
 
 func (s *ConfigStore) Close() error { return s.db.Close() }
-func (s *ConfigStore) Snapshot() *Config {
+func (s *ConfigStore) Snapshot() *domain.Config {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if time.Now().After(s.nextRead) {
@@ -93,7 +95,7 @@ func (s *ConfigStore) Snapshot() *Config {
 	}
 	return s.current
 }
-func (s *ConfigStore) Reload() (*Config, error) {
+func (s *ConfigStore) Reload() (*domain.Config, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e := s.readLocked()
@@ -120,7 +122,7 @@ func (s *ConfigStore) readLocked() error {
 	if len(document) > maxConfigDocument {
 		return errors.New("configuration too large")
 	}
-	var c Config
+	var c domain.Config
 	if e := json.Unmarshal([]byte(document), &c); e != nil {
 		return errors.New("invalid configuration database document")
 	}
@@ -132,7 +134,7 @@ func (s *ConfigStore) readLocked() error {
 	s.lastError = ""
 	return nil
 }
-func (s *ConfigStore) Save(c Config, expected string) error {
+func (s *ConfigStore) Save(c domain.Config, expected string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c = cloneConfig(&c)
@@ -215,9 +217,9 @@ func (s *ConfigStore) Save(c Config, expected string) error {
 }
 func (s *ConfigStore) Error() string { s.mu.Lock(); defer s.mu.Unlock(); return s.lastError }
 
-func cloneConfig(c *Config) Config {
+func cloneConfig(c *domain.Config) domain.Config {
 	b, _ := json.Marshal(c)
-	var v Config
+	var v domain.Config
 	_ = json.Unmarshal(b, &v)
 	return v
 }

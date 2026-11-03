@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // Native preparation replaces the model and must otherwise forward the request
@@ -18,7 +20,7 @@ func TestNativePrepareDoesNotCloneLargePayload(t *testing.T) {
 		"unknown_extension": json.RawMessage(`{"opaque":{"number":1234567890123456789}}`),
 	}
 	before := jsonBytes(body)
-	target := Target{Source: Source{Kind: "azure-openai"}, Model: "deployment"}
+	target := Target{Source: domain.Source{Kind: "azure-openai"}, Model: "deployment"}
 	expected, err := json.Marshal(map[string]json.RawMessage{"model": jsonBytes("deployment"), "input": body["input"], "unknown_extension": body["unknown_extension"]})
 	if err != nil {
 		t.Fatal(err)

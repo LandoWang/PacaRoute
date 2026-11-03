@@ -1,21 +1,25 @@
 package pacaroute
 
-import "strings"
+import (
+	"strings"
 
-func parseGatewayPath(path string) (agent AgentProtocol, explicit, operation string) {
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
+)
+
+func parseGatewayPath(path string) (agent domain.AgentProtocol, explicit, operation string) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) >= 2 && (parts[0] == "sources" || parts[0] == "pools") {
 		explicit = parts[1]
 		if parts[0] == "pools" {
-			explicit = poolTarget(explicit)
+			explicit = domain.PoolTarget(explicit)
 		}
 		parts = parts[2:]
 	}
 	if len(parts) > 0 && parts[0] == "codex" {
-		agent = AgentCodex
+		agent = domain.AgentCodex
 		parts = parts[1:]
 	} else if len(parts) > 0 && parts[0] == "cc" {
-		agent = AgentClaudeCode
+		agent = domain.AgentClaudeCode
 		parts = parts[1:]
 	}
 	if len(parts) > 0 && parts[0] == "v1" {
@@ -24,16 +28,16 @@ func parseGatewayPath(path string) (agent AgentProtocol, explicit, operation str
 	operation = strings.Join(parts, "/")
 	if agent == "" {
 		if operation == "messages" || operation == "messages/count_tokens" {
-			agent = AgentClaudeCode
+			agent = domain.AgentClaudeCode
 		} else {
-			agent = AgentCodex
+			agent = domain.AgentCodex
 		}
 	}
 	return
 }
 
 // upstreamPath maps the Agent operation to the target's native endpoint path.
-func upstreamPath(t Target, agent AgentProtocol, protocol, operation string) string {
+func upstreamPath(t Target, agent domain.AgentProtocol, protocol, operation string) string {
 	upstreamPath := "/responses"
 	if protocol == "messages" {
 		upstreamPath = "/v1/messages"
@@ -41,9 +45,9 @@ func upstreamPath(t Target, agent AgentProtocol, protocol, operation string) str
 	if operation == "messages/count_tokens" {
 		upstreamPath += "/count_tokens"
 	}
-	if t.Source.Kind == SourcePeer {
+	if t.Source.Kind == domain.SourcePeer {
 		prefix := "/codex"
-		if agent == AgentClaudeCode {
+		if agent == domain.AgentClaudeCode {
 			prefix = "/cc"
 		}
 		upstreamPath = prefix + "/" + operation

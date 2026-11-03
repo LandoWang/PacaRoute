@@ -3,9 +3,10 @@
 package pacaroute
 
 import (
-	"golang.org/x/sys/windows/registry"
 	"os"
 	"syscall"
+
+	"golang.org/x/sys/windows/registry"
 )
 
 const startupRegistry = `Software\Microsoft\Windows\CurrentVersion\Run`

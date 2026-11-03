@@ -14,6 +14,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func defaultRoot() string {
@@ -264,7 +266,7 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 		if action != "apply" {
 			return fail(errors.New("use config show or config apply"))
 		}
-		var c Config
+		var c domain.Config
 		if e = readJSONBody(in, &c); e != nil {
 			return fail(e)
 		}

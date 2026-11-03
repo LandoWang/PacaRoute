@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // Peer forwarding is bounded at eight hops: a request that has travelled seven
@@ -52,7 +54,7 @@ func TestDenialAndCatalogDoNotReserveQuota(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"status": "completed", "output": []any{}, "usage": map[string]int{"input_tokens": 1, "output_tokens": 1}})
 	})
 	c := cloneConfig(store.Snapshot())
-	c.Clients[0].Quota = &ClientQuota{WindowSeconds: 3600, Requests: 1}
+	c.Clients[0].Quota = &domain.ClientQuota{WindowSeconds: 3600, Requests: 1}
 	saveTest(t, store, c)
 	catalog, _ := http.NewRequest("GET", front.URL+"/codex/v1/models", nil)
 	catalog.Header.Set("Authorization", "Bearer alice-key")

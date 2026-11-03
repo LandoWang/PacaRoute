@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 type Router struct {
@@ -22,17 +24,19 @@ type Router struct {
 }
 
 type Target struct {
-	Source   Source
+	Source   domain.Source
 	Model    string
 	Member   string
 	Affinity string
-	Pool     *Pool
+	Pool     *domain.Pool
 	Sticky   bool
 }
 
-func endpointIdentity(s Source) string { return string(s.Kind) + ":" + s.AccountID + ":" + s.Endpoint }
-func (r *Router) Targets(c *Config, scope string, agent AgentProtocol, id, model, session string, continuation bool) ([]Target, error) {
-	if !isPoolTarget(id) {
+func endpointIdentity(s domain.Source) string {
+	return string(s.Kind) + ":" + s.AccountID + ":" + s.Endpoint
+}
+func (r *Router) Targets(c *domain.Config, scope string, agent domain.AgentProtocol, id, model, session string, continuation bool) ([]Target, error) {
+	if !domain.IsPoolTarget(id) {
 		s, ok := c.Source(id)
 		if !ok {
 			return nil, errors.New("source not found")
@@ -96,7 +100,7 @@ func (r *Router) Targets(c *Config, scope string, agent AgentProtocol, id, model
 	}
 	seed := key
 	if seed == "" {
-		seed = newID()
+		seed = domain.NewID()
 	}
 	type scored struct {
 		t     Target
@@ -139,11 +143,11 @@ func (r *Router) Targets(c *Config, scope string, agent AgentProtocol, id, model
 // SHA-256 hex output is a storage contract shared with existing journals.
 func affinityHash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }
 
-func (t Target) upstreamProtocol(agent ...AgentProtocol) string {
-	if t.Source.Kind == SourcePeer && len(agent) > 0 {
+func (t Target) upstreamProtocol(agent ...domain.AgentProtocol) string {
+	if t.Source.Kind == domain.SourcePeer && len(agent) > 0 {
 		return incomingProtocol(agent[0])
 	}
-	if t.Source.Kind == SourceAnthropic || t.Source.Kind == SourceCopilot && strings.HasPrefix(t.Model, "claude-") {
+	if t.Source.Kind == domain.SourceAnthropic || t.Source.Kind == domain.SourceCopilot && strings.HasPrefix(t.Model, "claude-") {
 		return "messages"
 	}
 	return "responses"

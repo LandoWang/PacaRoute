@@ -2,6 +2,8 @@ package pacaroute
 
 import (
 	"encoding/json"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // anthropicVersion is sent on Messages requests that do not carry one.
@@ -12,8 +14,8 @@ type object = map[string]json.RawMessage
 func obj(b json.RawMessage) object     { v := object{}; _ = json.Unmarshal(b, &v); return v }
 func array(b json.RawMessage) []object { var v []object; _ = json.Unmarshal(b, &v); return v }
 
-func incomingProtocol(agent AgentProtocol) string {
-	if agent == AgentClaudeCode {
+func incomingProtocol(agent domain.AgentProtocol) string {
+	if agent == domain.AgentClaudeCode {
 		return "messages"
 	}
 	return "responses"
@@ -23,7 +25,7 @@ func incomingProtocol(agent AgentProtocol) string {
 // prepare builds the upstream body for a source kind, actual model and chosen
 // upstream protocol. Native paths keep unknown fields; a protocol mismatch
 // selects an explicit translation.
-func prepare(body object, kind SourceKind, model string, agent AgentProtocol, upstream string) ([]byte, *translation, error) {
+func prepare(body object, kind domain.SourceKind, model string, agent domain.AgentProtocol, upstream string) ([]byte, *translation, error) {
 	// RawMessage values are never modified in place; copying the top-level map
 	// isolates edits from the body that later failover targets reuse.
 	wire := make(object, len(body))
@@ -44,7 +46,7 @@ func prepare(body object, kind SourceKind, model string, agent AgentProtocol, up
 			return nil, nil, e
 		}
 	}
-	if kind == SourceCopilot {
+	if kind == domain.SourceCopilot {
 		if upstream == "responses" {
 			delete(wire, "service_tier")
 			if string(wire["store"]) == "true" {

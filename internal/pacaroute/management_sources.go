@@ -3,6 +3,8 @@ package pacaroute
 import (
 	"net/http"
 	"strings"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func (s *Server) pauseSource(w http.ResponseWriter, r *http.Request, path string) {
@@ -70,7 +72,7 @@ func (s *Server) discoverSourceModels(w http.ResponseWriter, r *http.Request, pa
 // discoverDraftModels probes an unsaved source draft without committing it.
 func (s *Server) discoverDraftModels(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Source
+		domain.Source
 		ProxyID string `json:"proxy_id"`
 	}
 	if decodeRequest(w, r, &input) != nil {
@@ -79,14 +81,14 @@ func (s *Server) discoverDraftModels(w http.ResponseWriter, r *http.Request) {
 	}
 	source := input.Source
 	draft := cloneConfig(s.Store.Snapshot())
-	if !validID(source.ID) || source.ID == "copilot" {
-		source.ID = "discovery-" + newID()[:8]
+	if !domain.ValidID(source.ID) || source.ID == "copilot" {
+		source.ID = "discovery-" + domain.NewID()[:8]
 	}
 	source.Name = "Model discovery"
 	source.Deployments = []string{"discovery"}
 	// Validate the draft independently of saved routes. Keep its source ID so
 	// an existing resource-specific credential can override the account key.
-	draft.Sources = []Source{source}
+	draft.Sources = []domain.Source{source}
 	draft.Pools = nil
 	draft.Clients = nil
 	draft.SourceState.Paused = nil

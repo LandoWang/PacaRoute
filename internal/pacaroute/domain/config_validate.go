@@ -1,4 +1,4 @@
-package pacaroute
+package domain
 
 import (
 	"encoding/hex"
@@ -11,7 +11,7 @@ import (
 // Validate normalizes empty collections and then checks the whole graph in a
 // fixed order. Entity validators also apply their per-record defaults.
 func (c *Config) Validate() error {
-	c.normalize()
+	c.Normalize()
 	for _, validate := range []func() error{c.validateAccounts, c.validateSources, c.validateProxies, c.validatePools, c.validateClients} {
 		if err := validate(); err != nil {
 			return err
@@ -30,7 +30,7 @@ func (c *Config) Validate() error {
 
 // normalize replaces absent collections with empty ones so the stored and
 // published document always carries arrays and maps, never null.
-func (c *Config) normalize() {
+func (c *Config) Normalize() {
 	if c.Accounts == nil {
 		c.Accounts = []Account{}
 	}
@@ -58,7 +58,7 @@ func (c *Config) normalize() {
 func (c *Config) validateAccounts() error {
 	seen := map[string]bool{}
 	for _, a := range c.Accounts {
-		if !validID(a.ID) || seen[a.ID] || strings.TrimSpace(a.Name) == "" || (a.Kind != AccountGitHub && a.Kind != AccountAzure && !accountUsesAPIKey(a.Kind)) {
+		if !ValidID(a.ID) || seen[a.ID] || strings.TrimSpace(a.Name) == "" || (a.Kind != AccountGitHub && a.Kind != AccountAzure && !AccountUsesAPIKey(a.Kind)) {
 			return fmt.Errorf("invalid or duplicate account %q", a.ID)
 		}
 		if a.LoginMode != "" && !((a.Kind == AccountAzure && (a.LoginMode == "azure-cli" || a.LoginMode == "device")) || (a.Kind == AccountGitHub && (a.LoginMode == "device" || a.LoginMode == "oauth-app"))) {
@@ -84,7 +84,7 @@ func (c *Config) validateSources() error {
 			return errors.New("too many model prices")
 		}
 		for model, price := range s.Prices {
-			if !modelIdentifier.MatchString(model) {
+			if !ModelIdentifier.MatchString(model) {
 				return errors.New("invalid priced model")
 			}
 			if err := price.validate(); err != nil {
@@ -112,7 +112,7 @@ func (c *Config) validateSources() error {
 			}
 		}
 		a, ok := c.Account(s.AccountID)
-		if !validID(s.ID) || seen[s.ID] || s.Name == "" || !ok {
+		if !ValidID(s.ID) || seen[s.ID] || s.Name == "" || !ok {
 			return fmt.Errorf("invalid source/account %q", s.ID)
 		}
 		seen[s.ID] = true
@@ -149,16 +149,16 @@ func (c *Config) validateSources() error {
 			return errors.New("a source needs at least one model/deployment")
 		}
 		for _, m := range s.Deployments {
-			if !modelIdentifier.MatchString(m) {
+			if !ModelIdentifier.MatchString(m) {
 				return fmt.Errorf("invalid model %q", m)
 			}
 		}
 		for agent, models := range s.AgentModels {
-			if !agentValid(AgentProtocol(agent)) {
+			if !AgentValid(AgentProtocol(agent)) {
 				return errors.New("unknown Agent in discovered source models")
 			}
 			for _, model := range models {
-				if !modelIdentifier.MatchString(model) {
+				if !ModelIdentifier.MatchString(model) {
 					return errors.New("invalid discovered model")
 				}
 			}
@@ -171,7 +171,7 @@ func (c *Config) validateSources() error {
 func (c *Config) validateProxies() error {
 	seen := map[string]bool{"system": true, "direct": true}
 	for _, p := range c.Proxies.Profiles {
-		if !validID(p.ID) || seen[p.ID] || p.Name == "" {
+		if !ValidID(p.ID) || seen[p.ID] || p.Name == "" {
 			return errors.New("invalid proxy")
 		}
 		seen[p.ID] = true
@@ -199,7 +199,7 @@ func (c *Config) validateProxies() error {
 func (c *Config) validatePools() error {
 	seen := map[string]bool{}
 	for _, p := range c.Pools {
-		if !validID(p.ID) || seen[p.ID] || p.Name == "" || !agentValid(p.Agent) || !modelIdentifier.MatchString(p.Model) || len(p.Members) == 0 || len(p.Members) > 32 {
+		if !ValidID(p.ID) || seen[p.ID] || p.Name == "" || !AgentValid(p.Agent) || !ModelIdentifier.MatchString(p.Model) || len(p.Members) == 0 || len(p.Members) > 32 {
 			return errors.New("invalid source pool")
 		}
 		seen[p.ID] = true
@@ -207,19 +207,19 @@ func (c *Config) validatePools() error {
 		sum := 0
 		weights := map[string]int{}
 		for _, m := range p.Members {
-			if isPoolTarget(m.SourceID) {
+			if IsPoolTarget(m.SourceID) {
 				return errors.New("nested pools are not supported")
 			}
-			if !validID(m.ID) || ids[m.ID] || m.Weight < 0 || m.Weight > 1000000 {
+			if !ValidID(m.ID) || ids[m.ID] || m.Weight < 0 || m.Weight > 1000000 {
 				return errors.New("invalid pool member")
 			}
 			ids[m.ID] = true
 			sum += m.Weight
-			if !modelIdentifier.MatchString(p.MemberModel(m)) {
+			if !ModelIdentifier.MatchString(p.MemberModel(m)) {
 				return errors.New("invalid pool model alias")
 			}
 			weights[p.MemberModel(m)] += m.Weight
-			if e := c.validateTarget(m.SourceID, m.Model, p.Agent.Grant()); e != nil {
+			if e := c.ValidateTarget(m.SourceID, m.Model, p.Agent.Grant()); e != nil {
 				return e
 			}
 		}
@@ -252,7 +252,7 @@ func (c *Config) validateClients() error {
 		if v.Routes == nil {
 			v.Routes = []Route{}
 		}
-		if !validID(v.ID) || seen[v.ID] || v.Name == "" {
+		if !ValidID(v.ID) || seen[v.ID] || v.Name == "" {
 			return errors.New("invalid client")
 		}
 		seen[v.ID] = true
@@ -277,27 +277,27 @@ func (c *Config) validateClients() error {
 		}
 		ids := map[string]bool{}
 		for _, route := range v.Routes {
-			if !validID(route.ID) || ids[route.ID] || !clientAgentValid(route.Agent) || (route.MatchModel != "*" && !modelIdentifier.MatchString(route.MatchModel)) {
+			if !ValidID(route.ID) || ids[route.ID] || !clientAgentValid(route.Agent) || (route.MatchModel != "*" && !ModelIdentifier.MatchString(route.MatchModel)) {
 				return errors.New("invalid client route")
 			}
 			ids[route.ID] = true
-			if e := c.validateTarget(route.SourceID, route.Model, route.Agent); e != nil {
+			if e := c.ValidateTarget(route.SourceID, route.Model, route.Agent); e != nil {
 				return e
 			}
 		}
 	}
 	return nil
 }
-func (c *Config) validateTarget(id, model string, agent GrantKind) error {
+func (c *Config) ValidateTarget(id, model string, agent GrantKind) error {
 	if agent == GrantPeer {
 		for _, protocol := range []GrantKind{GrantCodex, GrantClaudeCode} {
-			if c.validateTarget(id, model, protocol) == nil {
+			if c.ValidateTarget(id, model, protocol) == nil {
 				return nil
 			}
 		}
 		return errors.New("PacaRoute target must expose this model for Codex or Claude Code")
 	}
-	if isPoolTarget(id) {
+	if IsPoolTarget(id) {
 		p, ok := c.Pool(id)
 		if !ok || p.Agent.Grant() != agent || !p.HasModel(model) {
 			return errors.New("route must match the pool Agent and model")
@@ -305,7 +305,7 @@ func (c *Config) validateTarget(id, model string, agent GrantKind) error {
 		return nil
 	}
 	s, ok := c.Source(id)
-	if !ok || !modelIdentifier.MatchString(model) {
+	if !ok || !ModelIdentifier.MatchString(model) {
 		return errors.New("unknown source or invalid model")
 	}
 	if s.Kind == SourcePeer && !s.SupportsAgentModel(AgentProtocol(agent), model) {

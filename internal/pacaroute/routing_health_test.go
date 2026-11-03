@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // Admission health distinguishes source/model cooldown from manual pause and
@@ -23,7 +25,7 @@ func TestRoutingHealthMatchesAdmissionAndExpiry(t *testing.T) {
 		t.Fatal("invalid cooldown deadline", remaining)
 	}
 	// A cooling model does not disable other deployments on the same source.
-	c.Pools[0].Members = append(c.Pools[0].Members, Member{ID: "other", SourceID: "test", Model: "other-model", Weight: 1})
+	c.Pools[0].Members = append(c.Pools[0].Members, domain.Member{ID: "other", SourceID: "test", Model: "other-model", Weight: 1})
 	if s.Router.Health(&c).Pools[0].Available != 2 {
 		t.Fatal("cooldown incorrectly applied to all source models")
 	}

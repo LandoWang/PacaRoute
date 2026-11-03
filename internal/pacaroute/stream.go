@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // maxSSEFrame bounds one SSE event and each of its lines.
@@ -83,8 +85,8 @@ func streamReadError(err error, terminal, last string) error {
 	return fmt.Errorf("upstream stream ended before %s (last event: %s): %w", terminal, streamDetail(last), err)
 }
 
-func emitStreamError(w io.Writer, agent AgentProtocol, message string) error {
-	if agent == AgentCodex {
+func emitStreamError(w io.Writer, agent domain.AgentProtocol, message string) error {
+	if agent == domain.AgentCodex {
 		// Codex consumes response.failed, but ignores bare error events. This is
 		// a failure terminal only; never synthesize a successful completion.
 		return emitSSE(w, "response.failed", map[string]any{"type": "response.failed", "response": map[string]any{"status": "failed", "error": map[string]string{"code": "server_error", "message": message}}})

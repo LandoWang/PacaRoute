@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // configJSONFixture covers every account/source kind, pool Agent, route grant and
@@ -48,7 +50,7 @@ const configJSONFixture = `{
 // Configuration JSON is a storage and wire contract: decoding and re-encoding
 // (raw, and after validation/normalization) must produce the recorded bytes.
 func TestConfigJSONRoundTripIsStable(t *testing.T) {
-	var raw Config
+	var raw domain.Config
 	if err := json.Unmarshal([]byte(configJSONFixture), &raw); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +58,7 @@ func TestConfigJSONRoundTripIsStable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var again Config
+	var again domain.Config
 	if err := json.Unmarshal(first, &again); err != nil {
 		t.Fatal(err)
 	}

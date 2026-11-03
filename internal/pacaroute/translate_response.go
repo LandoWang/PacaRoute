@@ -3,6 +3,8 @@ package pacaroute
 import (
 	"encoding/json"
 	"errors"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func (tr *translation) responseJSON(body []byte) ([]byte, error) {
@@ -42,7 +44,7 @@ func (tr *translation) responseJSON(body []byte) ([]byte, error) {
 			u.observe(jsonBytes(m))
 			usage = map[string]any{"input_tokens": u.Input, "output_tokens": u.Output}
 		}
-		return json.Marshal(map[string]any{"id": "msg_" + newID(), "type": "message", "role": "assistant", "model": tr.model, "content": blocks, "stop_reason": reason, "stop_sequence": nil, "usage": usage})
+		return json.Marshal(map[string]any{"id": "msg_" + domain.NewID(), "type": "message", "role": "assistant", "model": tr.model, "content": blocks, "stop_reason": reason, "stop_sequence": nil, "usage": usage})
 	}
 	return tr.messagesJSON(m)
 }
@@ -51,7 +53,7 @@ func (tr *translation) messagesJSON(m object) ([]byte, error) {
 	for _, b := range array(m["content"]) {
 		switch rawString(b["type"]) {
 		case "text":
-			output = append(output, map[string]any{"id": "msg_" + newID(), "type": "message", "role": "assistant", "status": "completed", "content": []any{map[string]any{"type": "output_text", "text": rawString(b["text"]), "annotations": []any{}}}})
+			output = append(output, map[string]any{"id": "msg_" + domain.NewID(), "type": "message", "role": "assistant", "status": "completed", "content": []any{map[string]any{"type": "output_text", "text": rawString(b["text"]), "annotations": []any{}}}})
 		case "tool_use":
 			item := tr.toolItem(b)
 			output = append(output, item)
@@ -66,7 +68,7 @@ func (tr *translation) messagesJSON(m object) ([]byte, error) {
 	u := Usage{}
 	u.observe(jsonBytes(m))
 	usage := u.responsesUsage()
-	return json.Marshal(map[string]any{"id": "resp_" + newID(), "object": "response", "status": status, "model": tr.model, "output": output, "usage": usage, "incomplete_details": incomplete})
+	return json.Marshal(map[string]any{"id": "resp_" + domain.NewID(), "object": "response", "status": status, "model": tr.model, "output": output, "usage": usage, "incomplete_details": incomplete})
 }
 func (tr *translation) toolItem(b object) map[string]any {
 	name := rawString(b["name"])

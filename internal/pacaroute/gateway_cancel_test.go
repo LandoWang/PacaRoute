@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // Client cancellation before headers is not a source failure, just as client
@@ -35,8 +37,8 @@ func TestCancelBeforeHeadersDoesNotCooldownPool(t *testing.T) {
 	if err := s.Auth.SetKeys(map[string]string{"other": "synthetic-only"}); err != nil {
 		t.Fatal(err)
 	}
-	c.Pools = []Pool{{ID: "pool", Name: "Pool", Agent: "codex", Model: "coding", Failover: true,
-		Members: []Member{{ID: "member", SourceID: "test", Model: "deployed", Weight: 1}, {ID: "other-member", SourceID: "other", Model: "deployed", Weight: 1}}}}
+	c.Pools = []domain.Pool{{ID: "pool", Name: "Pool", Agent: "codex", Model: "coding", Failover: true,
+		Members: []domain.Member{{ID: "member", SourceID: "test", Model: "deployed", Weight: 1}, {ID: "other-member", SourceID: "other", Model: "deployed", Weight: 1}}}}
 	c.Clients[0].Routes[0].SourceID = "pool:pool"
 	c.Clients[0].Routes[0].Model = "coding"
 	saveTest(t, store, c)

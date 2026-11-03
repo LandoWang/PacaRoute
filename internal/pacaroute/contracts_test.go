@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func storeForTest(t *testing.T) *ConfigStore {
@@ -26,14 +28,14 @@ func storeForTest(t *testing.T) *ConfigStore {
 	t.Cleanup(func() { s.Close() })
 	return s
 }
-func saveTest(t *testing.T, s *ConfigStore, c Config) {
+func saveTest(t *testing.T, s *ConfigStore, c domain.Config) {
 	t.Helper()
 	if e := s.Save(c, c.Revision); e != nil {
 		t.Fatal(e)
 	}
 }
-func fixtureConfig() Config {
-	return Config{Sources: []Source{{ID: "secondary", Name: "Secondary", Kind: "copilot", AccountID: "copilot"}}, Pools: []Pool{{ID: "balanced", Name: "Balanced", Agent: "codex", Model: "coding", Failover: true, Members: []Member{{ID: "primary", SourceID: "copilot", Model: "gpt-6-astra", Weight: 70}, {ID: "secondary", SourceID: "secondary", Model: "gpt-6-astra", Weight: 30}}}}, Proxies: Proxies{Bindings: map[string]string{}, AccountProxyID: "system"}}
+func fixtureConfig() domain.Config {
+	return domain.Config{Sources: []domain.Source{{ID: "secondary", Name: "Secondary", Kind: "copilot", AccountID: "copilot"}}, Pools: []domain.Pool{{ID: "balanced", Name: "Balanced", Agent: "codex", Model: "coding", Failover: true, Members: []domain.Member{{ID: "primary", SourceID: "copilot", Model: "gpt-6-astra", Weight: 70}, {ID: "secondary", SourceID: "secondary", Model: "gpt-6-astra", Weight: 30}}}}, Proxies: domain.Proxies{Bindings: map[string]string{}, AccountProxyID: "system"}}
 }
 
 // Contract: live readers accept atomic edits, keep the last valid snapshot on malformed data,
@@ -183,7 +185,7 @@ func TestNativeSSEUsageAndWireFidelity(t *testing.T) {
 }
 func TestNativeToolEchoPreservesCustomNamespaceAndOpaqueFields(t *testing.T) {
 	body := obj([]byte(`{"model":"alias","stream":true,"unknown":{"keep":"exact"},"tools":[{"type":"custom","name":"exec","format":{"type":"grammar","syntax":"lark","definition":"start: /.+/"}}],"input":[{"type":"custom_tool_call","call_id":"call-a","name":"exec","namespace":"functions","input":"await do_work()"},{"type":"custom_tool_call_output","call_id":"call-a","output":"done"}]}`))
-	target := Target{Source: Source{Kind: "copilot"}, Model: "gpt-6-astra"}
+	target := Target{Source: domain.Source{Kind: "copilot"}, Model: "gpt-6-astra"}
 	b, tr, e := prepare(body, target.Source.Kind, target.Model, "codex", target.upstreamProtocol("codex"))
 	if e != nil || tr != nil {
 		t.Fatal("native path translated")
@@ -201,7 +203,7 @@ func gatewayTest(t *testing.T, handler http.HandlerFunc) (*Server, *httptest.Ser
 	up := httptest.NewTLSServer(handler)
 	t.Cleanup(up.Close)
 	store := storeForTest(t)
-	c := Config{Accounts: []Account{{ID: "api", Name: "API", Kind: "api-key"}}, Sources: []Source{{ID: "test", Name: "Test", Kind: "openai", AuthMode: "api-key", AccountID: "api", Endpoint: up.URL, Deployments: []string{"deployed"}}}, Clients: []Client{{ID: "alice", Name: "Alice", KeyHash: keyHash("alice-key"), Routes: []Route{{ID: "main", Agent: "codex", MatchModel: "coding", SourceID: "test", Model: "deployed"}}}}}
+	c := domain.Config{Accounts: []domain.Account{{ID: "api", Name: "API", Kind: "api-key"}}, Sources: []domain.Source{{ID: "test", Name: "Test", Kind: "openai", AuthMode: "api-key", AccountID: "api", Endpoint: up.URL, Deployments: []string{"deployed"}}}, Clients: []domain.Client{{ID: "alice", Name: "Alice", KeyHash: keyHash("alice-key"), Routes: []domain.Route{{ID: "main", Agent: "codex", MatchModel: "coding", SourceID: "test", Model: "deployed"}}}}}
 	saveTest(t, store, c)
 	auth := NewAuth(store, "")
 	auth.http.values = map[string]*http.Client{"system:": up.Client()}
@@ -314,7 +316,7 @@ func TestResponseStartedNeverFailsOver(t *testing.T) {
 		w.(http.Flusher).Flush()
 	})
 	c := cloneConfig(store.Snapshot())
-	c.Pools = []Pool{{ID: "pool", Name: "Pool", Agent: "codex", Model: "coding", Failover: true, Members: []Member{{ID: "first", SourceID: "test", Model: "deployed", Weight: 1}, {ID: "second", SourceID: "test", Model: "deployed", Weight: 1}}}}
+	c.Pools = []domain.Pool{{ID: "pool", Name: "Pool", Agent: "codex", Model: "coding", Failover: true, Members: []domain.Member{{ID: "first", SourceID: "test", Model: "deployed", Weight: 1}, {ID: "second", SourceID: "test", Model: "deployed", Weight: 1}}}}
 	c.Clients[0].Routes[0].SourceID = "pool:pool"
 	c.Clients[0].Routes[0].Model = "coding"
 	saveTest(t, store, c)
@@ -663,7 +665,7 @@ func TestAPIKeyRotationAcrossAuthorities(t *testing.T) {
 	store := storeForTest(t)
 	a := NewAuth(store, "")
 	other := NewAuth(store, "")
-	source := Source{ID: "api", Kind: "openai", AuthMode: "api-key"}
+	source := domain.Source{ID: "api", Kind: "openai", AuthMode: "api-key"}
 	if err := a.SaveKey(context.Background(), source.ID, "fixture-before"); err != nil {
 		t.Fatal(err)
 	}

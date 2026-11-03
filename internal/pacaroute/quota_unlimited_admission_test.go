@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // A Client without enforced limits cannot be blocked, so admitting it must not
@@ -26,7 +28,7 @@ func TestUnlimitedAdmissionDoesNotScanHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	sequence := 0
-	measure := func(client string, limit *ClientQuota) time.Duration {
+	measure := func(client string, limit *domain.ClientQuota) time.Duration {
 		start := time.Now()
 		for i := 0; i < 16; i++ {
 			sequence++
@@ -37,7 +39,7 @@ func TestUnlimitedAdmissionDoesNotScanHistory(t *testing.T) {
 		}
 		return time.Since(start) / 16
 	}
-	for _, limit := range []*ClientQuota{nil, {WindowSeconds: 3600}} {
+	for _, limit := range []*domain.ClientQuota{nil, {WindowSeconds: 3600}} {
 		measure("empty", limit)
 		measure("history", limit)
 		empty, history := measure("empty", limit), measure("history", limit)

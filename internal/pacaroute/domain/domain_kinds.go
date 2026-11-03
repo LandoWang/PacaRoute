@@ -1,4 +1,4 @@
-package pacaroute
+package domain
 
 // GrantKind is what a Client grant or route permits. The two Agent protocols
 // are grants too; GrantPeer is an access grant for the /pacaroute namespace,
@@ -46,11 +46,11 @@ const (
 	AccountPeer      AccountKind = "pacaroute"
 )
 
-func agentValid(a AgentProtocol) bool { return a == AgentCodex || a == AgentClaudeCode }
+func AgentValid(a AgentProtocol) bool { return a == AgentCodex || a == AgentClaudeCode }
 func clientAgentValid(a GrantKind) bool {
-	return agentValid(AgentProtocol(a)) || a == GrantPeer
+	return AgentValid(AgentProtocol(a)) || a == GrantPeer
 }
-func accountUsesAPIKey(kind AccountKind) bool {
+func AccountUsesAPIKey(kind AccountKind) bool {
 	return kind == AccountOpenAI || kind == AccountAnthropic || kind == AccountAPIKey || kind == AccountPeer
 }
 func sourceAcceptsAccount(source SourceKind, account AccountKind) bool {

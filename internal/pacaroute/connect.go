@@ -6,13 +6,15 @@ import (
 	"net"
 	"net/url"
 	"strings"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 // connect configures a caller's machine without starting a gateway or opening
 // the service database. Keys enter on stdin and are never emitted in previews.
 func connectClient(a arguments, in io.Reader) (map[string]any, error) {
 	agent, model := a.get("agent", ""), a.get("model", "")
-	if !agentValid(AgentProtocol(agent)) || !modelIdentifier.MatchString(model) {
+	if !domain.AgentValid(domain.AgentProtocol(agent)) || !domain.ModelIdentifier.MatchString(model) {
 		return nil, errors.New("valid Agent and model alias required")
 	}
 	base := strings.TrimRight(a.get("url", ""), "/")

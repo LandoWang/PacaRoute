@@ -10,6 +10,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 const configBundleFormat = "pacaroute-config"
@@ -18,13 +20,13 @@ const configBundleLimit = 24 << 20
 // A bundle contains portable configuration only. Credentials, credential hashes,
 // runtime state and machine settings are deliberately outside this contract.
 type ConfigBundle struct {
-	Format     string  `json:"format"`
-	Version    int     `json:"version"`
-	ExportedAt string  `json:"exported_at"`
-	Config     *Config `json:"config"`
+	Format     string         `json:"format"`
+	Version    int            `json:"version"`
+	ExportedAt string         `json:"exported_at"`
+	Config     *domain.Config `json:"config"`
 }
 
-func ExportConfig(current *Config) ConfigBundle {
+func ExportConfig(current *domain.Config) ConfigBundle {
 	c := cloneConfig(current)
 	c.Revision = ""
 	for i := range c.Clients {
@@ -78,25 +80,25 @@ type ConfigImportPlan struct {
 	Removed     ImportCounts   `json:"removed"`
 	Changes     []ImportChange `json:"changes"`
 	Issues      []ImportIssue  `json:"issues"`
-	config      Config
+	config      domain.Config
 	clientIDs   []string
 }
 
-func configCounts(c *Config) ImportCounts {
+func configCounts(c *domain.Config) ImportCounts {
 	return ImportCounts{len(c.Accounts), len(c.Sources), len(c.Pools), len(c.Proxies.Profiles), len(c.Clients)}
 }
 
 // Each import gets a fresh namespace, including replace. Reusing an old account
 // or source ID could silently attach a credential left in the destination vault.
 // Members/routes are scoped by their newly allocated pool/Client and retain order.
-func planConfigImport(current *Config, b ConfigBundle, mode, namespace string) (*ConfigImportPlan, error) {
+func planConfigImport(current *domain.Config, b ConfigBundle, mode, namespace string) (*ConfigImportPlan, error) {
 	if b.Format != configBundleFormat || b.Version != 1 || b.Config == nil {
 		return nil, errors.New("unsupported PacaRoute configuration format or version")
 	}
 	if mode != "add" && mode != "replace" {
 		return nil, errors.New("import mode must be add or replace")
 	}
-	if !validID(namespace) || len(namespace) != 33 || !strings.HasPrefix(namespace, "i") {
+	if !domain.ValidID(namespace) || len(namespace) != 33 || !strings.HasPrefix(namespace, "i") {
 		return nil, errors.New("invalid import namespace")
 	}
 	in := cloneConfig(b.Config)
@@ -124,8 +126,8 @@ func planConfigImport(current *Config, b ConfigBundle, mode, namespace string) (
 	// copilot/azure-local would silently connect the two workspaces.
 	materializeLegacyIdentities(&in)
 	p := &ConfigImportPlan{Mode: mode, Revision: current.Revision, Namespace: namespace, Added: configCounts(&in), Changes: []ImportChange{}, Issues: []ImportIssue{}}
-	base := Config{}
-	base.normalize()
+	base := domain.Config{}
+	base.Normalize()
 	if mode == "add" {
 		base = cloneConfig(current)
 	} else {
@@ -185,7 +187,7 @@ func planConfigImport(current *Config, b ConfigBundle, mode, namespace string) (
 		old := a.ID
 		a.ID, a.Name = allocate("accounts", a.ID, a.Name, false)
 		accountMap[old] = a.ID
-		if sharedAzure(&in, old) {
+		if domain.SharedAzure(&in, old) {
 			a.LoginMode = "device"
 			p.Issues = append(p.Issues, ImportIssue{"azure_login_isolated", a.ID, a.Name})
 		}
@@ -237,8 +239,8 @@ func planConfigImport(current *Config, b ConfigBundle, mode, namespace string) (
 		}
 		for i := range client.Routes {
 			route := &client.Routes[i]
-			if id, ok := poolID(route.SourceID); ok {
-				route.SourceID = poolTarget(poolMap[id])
+			if id, ok := domain.PoolID(route.SourceID); ok {
+				route.SourceID = domain.PoolTarget(poolMap[id])
 			} else {
 				route.SourceID = sourceMap[route.SourceID]
 			}
@@ -255,12 +257,12 @@ func planConfigImport(current *Config, b ConfigBundle, mode, namespace string) (
 	p.Fingerprint = digestHex(string(jsonBytes(struct {
 		Bundle                    ConfigBundle
 		Mode, Revision, Namespace string
-		Config                    Config
+		Config                    domain.Config
 	}{b, mode, current.Revision, namespace, base})))
 	return p, nil
 }
 
-func importNamespace() string { return "i" + strings.ReplaceAll(newID(), "-", "") }
+func importNamespace() string { return "i" + strings.ReplaceAll(domain.NewID(), "-", "") }
 
 // digestHex is the SHA-256 hex digest used for imported ID suffixes and the
 // preview fingerprint.

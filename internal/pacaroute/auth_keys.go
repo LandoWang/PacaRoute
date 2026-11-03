@@ -5,11 +5,13 @@ import (
 	"errors"
 	"os"
 	"strings"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func (a *Auth) SetKeys(keys map[string]string) error {
 	for k, v := range keys {
-		if !validID(k) || !validSecret(v) {
+		if !domain.ValidID(k) || !validSecret(v) {
 			return errors.New("invalid source credential")
 		}
 	}
@@ -28,7 +30,7 @@ func (a *Auth) SetKeys(keys map[string]string) error {
 }
 func validSecret(v string) bool { return len(v) <= 16384 && !strings.ContainsAny(v, "\r\n\x00") }
 func (a *Auth) SaveKey(ctx context.Context, id, key string) error {
-	if !validID(id) || key == "" || !validSecret(key) {
+	if !domain.ValidID(id) || key == "" || !validSecret(key) {
 		return errors.New("invalid API key")
 	}
 	unlock, e := fileLock(ctx, a.vault.secretPath(id)+lockSuffix, credentialLockWait)
@@ -43,7 +45,7 @@ func (a *Auth) SaveKey(ctx context.Context, id, key string) error {
 		if e = os.Remove(a.vault.secretPath(id)); e != nil && !os.IsNotExist(e) {
 			return e
 		}
-		if e = atomicWrite(a.vault.secretPath(id)+".revision", []byte(newID()), 0600); e != nil {
+		if e = atomicWrite(a.vault.secretPath(id)+".revision", []byte(domain.NewID()), 0600); e != nil {
 			return e
 		}
 	} else if e = a.vault.write(a.vault.secretPath(id), map[string]string{"key": key}); e != nil {
@@ -76,7 +78,7 @@ func (a *Auth) HasAccountKey(id string) bool {
 }
 func (a *Auth) SaveAccountKey(ctx context.Context, id, key string) error {
 	account, ok := a.config.Snapshot().Account(id)
-	if !ok || !accountUsesAPIKey(account.Kind) || key == "" || !validSecret(key) {
+	if !ok || !domain.AccountUsesAPIKey(account.Kind) || key == "" || !validSecret(key) {
 		return errors.New("select a key-based account and a valid API key")
 	}
 	path := a.vault.accountKeyPath(id)
@@ -92,7 +94,7 @@ func (a *Auth) SaveAccountKey(ctx context.Context, id, key string) error {
 		if e = os.Remove(path); e != nil && !os.IsNotExist(e) {
 			return e
 		}
-		if e = atomicWrite(path+".revision", []byte(newID()), 0600); e != nil {
+		if e = atomicWrite(path+".revision", []byte(domain.NewID()), 0600); e != nil {
 			return e
 		}
 	} else if e = a.vault.write(path, map[string]string{"key": key}); e != nil {

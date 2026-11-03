@@ -8,28 +8,30 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 type modelDiscovery struct {
-	Endpoint       string  `json:"endpoint,omitempty"`
-	Models         []Model `json:"models"`
-	ResourceID     string  `json:"resource_id,omitempty"`
-	SubscriptionID string  `json:"subscription_id,omitempty"`
+	Endpoint       string         `json:"endpoint,omitempty"`
+	Models         []domain.Model `json:"models"`
+	ResourceID     string         `json:"resource_id,omitempty"`
+	SubscriptionID string         `json:"subscription_id,omitempty"`
 }
 
-func (a *catalog) DiscoverModels(ctx context.Context, c *Config, source Source) (modelDiscovery, error) {
+func (a *catalog) DiscoverModels(ctx context.Context, c *domain.Config, source domain.Source) (modelDiscovery, error) {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	out := modelDiscovery{Models: []Model{}, ResourceID: source.ResourceID, SubscriptionID: source.SubscriptionID}
-	if source.Kind == SourcePeer {
+	out := modelDiscovery{Models: []domain.Model{}, ResourceID: source.ResourceID, SubscriptionID: source.SubscriptionID}
+	if source.Kind == domain.SourcePeer {
 		return a.discoverPeer(ctx, c, source)
 	}
-	if source.Kind == SourceCopilot {
+	if source.Kind == domain.SourceCopilot {
 		models, e := a.Models(ctx, source.ID)
 		out.Models = models
 		return out, e
 	}
-	if source.Kind == SourceAzureOpenAI {
+	if source.Kind == domain.SourceAzureOpenAI {
 		subscription := source.SubscriptionID
 		if source.ResourceID != "" {
 			parts := strings.Split(source.ResourceID, "/")
@@ -66,7 +68,7 @@ func (a *catalog) DiscoverModels(ctx context.Context, c *Config, source Source) 
 		if e != nil {
 			return out, e
 		}
-		out.Models = result["models"].([]Model)
+		out.Models = result["models"].([]domain.Model)
 		out.ResourceID = resource
 		out.SubscriptionID = subscription
 		return out, nil
@@ -76,7 +78,7 @@ func (a *catalog) DiscoverModels(ctx context.Context, c *Config, source Source) 
 		return out, e
 	}
 	endpoint := strings.TrimRight(source.Endpoint, "/")
-	if source.Kind == SourceAnthropic && !strings.HasSuffix(endpoint, "/v1") {
+	if source.Kind == domain.SourceAnthropic && !strings.HasSuffix(endpoint, "/v1") {
 		endpoint += "/v1"
 	}
 	endpoint += "/models"
@@ -87,7 +89,7 @@ func (a *catalog) DiscoverModels(ctx context.Context, c *Config, source Source) 
 		}
 		req.Header.Set(lease.Header, lease.Value)
 		req.Header.Set("Accept", "application/json")
-		if source.Kind == SourceAnthropic {
+		if source.Kind == domain.SourceAnthropic {
 			req.Header.Set("anthropic-version", anthropicVersion)
 		}
 		response, e := a.http.client(c.SourceProxy(source.ID)).Do(req)
@@ -112,14 +114,14 @@ func (a *catalog) DiscoverModels(ctx context.Context, c *Config, source Source) 
 			return out, e
 		}
 		for _, m := range body.Data {
-			if !modelIdentifier.MatchString(m.ID) {
+			if !domain.ModelIdentifier.MatchString(m.ID) {
 				continue
 			}
 			name := m.Name
 			if name == "" {
 				name = m.ID
 			}
-			out.Models = append(out.Models, Model{ID: m.ID, Name: name, Vendor: string(source.Kind), Codex: true, Claude: true})
+			out.Models = append(out.Models, domain.Model{ID: m.ID, Name: name, Vendor: string(source.Kind), Codex: true, Claude: true})
 		}
 		if !body.HasMore || body.LastID == "" {
 			return out, nil
@@ -133,8 +135,8 @@ func (a *catalog) DiscoverModels(ctx context.Context, c *Config, source Source) 
 	return out, errors.New("model catalog exceeds the discovery limit; configure model IDs manually")
 }
 
-func (a *catalog) discoverPeer(ctx context.Context, c *Config, source Source) (modelDiscovery, error) {
-	out := modelDiscovery{Models: []Model{}}
+func (a *catalog) discoverPeer(ctx context.Context, c *domain.Config, source domain.Source) (modelDiscovery, error) {
+	out := modelDiscovery{Models: []domain.Model{}}
 	base := strings.TrimRight(source.Endpoint, "/")
 	namespaced := strings.HasSuffix(base, "/pacaroute")
 	if !namespaced {
@@ -206,9 +208,9 @@ func (a *catalog) discoverPeer(ctx context.Context, c *Config, source Source) (m
 	} else if status != 200 {
 		return out, errors.New("remote PacaRoute rejected discovery; use its Client key, not its management key")
 	}
-	models := map[string]Model{}
+	models := map[string]domain.Model{}
 	for _, entry := range entries {
-		if !modelIdentifier.MatchString(entry.ID) {
+		if !domain.ModelIdentifier.MatchString(entry.ID) {
 			continue
 		}
 		m := models[entry.ID]

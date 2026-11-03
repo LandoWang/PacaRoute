@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 type credential struct {
@@ -46,7 +48,7 @@ func (a *Auth) readCredential(id string) (credential, error) {
 	}
 	return c, nil
 }
-func (a *Auth) credentialLocked(ctx context.Context, id string, p Proxy, force bool) (credential, error) {
+func (a *Auth) credentialLocked(ctx context.Context, id string, p domain.Proxy, force bool) (credential, error) {
 	c, e := a.readCredential(id)
 	if e != nil {
 		return c, e
@@ -78,7 +80,7 @@ func (a *Auth) credentialLocked(ctx context.Context, id string, p Proxy, force b
 	}
 	return c, nil
 }
-func (a *Auth) copilotLocked(ctx context.Context, id string, p Proxy, force bool) (lease, error) {
+func (a *Auth) copilotLocked(ctx context.Context, id string, p domain.Proxy, force bool) (lease, error) {
 	path := a.vault.githubPath(id)
 	unlock, e := fileLock(ctx, path+lockSuffix, 30*time.Second)
 	if e != nil {
@@ -184,7 +186,7 @@ func expiry(seconds int) *time.Time {
 	v := time.Now().Add(time.Duration(seconds) * time.Second)
 	return &v
 }
-func (a *Auth) oauth(ctx context.Context, p Proxy, form url.Values) (oauthReply, error) {
+func (a *Auth) oauth(ctx context.Context, p domain.Proxy, form url.Values) (oauthReply, error) {
 	var v oauthReply
 	r, _ := http.NewRequestWithContext(ctx, "POST", "https://github.com/login/oauth/access_token", strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -215,7 +217,7 @@ type DeviceLogin struct {
 func (a *Auth) BeginLogin(ctx context.Context, id string) (DeviceLogin, error) {
 	c := a.config.Snapshot()
 	account, ok := c.Account(id)
-	if !ok || account.Kind != AccountGitHub {
+	if !ok || account.Kind != domain.AccountGitHub {
 		return DeviceLogin{}, errors.New("GitHub account not found")
 	}
 	clientID := account.OAuthClientID
@@ -279,7 +281,7 @@ func (a *Auth) CompleteLogin(ctx context.Context, d DeviceLogin) error {
 		if v.AccessToken == "" {
 			return errors.New("GitHub device login was not authorized")
 		}
-		record := credential{Version: d.Version, AccessToken: v.AccessToken, AccessExpires: expiry(v.ExpiresIn), RefreshToken: v.RefreshToken, RefreshExpires: expiry(v.RefreshExpiresIn), TokenType: v.TokenType, Scope: v.Scope, OAuthClientID: d.ClientID, CredentialID: strings.ReplaceAll(newID(), "-", "")}
+		record := credential{Version: d.Version, AccessToken: v.AccessToken, AccessExpires: expiry(v.ExpiresIn), RefreshToken: v.RefreshToken, RefreshExpires: expiry(v.RefreshExpiresIn), TokenType: v.TokenType, Scope: v.Scope, OAuthClientID: d.ClientID, CredentialID: strings.ReplaceAll(domain.NewID(), "-", "")}
 		unlock, e := fileLock(ctx, a.vault.githubPath(d.AccountID)+lockSuffix, credentialLockWait)
 		if e != nil {
 			return e
@@ -294,7 +296,7 @@ func (a *Auth) LoggedIn(id string) bool {
 	return e == nil && (c.AccessExpires == nil || c.AccessExpires.After(time.Now()) || c.RefreshToken != "")
 }
 func (a *Auth) Logout(ctx context.Context, id string) error {
-	if !validID(id) {
+	if !domain.ValidID(id) {
 		return errors.New("invalid account")
 	}
 	path := a.vault.githubPath(id)

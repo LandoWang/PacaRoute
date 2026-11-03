@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func localTestServer(t *testing.T) *Server {
@@ -199,7 +201,7 @@ func TestDesktopPortChangeKeepsServiceOnConflict(t *testing.T) {
 
 // Contract: account providers and resource products are separate; credentials cannot cross providers.
 func TestProviderAccountsAndResourceCompatibility(t *testing.T) {
-	c := Config{Accounts: []Account{{ID: "gh", Name: "GitHub", Kind: "github"}, {ID: "oa", Name: "OpenAI", Kind: "openai"}, {ID: "an", Name: "Anthropic", Kind: "anthropic"}, {ID: "az", Name: "Azure", Kind: "azure"}}, Sources: []Source{{ID: "ghcp", Name: "Copilot", Kind: "copilot", AccountID: "gh"}, {ID: "oa-api", Name: "OpenAI API", Kind: "openai", AccountID: "oa", AuthMode: "api-key", Endpoint: "https://api.openai.com/v1", Deployments: []string{"test-model"}}, {ID: "an-api", Name: "Anthropic API", Kind: "anthropic", AccountID: "an", AuthMode: "api-key", Endpoint: "https://api.anthropic.com", Deployments: []string{"test-model"}}, {ID: "az-resource", Name: "Foundry", Kind: "azure-openai", AccountID: "az", AuthMode: "azure-cli", Endpoint: "https://example.openai.azure.com", Deployments: []string{"deployment"}}}}
+	c := domain.Config{Accounts: []domain.Account{{ID: "gh", Name: "GitHub", Kind: "github"}, {ID: "oa", Name: "OpenAI", Kind: "openai"}, {ID: "an", Name: "Anthropic", Kind: "anthropic"}, {ID: "az", Name: "Azure", Kind: "azure"}}, Sources: []domain.Source{{ID: "ghcp", Name: "Copilot", Kind: "copilot", AccountID: "gh"}, {ID: "oa-api", Name: "OpenAI API", Kind: "openai", AccountID: "oa", AuthMode: "api-key", Endpoint: "https://api.openai.com/v1", Deployments: []string{"test-model"}}, {ID: "an-api", Name: "Anthropic API", Kind: "anthropic", AccountID: "an", AuthMode: "api-key", Endpoint: "https://api.anthropic.com", Deployments: []string{"test-model"}}, {ID: "az-resource", Name: "Foundry", Kind: "azure-openai", AccountID: "az", AuthMode: "azure-cli", Endpoint: "https://example.openai.azure.com", Deployments: []string{"deployment"}}}}
 	if e := c.Validate(); e != nil {
 		t.Fatal(e)
 	}
@@ -218,9 +220,9 @@ func TestProviderAccountsAndResourceCompatibility(t *testing.T) {
 func TestAccountKeyInheritanceAndRotation(t *testing.T) {
 	store := storeForTest(t)
 	c := cloneConfig(store.Snapshot())
-	c.Accounts = []Account{{ID: "openai-work", Name: "Work", Kind: "openai"}}
-	source := Source{ID: "work-api", Name: "API", Kind: "openai", AccountID: "openai-work", AuthMode: "api-key", Endpoint: "https://api.openai.com/v1", Deployments: []string{"test-model"}}
-	c.Sources = []Source{source}
+	c.Accounts = []domain.Account{{ID: "openai-work", Name: "Work", Kind: "openai"}}
+	source := domain.Source{ID: "work-api", Name: "API", Kind: "openai", AccountID: "openai-work", AuthMode: "api-key", Endpoint: "https://api.openai.com/v1", Deployments: []string{"test-model"}}
+	c.Sources = []domain.Source{source}
 	saveTest(t, store, c)
 	a := NewAuth(store, "")
 	other := NewAuth(store, "")
@@ -267,9 +269,9 @@ func TestProviderModelDiscoveryUsesAccountAndPagination(t *testing.T) {
 	defer upstream.Close()
 	store := storeForTest(t)
 	c := cloneConfig(store.Snapshot())
-	c.Accounts = []Account{{ID: "anthropic-work", Name: "Anthropic", Kind: "anthropic"}}
-	source := Source{ID: "anthropic-api", Name: "API", Kind: "anthropic", AccountID: "anthropic-work", AuthMode: "api-key", Endpoint: upstream.URL, Deployments: []string{"first"}}
-	c.Sources = []Source{source}
+	c.Accounts = []domain.Account{{ID: "anthropic-work", Name: "Anthropic", Kind: "anthropic"}}
+	source := domain.Source{ID: "anthropic-api", Name: "API", Kind: "anthropic", AccountID: "anthropic-work", AuthMode: "api-key", Endpoint: upstream.URL, Deployments: []string{"first"}}
+	c.Sources = []domain.Source{source}
 	saveTest(t, store, c)
 	a := NewAuth(store, "")
 	a.http.values = map[string]*http.Client{"system:": upstream.Client()}
@@ -293,9 +295,9 @@ func TestDraftModelDiscoveryPreservesResourceCredentialAndConfig(t *testing.T) {
 	defer upstream.Close()
 	s := localTestServer(t)
 	c := cloneConfig(s.Store.Snapshot())
-	c.Accounts = []Account{{ID: "openai-work", Name: "OpenAI", Kind: "openai"}}
-	source := Source{ID: "work-resource", Name: "Resource", Kind: "openai", AccountID: "openai-work", AuthMode: "api-key", Endpoint: upstream.URL + "/v1", Deployments: []string{"configured-model"}}
-	c.Sources = []Source{source}
+	c.Accounts = []domain.Account{{ID: "openai-work", Name: "OpenAI", Kind: "openai"}}
+	source := domain.Source{ID: "work-resource", Name: "Resource", Kind: "openai", AccountID: "openai-work", AuthMode: "api-key", Endpoint: upstream.URL + "/v1", Deployments: []string{"configured-model"}}
+	c.Sources = []domain.Source{source}
 	saveTest(t, s.Store, c)
 	if e := s.Auth.SaveKey(context.Background(), source.ID, "fixture-resource"); e != nil {
 		t.Fatal(e)
@@ -303,7 +305,7 @@ func TestDraftModelDiscoveryPreservesResourceCredentialAndConfig(t *testing.T) {
 	s.Auth.http.values = map[string]*http.Client{"direct:": upstream.Client()}
 	before := s.Store.Snapshot().Revision
 	body, _ := json.Marshal(struct {
-		Source
+		domain.Source
 		ProxyID string `json:"proxy_id"`
 	}{source, "direct"})
 	w := localRequest(s, "POST", "/api/model-discovery", string(body), "127.0.0.1:42", "127.0.0.1:18766", true)

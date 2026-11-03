@@ -7,10 +7,11 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/getlantern/systray"
 	"path/filepath"
 	"runtime"
 	"time"
+
+	"github.com/getlantern/systray"
 )
 
 //go:embed trayassets/mark.png

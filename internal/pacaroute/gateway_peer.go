@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 const peerHopHeader = "X-PacaRoute-Hops"
@@ -33,12 +35,12 @@ func (s *Server) peerCatalog(w http.ResponseWriter, r *http.Request) {
 		problem(w, 401, "valid Client API key required")
 		return
 	}
-	if !client.AgentEnabled(GrantPeer) {
+	if !client.AgentEnabled(domain.GrantPeer) {
 		problem(w, 404, "endpoint not found")
 		return
 	}
 	models := map[string]*peerModel{}
-	for _, agent := range []AgentProtocol{AgentCodex, AgentClaudeCode} {
+	for _, agent := range []domain.AgentProtocol{domain.AgentCodex, domain.AgentClaudeCode} {
 		for _, route := range peerClientView(c, client, agent).Routes {
 			name := route.MatchModel
 			if name == "*" {

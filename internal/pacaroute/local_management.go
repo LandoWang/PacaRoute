@@ -2,6 +2,8 @@ package pacaroute
 
 import (
 	"net/http"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func (s *Server) localAllowed(r *http.Request) bool {
@@ -33,7 +35,7 @@ func (s *Server) localAPI(w http.ResponseWriter, r *http.Request, path string) {
 			problem(w, 409, "local Agent configuration requires --allow-local")
 			return
 		}
-		if e := s.Store.Snapshot().validateTarget(v.Source, v.Model, GrantKind(v.Client)); e != nil {
+		if e := s.Store.Snapshot().ValidateTarget(v.Source, v.Model, domain.GrantKind(v.Client)); e != nil {
 			problem(w, 400, e.Error())
 			return
 		}

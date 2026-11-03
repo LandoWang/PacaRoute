@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func (s *Server) management(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +97,7 @@ func (s *Server) statusAPI(w http.ResponseWriter, r *http.Request) {
 
 // saveConfig commits a full graph edit under its expected revision.
 func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
-	var c Config
+	var c domain.Config
 	if e := decodeRequest(w, r, &c); e != nil {
 		problem(w, 400, e.Error())
 		return

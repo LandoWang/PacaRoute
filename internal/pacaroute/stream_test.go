@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 func streamPool(t *testing.T, failedWire string, failover bool) (*Server, *atomic.Int32, *atomic.Int32) {
@@ -33,7 +35,7 @@ func streamPool(t *testing.T, failedWire string, failover bool) (*Server, *atomi
 	healthy.ID = "healthy"
 	healthy.Endpoint += "/healthy"
 	c.Sources = append(c.Sources, healthy)
-	c.Pools = []Pool{{ID: "pool", Name: "Pool", Agent: "codex", Model: "coding", Failover: failover, Members: []Member{{ID: "bad", SourceID: "test", Model: "deployed", Weight: 1}, {ID: "good", SourceID: "healthy", Model: "deployed", Weight: 1}}}}
+	c.Pools = []domain.Pool{{ID: "pool", Name: "Pool", Agent: "codex", Model: "coding", Failover: failover, Members: []domain.Member{{ID: "bad", SourceID: "test", Model: "deployed", Weight: 1}, {ID: "good", SourceID: "healthy", Model: "deployed", Weight: 1}}}}
 	c.Clients[0].Routes[0].SourceID = "pool:pool"
 	c.Clients[0].Routes[0].Model = "coding"
 	saveTest(t, store, c)
@@ -230,7 +232,7 @@ func TestTranslatedStreamErrorsRetainDetails(t *testing.T) {
 			} else {
 				c.Sources[0].Kind = "anthropic"
 			}
-			c.Clients[0].Routes[0].Agent = GrantKind(agent)
+			c.Clients[0].Routes[0].Agent = domain.GrantKind(agent)
 			saveTest(t, store, c)
 			r := httptest.NewRequest("POST", path, strings.NewReader(body))
 			r.Header.Set("Authorization", "Bearer alice-key")

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 const (
@@ -30,7 +32,7 @@ type cachedLease struct {
 }
 
 type configReader interface {
-	Snapshot() *Config
+	Snapshot() *domain.Config
 }
 
 // Auth is the only runtime owner of credential records, persistence and rotation.
@@ -51,7 +53,7 @@ func NewAuth(s *ConfigStore, credentialRoot string) *Auth {
 	if credentialRoot == "" {
 		credentialRoot = s.Root
 	}
-	a := &Auth{config: s, vault: vault{root: credentialRoot}, leases: map[string]cachedLease{}, keys: map[string]string{}, session: newID(), machine: newID(), device: newID()}
+	a := &Auth{config: s, vault: vault{root: credentialRoot}, leases: map[string]cachedLease{}, keys: map[string]string{}, session: domain.NewID(), machine: domain.NewID(), device: domain.NewID()}
 	for i := range a.leaseGates {
 		a.leaseGates[i] = make(chan struct{}, 1)
 	}
@@ -64,7 +66,7 @@ func statStamp(path string) string {
 	}
 	return fmt.Sprint(f.Size(), ":", f.ModTime().UnixNano())
 }
-func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (lease, error) {
+func (a *Auth) Lease(ctx context.Context, c *domain.Config, s domain.Source, force bool) (lease, error) {
 	p := c.SourceProxy(s.ID)
 	key := s.ID + ":" + string(s.Kind) + ":" + s.AccountID + ":" + s.AuthMode + ":" + s.SubscriptionID + ":" + p.Mode + p.Address
 	// Bound concurrent refresh coordination without holding the global cache lock
@@ -83,7 +85,7 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 	}
 	defer func() { <-gate }()
 	stamp := ""
-	if s.Kind == SourceCopilot {
+	if s.Kind == domain.SourceCopilot {
 		stamp = statStamp(a.vault.githubPath(s.AccountID))
 	} else if s.AuthMode == "api-key" {
 		stamp = statStamp(a.vault.secretPath(s.ID)) + statStamp(a.vault.accountKeyPath(s.AccountID)) + statStamp(a.vault.secretPath(s.ID)+".revision") + statStamp(a.vault.accountKeyPath(s.AccountID)+".revision")
@@ -103,7 +105,7 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 	var l lease
 	var e error
 	switch {
-	case s.Kind == SourceCopilot:
+	case s.Kind == domain.SourceCopilot:
 		l, e = a.copilotLocked(ctx, s.AccountID, p, force)
 	case s.AuthMode == "api-key":
 		if secret == "" {
@@ -122,7 +124,7 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 			e = nil
 		}
 		if secret == "" {
-			if account, ok := c.Account(s.AccountID); ok && accountUsesAPIKey(account.Kind) {
+			if account, ok := c.Account(s.AccountID); ok && domain.AccountUsesAPIKey(account.Kind) {
 				secret, e = a.accountKey(s.AccountID)
 				if e != nil && !os.IsNotExist(e) {
 					return l, e
@@ -134,11 +136,11 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 			return l, errors.New("source API key is missing; save it in PacaRoute")
 		}
 		l = lease{Header: "Authorization", Value: "Bearer " + secret, Expires: time.Now().Add(apiKeyLeaseTTL)}
-		if s.Kind == SourceAzureOpenAI {
+		if s.Kind == domain.SourceAzureOpenAI {
 			l.Header = "api-key"
 			l.Value = secret
 		}
-		if s.Kind == SourceAnthropic {
+		if s.Kind == domain.SourceAnthropic {
 			l.Header = "x-api-key"
 			l.Value = secret
 		}

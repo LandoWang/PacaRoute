@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
 const leaseKindSyntheticKey = "synthetic-audit-placeholder-0001"
@@ -18,9 +20,9 @@ func TestLeaseCacheSeparatesSourceKind(t *testing.T) {
 	if err := auth.SetKeys(map[string]string{"models": leaseKindSyntheticKey}); err != nil {
 		t.Fatal(err)
 	}
-	c := Config{Accounts: []Account{{ID: "shared", Name: "Shared", Kind: "api-key"}}, Proxies: Proxies{Bindings: map[string]string{}, AccountProxyID: "system"}}
-	openai := Source{ID: "models", Name: "Models", Kind: "openai", AccountID: "shared", AuthMode: "api-key", Endpoint: "https://example.invalid/v1", Deployments: []string{"m"}}
-	c.Sources = []Source{openai}
+	c := domain.Config{Accounts: []domain.Account{{ID: "shared", Name: "Shared", Kind: "api-key"}}, Proxies: domain.Proxies{Bindings: map[string]string{}, AccountProxyID: "system"}}
+	openai := domain.Source{ID: "models", Name: "Models", Kind: "openai", AccountID: "shared", AuthMode: "api-key", Endpoint: "https://example.invalid/v1", Deployments: []string{"m"}}
+	c.Sources = []domain.Source{openai}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +32,7 @@ func TestLeaseCacheSeparatesSourceKind(t *testing.T) {
 	anthropic := openai
 	anthropic.Kind = "anthropic"
 	edited := c
-	edited.Sources = []Source{anthropic}
+	edited.Sources = []domain.Source{anthropic}
 	if err := edited.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -62,9 +64,9 @@ func TestDiscoveryAfterSourceKindChange(t *testing.T) {
 	if err := auth.SetKeys(map[string]string{"models": leaseKindSyntheticKey}); err != nil {
 		t.Fatal(err)
 	}
-	c := Config{Accounts: []Account{{ID: "shared", Name: "Shared", Kind: "api-key"}}, Proxies: Proxies{Bindings: map[string]string{}, AccountProxyID: "system"}}
-	src := Source{ID: "models", Name: "Models", Kind: "openai", AccountID: "shared", AuthMode: "api-key", Endpoint: srv.URL + "/v1", Deployments: []string{"m"}}
-	c.Sources = []Source{src}
+	c := domain.Config{Accounts: []domain.Account{{ID: "shared", Name: "Shared", Kind: "api-key"}}, Proxies: domain.Proxies{Bindings: map[string]string{}, AccountProxyID: "system"}}
+	src := domain.Source{ID: "models", Name: "Models", Kind: "openai", AccountID: "shared", AuthMode: "api-key", Endpoint: srv.URL + "/v1", Deployments: []string{"m"}}
+	c.Sources = []domain.Source{src}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +74,7 @@ func TestDiscoveryAfterSourceKindChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	src.Kind = "anthropic"
-	c.Sources = []Source{src}
+	c.Sources = []domain.Source{src}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
