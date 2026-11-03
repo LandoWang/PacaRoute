@@ -15,7 +15,7 @@ import {
   sharedAzure,
 } from "../../domain/accounts";
 import { generatedID, suggestedName, accounts } from "../../domain/config";
-import { PeerScan } from "../peers/peer-connection";
+import { PeerScan } from "../peers/peer-scan";
 import {
   normalizePeerEndpoint,
   type PeerConnection,

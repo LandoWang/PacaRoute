@@ -1,0 +1,178 @@
+import { Copy, Download } from "lucide-react";
+import { useEffect, useState } from "react";
+import { api } from "../../api/transport";
+import { type Client, type ClientKeyResponse } from "../../api/types";
+import { useApp } from "../../app/state";
+import { Button, ErrorNote, Field, Input, Modal } from "../../components/ui";
+import { errorMessage } from "../../domain/errors";
+import { encodePeerConnection } from "./peer-connection-data";
+export function ClientQR({
+  client,
+  onClose,
+}: {
+  client: Client;
+  onClose: () => void;
+}) {
+  const { status } = useApp();
+  const [endpoint, setEndpoint] = useState(
+    (status.gateway_url || location.origin).replace(/\/$/, "") + "/pacaroute",
+  );
+  const [key, setKey] = useState("");
+  const [keyError, setKeyError] = useState("");
+  const [image, setImage] = useState<{ url: string; payload: string }>();
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    if (!client.local)
+      api<ClientKeyResponse>(
+        `clients/${client.id}/key`,
+        "GET",
+        undefined,
+        controller.signal,
+      )
+        .then((v) => {
+          if (v.api_key) setKey(v.api_key);
+          else
+            setKeyError(
+              "旧客户端尚未保存可读取的 Key。请在接入脚本中补填原 Key，或轮换密钥后重试。",
+            );
+        })
+        .catch(() => {
+          if (!controller.signal.aborted)
+            setKeyError(
+              "无法读取这个客户端的 Key。旧客户端可先在接入脚本中补填原 Key，或轮换密钥后重试。",
+            );
+        });
+    return () => controller.abort();
+  }, [client.id, client.local]);
+  let payload = "",
+    validation = "";
+  try {
+    if (key)
+      payload = encodePeerConnection({
+        version: 1,
+        endpoint,
+        client_key: key,
+        name: client.name,
+      });
+  } catch (e) {
+    validation = errorMessage(e);
+  }
+  useEffect(() => {
+    let active = true;
+    setImage(undefined);
+    setError("");
+    setCopied(false);
+    if (payload)
+      import("qrcode")
+        .then(({ default: QRCode }) =>
+          QRCode.toDataURL(payload, {
+            errorCorrectionLevel: "M",
+            margin: 4,
+            scale: 8,
+            color: { dark: "#101820", light: "#ffffff" },
+          }),
+        )
+        .then((url) => {
+          if (active) setImage({ url, payload });
+        })
+        .catch(() => {
+          if (active) setError("二维码生成失败，请缩短地址或名称");
+        });
+    return () => {
+      active = false;
+    };
+  }, [payload]);
+  const ready = image?.payload === payload ? image : undefined;
+  let local = false;
+  try {
+    local = ["localhost", "127.0.0.1", "[::1]"].includes(
+      new URL(endpoint).hostname,
+    );
+  } catch {
+    /* Validation is shown below. */
+  }
+  return (
+    <Modal title={client.name + " · 接入二维码"} onClose={onClose}>
+      <div className="form-body">
+        <Field
+          label="供对方访问的服务地址"
+          hint="填写对方能访问的域名或局域网地址。此处不会修改服务监听地址。"
+        >
+          <Input
+            type="url"
+            value={endpoint}
+            onChange={(e) => setEndpoint(e.target.value)}
+          />
+        </Field>
+        {local && (
+          <p className="muted">
+            当前是本机地址，其他设备需要改为这台服务的 IP 或域名。
+          </p>
+        )}
+        {client.disabled && (
+          <ErrorNote>此客户端已停用，启用后才能接入。</ErrorNote>
+        )}
+        {(keyError || error || validation) && (
+          <ErrorNote>{keyError || error || validation}</ErrorNote>
+        )}
+        {ready ? (
+          <img
+            className="connection-qr"
+            src={ready.url}
+            alt="PacaRoute 客户端接入二维码"
+          />
+        ) : (
+          !keyError &&
+          !validation &&
+          !error && <p className="muted">正在生成二维码…</p>
+        )}
+        <p className="muted">
+          二维码和接入信息包含此客户端密钥，持有人可以使用这个客户端
+          的模型。只交给对应调用方；轮换 Key 后旧二维码失效。
+        </p>
+        <div className="actions">
+          <Button
+            disabled={!ready}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(payload);
+                setCopied(true);
+              } catch {
+                setError("复制失败，请使用下载二维码");
+              }
+            }}
+          >
+            <Copy size={15} />
+            {copied ? "已复制" : "复制接入信息"}
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={!ready}
+            onClick={() => {
+              if (!ready) return;
+              const link = document.createElement("a");
+              const bytes = Uint8Array.from(
+                atob(ready.url.split(",")[1]),
+                (c) => c.charCodeAt(0),
+              );
+              const url = URL.createObjectURL(
+                new Blob([bytes], { type: "image/png" }),
+              );
+              link.href = url;
+              link.download = `PacaRoute-${client.id}-connection.png`;
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}
+          >
+            <Download size={15} />
+            下载二维码
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

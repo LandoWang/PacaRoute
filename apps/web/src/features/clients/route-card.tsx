@@ -9,7 +9,7 @@ import { agentNames } from "../../domain/routing";
 import { ModelInput } from "../models/model-input";
 import { ModelMultiSelect } from "../models/model-multiselect";
 import { TargetPicker } from "../models/target-picker";
-import { ClientQR } from "../peers/peer-connection";
+import { ClientQR } from "../peers/client-qr";
 import { BackupPicker } from "../settings/backup-picker";
 import { ConnectionScript } from "./connection-script-dialog";
 import {

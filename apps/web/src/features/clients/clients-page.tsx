@@ -13,7 +13,7 @@ import {
   Input,
 } from "../../components/ui";
 import { enabledAgents } from "../../domain/routing";
-import { ClientQR } from "../peers/peer-connection";
+import { ClientQR } from "../peers/client-qr";
 import { AdvancedRoutesEditor } from "./advanced-routes-editor";
 import { ClientEditor } from "./client-editor";
 import { QuotaMeter } from "./quota";
