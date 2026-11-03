@@ -14,6 +14,7 @@ import {
 import { sources, sourceName } from "../../domain/config";
 import { format } from "../../domain/format";
 import { Stats } from "./stats";
+import { POLL_INTERVAL_MS } from "../../app/polling";
 export function UsagePage() {
   const { config, status, navigate } = useApp();
   const [range, setRange] = useState("24"),
@@ -35,7 +36,7 @@ export function UsagePage() {
         : to.toISOString();
   const result = useLoad<Usage>(
     `usage?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}&source=${source}&client=${client}`,
-    15000,
+    POLL_INTERVAL_MS,
   );
   const hours = useMemo(
     () => usageHours(result.data, fromISO, toISO),

@@ -12,11 +12,12 @@ import { Loading } from "../../components/feedback";
 import { Button, Badge, Panel, Empty } from "../../components/ui";
 import { sources, sourceName } from "../../domain/config";
 import { Stats } from "../usage/stats";
+import { POLL_INTERVAL_MS } from "../../app/polling";
 export function Overview() {
   const state = useApp(),
     { config, navigate } = state;
-  const usage = useLoad<Usage>("usage", 15000),
-    recent = useLoad<Activity[]>("activity", 15000);
+  const usage = useLoad<Usage>("usage", POLL_INTERVAL_MS),
+    recent = useLoad<Activity[]>("activity", POLL_INTERVAL_MS);
   const steps = [
     ["账号", "连接 GitHub 或 Azure", "accounts"],
     ["来源", "选择资源、模型与网络", "sources"],

@@ -6,6 +6,7 @@ import {
 import { useLoad } from "../../app/state";
 import { Field, Input, Select, ErrorNote } from "../../components/ui";
 import { format } from "../../domain/format";
+import { POLL_INTERVAL_MS } from "../../app/polling";
 export function QuotaFields({
   value,
   onChange,
@@ -93,7 +94,10 @@ export function QuotaFields({
   );
 }
 export function QuotaMeter({ client }: { client: Client }) {
-  const load = useLoad<ClientQuotaState>(`clients/${client.id}/quota`, 15000),
+  const load = useLoad<ClientQuotaState>(
+      `clients/${client.id}/quota`,
+      POLL_INTERVAL_MS,
+    ),
     v = load.data;
   if (load.error) return <ErrorNote>配额统计暂时不可用</ErrorNote>;
   if (!v) return null;

@@ -20,6 +20,10 @@ const labels: Record<ImportKind, string> = {
   proxies: "代理",
   clients: "客户端",
 };
+// Matches the server's 24 MiB bundle limit (configBundleLimit in
+// config_transfer.go). The import request may be up to 32 MiB only to leave
+// room for its JSON envelope around the bundle.
+const MAX_IMPORT_FILE_BYTES = 24 * 1024 * 1024;
 const issueLabels: Record<string, string> = {
   account_credentials_required: "需要重新登录或填写账号 Key",
   source_key_required: "需要填写资源 Key，或使用账号 Key",
@@ -229,7 +233,7 @@ function ImportConfig({ onClose }: { onClose: () => void }) {
                 setFilename(file?.name || "");
                 setFileError("");
                 if (!file) return;
-                if (file.size > 24 * 1024 * 1024) {
+                if (file.size > MAX_IMPORT_FILE_BYTES) {
                   setFileError("配置文件不能超过 24 MiB");
                   return;
                 }

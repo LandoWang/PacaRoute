@@ -1,3 +1,7 @@
+// Refresh interval for page data (usage, activity, errors, quotas).
+export const POLL_INTERVAL_MS = 15_000;
+// Refresh interval for service status and routing health.
+export const STATUS_POLL_INTERVAL_MS = 5_000;
 // Runs `task` now (unless `immediate` is false) and then every `interval` ms.
 // Runs never overlap, hidden pages are skipped, a page that becomes visible
 // again refreshes at once and stopping aborts the in-flight request.

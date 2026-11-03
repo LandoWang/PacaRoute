@@ -6,6 +6,8 @@ import {
   parsePeerConnection,
   type PeerConnection,
 } from "./peer-connection-data";
+// Largest QR image file decoded in the browser.
+const MAX_QR_IMAGE_BYTES = 16 * 1024 * 1024;
 export function PeerScan({
   onRead,
   onClose,
@@ -42,7 +44,7 @@ export function PeerScan({
     setError("");
     const token = generation.current;
     try {
-      if (file.size > 16 * 1024 * 1024)
+      if (file.size > MAX_QR_IMAGE_BYTES)
         throw Error("请选择小于 16 MB 的二维码图片");
       const bitmap = await createImageBitmap(file);
       try {

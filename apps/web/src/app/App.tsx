@@ -12,7 +12,7 @@ import pacaRouteMark from "../assets/pacaroute-mark.png";
 import { Button, ErrorNote } from "../components/ui";
 import { RoutingAlert } from "../features/pools/routing-health";
 import { saveConfig } from "./config-save";
-import { startPolling } from "./polling";
+import { startPolling, STATUS_POLL_INTERVAL_MS } from "./polling";
 import { Login } from "./login";
 import { initialPage, pages } from "./pages";
 import { StateContext } from "./state";
@@ -95,7 +95,7 @@ export function App() {
             if (!signal.aborted && !(e instanceof APIError && e.status === 401))
               setError("服务连接中断，请从托盘检查服务状态。");
           }),
-      5000,
+      STATUS_POLL_INTERVAL_MS,
       false,
     );
   }, [auth]);
