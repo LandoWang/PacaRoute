@@ -9,7 +9,6 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -177,20 +176,6 @@ func (v *vault) githubPath(id string) string {
 	return filepath.Join(v.root, "accounts", id, "github_credentials.dat")
 }
 func (v *vault) secretPath(id string) string { return filepath.Join(v.root, "secrets", id+".dat") }
-func newID() string {
-	var b [16]byte
-	_, _ = rand.Read(b[:])
-	b[6] = (b[6] & 15) | 64
-	b[8] = (b[8] & 63) | 128
-	h := hex.EncodeToString(b[:])
-	return h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
-}
-func keyHash(key string) string { h := sha256.Sum256([]byte(key)); return hex.EncodeToString(h[:]) }
-func newKey() string {
-	b := make([]byte, 32)
-	_, _ = rand.Read(b)
-	return "pr_" + hex.EncodeToString(b)
-}
 
 func (v *vault) accountKeyPath(id string) string {
 	return filepath.Join(v.root, "accounts", id, "api_key.dat")

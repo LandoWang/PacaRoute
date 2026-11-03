@@ -2,6 +2,9 @@ package pacaroute
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"os"
@@ -55,3 +58,21 @@ func (a *Auth) ClientKey(c Client) (string, error) {
 	}
 	return key, nil
 }
+
+func keyHash(key string) string { h := sha256.Sum256([]byte(key)); return hex.EncodeToString(h[:]) }
+func newKey() string {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b)
+	return "pr_" + hex.EncodeToString(b)
+}
+
+func keyEqual(hash, key string) bool {
+	expected, e := hex.DecodeString(hash)
+	if e != nil {
+		return false
+	}
+	sum := sha256.Sum256([]byte(key))
+	return len(expected) == 32 && constantEqual(expected, sum[:])
+}
+
+func constantEqual(a, b []byte) bool { return subtle.ConstantTimeCompare(a, b) == 1 }

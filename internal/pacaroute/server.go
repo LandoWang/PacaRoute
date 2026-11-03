@@ -2,7 +2,6 @@ package pacaroute
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -60,7 +59,6 @@ func NewServer(store *ConfigStore, auth *Auth) (*Server, error) {
 	}
 	return &Server{Quotas: quotas, Store: store, Auth: auth, Router: r, Activity: NewActivityStore(store.Root), AdminKey: string(key), started: time.Now(), loginJobs: newLoginJobs()}, nil
 }
-func constantEqual(a, b []byte) bool { return subtle.ConstantTimeCompare(a, b) == 1 }
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

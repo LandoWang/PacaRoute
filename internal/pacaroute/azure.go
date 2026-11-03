@@ -112,10 +112,6 @@ func (a *Auth) AzureLogin(ctx context.Context, id string, logout bool, emit func
 
 var _ = json.Valid
 
-func sharedAzure(c *Config, id string) bool {
-	account, _ := c.Account(id)
-	return id == "" || id == "azure-local" || account.LoginMode == "azure-cli"
-}
 func (a *Auth) azureDirectory(c *Config, id string) string {
 	if !sharedAzure(c, id) {
 		return filepath.Join(a.vault.root, "accounts", id)

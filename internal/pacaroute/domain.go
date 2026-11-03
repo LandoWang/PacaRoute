@@ -1,6 +1,8 @@
 package pacaroute
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -347,4 +349,18 @@ func (q *ClientQuota) enforced() bool {
 	}
 	cost, _ := moneyMicros(q.Cost)
 	return q.Requests > 0 || q.InputTokens > 0 || cost > 0
+}
+
+func newID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 15) | 64
+	b[8] = (b[8] & 63) | 128
+	h := hex.EncodeToString(b[:])
+	return h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
+}
+
+func sharedAzure(c *Config, id string) bool {
+	account, _ := c.Account(id)
+	return id == "" || id == "azure-local" || account.LoginMode == "azure-cli"
 }
