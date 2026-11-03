@@ -347,3 +347,10 @@ func (s *ConfigStore) Save(c Config, expected string) error {
 	return s.readLocked()
 }
 func (s *ConfigStore) Error() string { s.mu.Lock(); defer s.mu.Unlock(); return s.lastError }
+
+func cloneConfig(c *Config) Config {
+	b, _ := json.Marshal(c)
+	var v Config
+	_ = json.Unmarshal(b, &v)
+	return v
+}
