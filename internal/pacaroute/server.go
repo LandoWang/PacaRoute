@@ -2,7 +2,6 @@ package pacaroute
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -58,15 +57,6 @@ func NewServer(store *ConfigStore, auth *Auth) (*Server, error) {
 		return nil, e
 	}
 	return &Server{Quotas: quotas, Store: store, Auth: auth, Router: r, Activity: NewActivityStore(store.Root), AdminKey: string(key), started: time.Now(), loginJobs: newLoginJobs()}, nil
-}
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-func problem(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]any{"type": "error", "error": map[string]string{"type": "pacaroute_error", "message": message}})
 }
 func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
