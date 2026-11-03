@@ -3,6 +3,7 @@ package pacaroute
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"math"
 	"sort"
@@ -53,16 +54,16 @@ func (r *Router) Targets(c *Config, scope string, agent AgentProtocol, id, model
 	}
 	key := ""
 	if session != "" {
-		key = keyHash(scope + "\x00" + string(agent) + "\x00" + p.ID + "\x00" + session)
+		key = affinityHash(scope + "\x00" + string(agent) + "\x00" + p.ID + "\x00" + session)
 		if p.MultiModel {
-			key = keyHash(scope + "\x00" + string(agent) + "\x00" + p.ID + "\x00" + model + "\x00" + session)
+			key = affinityHash(scope + "\x00" + string(agent) + "\x00" + p.ID + "\x00" + model + "\x00" + session)
 		}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	prior, has := r.bindings[key]
 	if !has && !p.MultiModel && scope == "local" && session != "" {
-		legacyKey := strings.ToUpper(keyHash(string(agent) + "\n" + p.ID + "\n" + session))
+		legacyKey := strings.ToUpper(affinityHash(string(agent) + "\n" + p.ID + "\n" + session))
 		if v, ok := r.legacy[legacyKey]; ok {
 			if source, found := c.Source(v.Source); found {
 				v.Key = key
@@ -133,3 +134,7 @@ func (r *Router) Targets(c *Config, scope string, agent AgentProtocol, id, model
 	}
 	return result, nil
 }
+
+// affinityHash derives persisted session-binding and legacy import keys. Its
+// SHA-256 hex output is a storage contract shared with existing journals.
+func affinityHash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }

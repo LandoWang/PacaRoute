@@ -2,6 +2,8 @@ package pacaroute
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -409,7 +411,7 @@ func (s *Server) send(x *gatewayExchange, t Target, wire []byte, protocol, upstr
 		if t.Source.Kind == SourcePeer {
 			req.Header.Set(peerHopHeader, strconv.Itoa(x.hops+1))
 			if x.session != "" {
-				req.Header.Set("X-PacaRoute-Session", keyHash(s.AdminKey+"\x00"+x.affinityScope+"\x00"+string(x.agent)+"\x00"+t.Source.ID+"\x00"+x.session))
+				req.Header.Set("X-PacaRoute-Session", peerSessionHash(s.AdminKey, x.affinityScope, x.agent, t.Source.ID, x.session))
 			}
 		}
 		if t.Source.Kind == SourceCopilot {
@@ -526,4 +528,12 @@ func affinityClient(client *Client) string {
 		return "client:local"
 	}
 	return client.ID
+}
+
+// peerSessionHash derives the session identity sent to a peer PacaRoute. It is
+// keyed by this installation's admin key so the peer cannot correlate the
+// downstream session, and is stable so peer affinity survives restarts.
+func peerSessionHash(adminKey, scope string, agent AgentProtocol, sourceID, session string) string {
+	h := sha256.Sum256([]byte(adminKey + "\x00" + scope + "\x00" + string(agent) + "\x00" + sourceID + "\x00" + session))
+	return hex.EncodeToString(h[:])
 }

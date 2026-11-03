@@ -3,6 +3,8 @@ package pacaroute
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -165,9 +167,9 @@ func planConfigImport(current *Config, b ConfigBundle, mode, namespace string) (
 			if len(stem) > 19 {
 				stem = stem[:19]
 			}
-			id = stem + "-" + keyHash(oldID)[:8] + "-" + namespace
+			id = stem + "-" + digestHex(oldID)[:8] + "-" + namespace
 			for n := 1; ids[kind][id]; n++ {
-				id = stem + "-" + keyHash(fmt.Sprint(oldID, n))[:8] + "-" + namespace
+				id = stem + "-" + digestHex(fmt.Sprint(oldID, n))[:8] + "-" + namespace
 			}
 		}
 		name := strings.TrimSpace(oldName)
@@ -251,7 +253,7 @@ func planConfigImport(current *Config, b ConfigBundle, mode, namespace string) (
 		return nil, err
 	}
 	p.config = base
-	p.Fingerprint = keyHash(string(jsonBytes(struct {
+	p.Fingerprint = digestHex(string(jsonBytes(struct {
 		Bundle                    ConfigBundle
 		Mode, Revision, Namespace string
 		Config                    Config
@@ -286,3 +288,7 @@ func applyConfigImport(ctx context.Context, store *ConfigStore, auth *Auth, p *C
 	// can leave an unused encrypted record but cannot replace a live credential.
 	return store.Save(c, p.Revision)
 }
+
+// digestHex is the SHA-256 hex digest used for imported ID suffixes and the
+// preview fingerprint.
+func digestHex(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }

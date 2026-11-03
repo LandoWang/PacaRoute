@@ -27,6 +27,11 @@ func TestAffinityKeysArePersistentContract(t *testing.T) {
 		}
 	}
 
+	// A peer receives a derived, installation-keyed session identity.
+	if got := peerSessionHash("admin-fixture", "alice\x00pacaroute", AgentCodex, "remote", "session-1"); got != "97a7fdd11496e7488ab25de1c29caab4fc33fc0c4c113ace8c5e6887747eaf71" {
+		t.Fatal("peer session identity changed", got)
+	}
+
 	// The local Client imports a previous application's binding by its
 	// upper-case legacy hash of Agent, pool and session.
 	root := t.TempDir()
