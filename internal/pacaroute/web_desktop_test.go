@@ -274,7 +274,7 @@ func TestProviderModelDiscoveryUsesAccountAndPagination(t *testing.T) {
 	c.Sources = []domain.Source{source}
 	saveTest(t, store, c)
 	a := NewAuth(store, "")
-	a.http.values = map[string]*http.Client{"system:": upstream.Client()}
+	a.http.Values = map[string]*http.Client{"system:": upstream.Client()}
 	if e := a.SaveAccountKey(context.Background(), source.AccountID, "fixture-anthropic"); e != nil {
 		t.Fatal(e)
 	}
@@ -302,7 +302,7 @@ func TestDraftModelDiscoveryPreservesResourceCredentialAndConfig(t *testing.T) {
 	if e := s.Auth.SaveKey(context.Background(), source.ID, "fixture-resource"); e != nil {
 		t.Fatal(e)
 	}
-	s.Auth.http.values = map[string]*http.Client{"direct:": upstream.Client()}
+	s.Auth.http.Values = map[string]*http.Client{"direct:": upstream.Client()}
 	before := s.Store.Snapshot().Revision
 	body, _ := json.Marshal(struct {
 		domain.Source

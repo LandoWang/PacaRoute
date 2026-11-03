@@ -60,7 +60,7 @@ func TestDiscoveryAfterSourceKindChange(t *testing.T) {
 	defer srv.Close()
 	s := storeForTest(t)
 	auth := NewAuth(s, t.TempDir())
-	auth.http.values = map[string]*http.Client{"system:": srv.Client()}
+	auth.http.Values = map[string]*http.Client{"system:": srv.Client()}
 	if err := auth.SetKeys(map[string]string{"models": leaseKindSyntheticKey}); err != nil {
 		t.Fatal(err)
 	}

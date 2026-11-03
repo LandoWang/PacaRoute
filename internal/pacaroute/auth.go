@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -40,7 +42,7 @@ type Auth struct {
 	config                   configReader
 	systemKeys               bool
 	vault                    vault
-	http                     transports
+	http                     transport.Pools
 	mu                       sync.Mutex
 	leaseGates               [64]chan struct{}
 	keyEpoch                 uint64

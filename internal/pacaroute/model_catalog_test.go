@@ -34,7 +34,7 @@ func TestCopilotCatalogIncludesNativeMessagesModels(t *testing.T) {
    {"id":"gpt-6-astra","supported_endpoints":["/responses"]}
   ]}`
 	})
-	auth.http.values = map[string]*http.Client{"system:": transport}
+	auth.http.Values = map[string]*http.Client{"system:": transport}
 	models, err := newCatalog(auth.config, auth, &auth.http).Models(context.Background(), "copilot")
 	if err != nil {
 		t.Fatal(err)

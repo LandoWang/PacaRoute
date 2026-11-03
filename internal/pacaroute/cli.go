@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -230,7 +232,7 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 		default:
 			return fail(errors.New("unknown metadata kind"))
 		}
-		if e = readJSONBody(in, target); e != nil {
+		if e = transport.ReadJSONBody(in, target); e != nil {
 			return fail(e)
 		}
 		if kind == "sources" {
@@ -269,7 +271,7 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 			return fail(errors.New("use config show or config apply"))
 		}
 		var c domain.Config
-		if e = readJSONBody(in, &c); e != nil {
+		if e = transport.ReadJSONBody(in, &c); e != nil {
 			return fail(e)
 		}
 		if c.Revision == "" {

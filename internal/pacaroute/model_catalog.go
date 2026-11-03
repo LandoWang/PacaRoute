@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -18,10 +20,10 @@ type leaseProvider interface {
 type catalog struct {
 	config configReader
 	leases leaseProvider
-	http   *transports
+	http   *transport.Pools
 }
 
-func newCatalog(config configReader, leases leaseProvider, http *transports) *catalog {
+func newCatalog(config configReader, leases leaseProvider, http *transport.Pools) *catalog {
 	return &catalog{config: config, leases: leases, http: http}
 }
 
@@ -58,7 +60,7 @@ func (a *catalog) Models(ctx context.Context, id string) ([]domain.Model, error)
 	}
 	r, _ := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(l.Endpoint, "/")+"/models", nil)
 	a.leases.ApplyProviderHeaders(r, l, false)
-	res, e := a.http.client(c.SourceProxy(id)).Do(r)
+	res, e := a.http.Client(c.SourceProxy(id)).Do(r)
 	if e != nil {
 		return nil, errors.New("model catalog connection failed")
 	}
@@ -77,7 +79,7 @@ func (a *catalog) Models(ctx context.Context, id string) ([]domain.Model, error)
 			} `json:"policy"`
 		} `json:"data"`
 	}
-	if e = readJSONBody(res.Body, &data); e != nil {
+	if e = transport.ReadJSONBody(res.Body, &data); e != nil {
 		return nil, e
 	}
 	for _, m := range data.Data {

@@ -64,7 +64,7 @@ func (s *Server) send(x *gatewayExchange, t Target, wire []byte, protocol, upstr
 			req.Header.Set("X-Request-Id", domain.NewID())
 			req.Header.Set("Openai-Intent", "conversation-panel")
 		}
-		res, e = s.Auth.http.client(c.SourceProxy(t.Source.ID)).Do(req)
+		res, e = s.Auth.http.Client(c.SourceProxy(t.Source.ID)).Do(req)
 		if e != nil {
 			break
 		}

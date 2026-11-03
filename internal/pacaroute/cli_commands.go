@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -129,7 +131,7 @@ func entityCommand(ctx context.Context, a arguments, s *ConfigStore, in io.Reade
 	} else {
 		if action == "add" || action == "update" {
 			var record object
-			if e := readJSONBody(in, &record); e != nil {
+			if e := transport.ReadJSONBody(in, &record); e != nil {
 				return e
 			}
 			id = rawString(record["id"])

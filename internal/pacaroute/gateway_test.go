@@ -136,7 +136,7 @@ func TestCopilotRejectedLeaseRefreshesOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	var exchanges, upstream atomic.Int32
-	auth.http.values = map[string]*http.Client{"system:": {Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+	auth.http.Values = map[string]*http.Client{"system:": {Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		reply := func(status int, contentType, body string) (*http.Response, error) {
 			return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {contentType}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
 		}

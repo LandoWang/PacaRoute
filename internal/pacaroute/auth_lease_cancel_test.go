@@ -22,7 +22,7 @@ func TestLeaseGateHonorsCancellation(t *testing.T) {
 	unblock := func() { once.Do(func() { close(release) }) }
 	defer unblock()
 	var enteredOnce sync.Once
-	auth.http.values = map[string]*http.Client{"system:": syntheticAuthClient(func(r *http.Request) string {
+	auth.http.Values = map[string]*http.Client{"system:": syntheticAuthClient(func(r *http.Request) string {
 		enteredOnce.Do(func() { close(entered) })
 		<-release
 		return fmt.Sprintf(`{"token":"audit-synthetic-exchange","expires_at":%d,"endpoints":{"api":"https://api.githubcopilot.com"}}`, time.Now().Add(time.Hour).Unix())

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -112,7 +114,7 @@ func (a *Auth) copilotLocked(ctx context.Context, id string, p domain.Proxy, for
 	req.Header.Set("Authorization", "token "+c.AccessToken)
 	a.copilotHeaders(req, lease{}, false)
 	req.Header.Set("Accept", "application/json")
-	res, e := a.http.client(p).Do(req)
+	res, e := a.http.Client(p).Do(req)
 	if e != nil {
 		return lease{}, errors.New("Copilot token exchange connection failed")
 	}
@@ -127,7 +129,7 @@ func (a *Auth) copilotLocked(ctx context.Context, id string, p domain.Proxy, for
 			API string `json:"api"`
 		} `json:"endpoints"`
 	}
-	if e = readJSONBody(res.Body, &v); e != nil || v.Token == "" {
+	if e = transport.ReadJSONBody(res.Body, &v); e != nil || v.Token == "" {
 		return lease{}, errors.New("invalid Copilot token exchange")
 	}
 	endpoint := v.Endpoints.API
@@ -191,7 +193,7 @@ func (a *Auth) oauth(ctx context.Context, p domain.Proxy, form url.Values) (oaut
 	r, _ := http.NewRequestWithContext(ctx, "POST", "https://github.com/login/oauth/access_token", strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("Accept", "application/json")
-	res, e := a.http.client(p).Do(r)
+	res, e := a.http.Client(p).Do(r)
 	if e != nil {
 		return v, errors.New("GitHub OAuth connection failed")
 	}
@@ -199,7 +201,7 @@ func (a *Auth) oauth(ctx context.Context, p domain.Proxy, form url.Values) (oaut
 	if res.StatusCode != 200 {
 		return v, fmt.Errorf("GitHub OAuth failed (%d)", res.StatusCode)
 	}
-	e = readJSONBody(res.Body, &v)
+	e = transport.ReadJSONBody(res.Body, &v)
 	return v, e
 }
 
@@ -232,7 +234,7 @@ func (a *Auth) BeginLogin(ctx context.Context, id string) (DeviceLogin, error) {
 	r, _ := http.NewRequestWithContext(ctx, "POST", "https://github.com/login/device/code", strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("Accept", "application/json")
-	res, e := a.http.client(p).Do(r)
+	res, e := a.http.Client(p).Do(r)
 	if e != nil {
 		return DeviceLogin{}, errors.New("GitHub device login connection failed")
 	}
@@ -247,7 +249,7 @@ func (a *Auth) BeginLogin(ctx context.Context, id string) (DeviceLogin, error) {
 	if res.StatusCode != 200 {
 		return DeviceLogin{}, fmt.Errorf("GitHub device login failed (%d)", res.StatusCode)
 	}
-	if e = readJSONBody(res.Body, &v); e != nil || v.DeviceCode == "" {
+	if e = transport.ReadJSONBody(res.Body, &v); e != nil || v.DeviceCode == "" {
 		return DeviceLogin{}, errors.New("invalid device login response")
 	}
 	return DeviceLogin{v.DeviceCode, v.UserCode, v.URI, v.Expires, v.Interval, clientID, id, version}, nil
@@ -334,13 +336,13 @@ func (a *Auth) AccountInfo(ctx context.Context, id string) (map[string]any, erro
 		r, _ := http.NewRequestWithContext(ctx, "GET", "https://api.github.com"+item.path, nil)
 		r.Header.Set("Authorization", "Bearer "+record.AccessToken)
 		a.copilotHeaders(r, lease{}, false)
-		res, e := a.http.client(p).Do(r)
+		res, e := a.http.Client(p).Do(r)
 		if e != nil {
 			out[item.key+"_error"] = "GitHub connection failed"
 			continue
 		}
 		var body map[string]any
-		if res.StatusCode == 200 && readJSONBody(res.Body, &body) == nil {
+		if res.StatusCode == 200 && transport.ReadJSONBody(res.Body, &body) == nil {
 			if item.key == "user" {
 				out["login"] = body["login"]
 			} else {

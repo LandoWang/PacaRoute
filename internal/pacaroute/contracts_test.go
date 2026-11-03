@@ -208,7 +208,7 @@ func gatewayTest(t *testing.T, handler http.HandlerFunc) (*Server, *httptest.Ser
 	c := domain.Config{Accounts: []domain.Account{{ID: "api", Name: "API", Kind: "api-key"}}, Sources: []domain.Source{{ID: "test", Name: "Test", Kind: "openai", AuthMode: "api-key", AccountID: "api", Endpoint: up.URL, Deployments: []string{"deployed"}}}, Clients: []domain.Client{{ID: "alice", Name: "Alice", KeyHash: keyHash("alice-key"), Routes: []domain.Route{{ID: "main", Agent: "codex", MatchModel: "coding", SourceID: "test", Model: "deployed"}}}}}
 	saveTest(t, store, c)
 	auth := NewAuth(store, "")
-	auth.http.values = map[string]*http.Client{"system:": up.Client()}
+	auth.http.Values = map[string]*http.Client{"system:": up.Client()}
 	if e := auth.SetKeys(map[string]string{"test": "upstream-secret"}); e != nil {
 		t.Fatal(e)
 	}
@@ -545,14 +545,14 @@ func TestExchangeLeaseRestartAndCrossProcessLogout(t *testing.T) {
 		}
 		return fmt.Sprintf(`{"token":"synthetic-exchange","expires_at":%d,"endpoints":{"api":"https://api.githubcopilot.com"}}`, time.Now().Add(time.Hour).Unix())
 	})
-	a.http.values = map[string]*http.Client{"system:": client}
+	a.http.Values = map[string]*http.Client{"system:": client}
 	source, _ := s.Snapshot().Source("copilot")
 	l, e := a.Lease(context.Background(), s.Snapshot(), source, false)
 	if e != nil {
 		t.Fatal(e)
 	}
 	b := NewAuth(s, "")
-	b.http.values = map[string]*http.Client{"system:": client}
+	b.http.Values = map[string]*http.Client{"system:": client}
 	second, e := b.Lease(context.Background(), s.Snapshot(), source, false)
 	if e != nil || second.Value != l.Value || calls.Load() != 1 {
 		t.Fatal("restart exchanged a valid cached lease again")
@@ -583,8 +583,8 @@ func TestRotatingCredentialRefreshSerializesAcrossProcesses(t *testing.T) {
 		}
 		return `{"access_token":"synthetic-current","refresh_token":"synthetic-next","expires_in":3600,"refresh_token_expires_in":7200}`
 	})
-	a.http.values = map[string]*http.Client{"system:": client}
-	b.http.values = map[string]*http.Client{"system:": client}
+	a.http.Values = map[string]*http.Client{"system:": client}
+	b.http.Values = map[string]*http.Client{"system:": client}
 	source, _ := s.Snapshot().Source("copilot")
 	var wg sync.WaitGroup
 	for _, auth := range []*Auth{a, b} {

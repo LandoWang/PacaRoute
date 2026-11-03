@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -125,7 +127,7 @@ func (a *Auth) azureDirectory(c *domain.Config, id string) string {
 	return filepath.Join(home, ".azure")
 }
 func (a *Auth) azureEnv(c *domain.Config, id string, p domain.Proxy) []string {
-	env := proxyEnv(p)
+	env := transport.ProxyEnv(p)
 	for i := len(env) - 1; i >= 0; i-- {
 		if strings.HasPrefix(env[i], "AZURE_CONFIG_DIR=") {
 			env = append(env[:i], env[i+1:]...)
@@ -143,7 +145,7 @@ func commandJSON(ctx context.Context, env []string, args ...string) (json.RawMes
 	if e != nil {
 		return nil, errors.New("Azure CLI failed; sign in to this account and check the selected subscription")
 	}
-	if len(b) > maxJSONBody || !json.Valid(b) {
+	if len(b) > transport.MaxJSONBody || !json.Valid(b) {
 		return nil, errors.New("invalid Azure CLI response")
 	}
 	return b, nil

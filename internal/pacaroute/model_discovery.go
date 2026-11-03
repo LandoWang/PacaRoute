@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -92,7 +94,7 @@ func (a *catalog) DiscoverModels(ctx context.Context, c *domain.Config, source d
 		if source.Kind == domain.SourceAnthropic {
 			req.Header.Set("anthropic-version", anthropicVersion)
 		}
-		response, e := a.http.client(c.SourceProxy(source.ID)).Do(req)
+		response, e := a.http.Client(c.SourceProxy(source.ID)).Do(req)
 		if e != nil {
 			return out, errors.New("model discovery connection failed")
 		}
@@ -108,7 +110,7 @@ func (a *catalog) DiscoverModels(ctx context.Context, c *domain.Config, source d
 			HasMore bool   `json:"has_more"`
 			LastID  string `json:"last_id"`
 		}
-		e = readJSONBody(response.Body, &body)
+		e = transport.ReadJSONBody(response.Body, &body)
 		response.Body.Close()
 		if e != nil {
 			return out, e
@@ -141,12 +143,12 @@ func (a *catalog) discoverPeer(ctx context.Context, c *domain.Config, source dom
 	namespaced := strings.HasSuffix(base, "/pacaroute")
 	if !namespaced {
 		req, _ := http.NewRequestWithContext(ctx, "GET", base+"/.well-known/pacaroute", nil)
-		res, err := a.http.client(c.SourceProxy(source.ID)).Do(req)
+		res, err := a.http.Client(c.SourceProxy(source.ID)).Do(req)
 		if err == nil {
 			var descriptor struct {
 				PeerPath string `json:"peer_path"`
 			}
-			if res.StatusCode == 200 && readJSONBody(res.Body, &descriptor) == nil && descriptor.PeerPath == "pacaroute" {
+			if res.StatusCode == 200 && transport.ReadJSONBody(res.Body, &descriptor) == nil && descriptor.PeerPath == "pacaroute" {
 				base += "/pacaroute"
 				namespaced = true
 			}
@@ -165,7 +167,7 @@ func (a *catalog) discoverPeer(ctx context.Context, c *domain.Config, source dom
 			return nil, 0, err
 		}
 		req.Header.Set(l.Header, l.Value)
-		res, err := a.http.client(c.SourceProxy(source.ID)).Do(req)
+		res, err := a.http.Client(c.SourceProxy(source.ID)).Do(req)
 		if err != nil {
 			return nil, 0, errors.New("cannot reach remote PacaRoute")
 		}
@@ -176,7 +178,7 @@ func (a *catalog) discoverPeer(ctx context.Context, c *domain.Config, source dom
 		var body struct {
 			Data []peerModel `json:"data"`
 		}
-		if err := readJSONBody(res.Body, &body); err != nil {
+		if err := transport.ReadJSONBody(res.Body, &body); err != nil {
 			return nil, 200, errors.New("invalid remote PacaRoute model catalog")
 		}
 		return body.Data, 200, nil
