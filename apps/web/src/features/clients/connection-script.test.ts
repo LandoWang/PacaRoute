@@ -183,6 +183,8 @@ describe("客户端 connection scripts", () => {
         rmSync(dir, { recursive: true, force: true });
       }
     },
+    // pwsh startup can exceed the 5 s default while the suite runs in parallel.
+    30_000,
   );
   it("rejects control characters in the address and invalid Client IDs", () => {
     for (const platform of ["shell", "powershell"] as const) {
