@@ -3,7 +3,7 @@ package pacaroute
 import "github.com/LandoWang/pacaroute/internal/pacaroute/clientconfig"
 
 func clientPath(client string) (string, error) {
-	return clientconfig.ClientPath(client)
+	return clientconfig.AgentConfigPath(client)
 }
 
 // configPlan preserves the local preview fields used by CLI and management callers.
@@ -15,7 +15,7 @@ type configPlan struct {
 }
 
 func planClient(client, source, model string, port int) (configPlan, error) {
-	p, e := clientconfig.PlanClient(client, source, model, port)
+	p, e := clientconfig.PlanLocal(client, source, model, port)
 	return configPlan{p.Path, p.Fingerprint, p.Changes, p}, e
 }
 
@@ -29,5 +29,5 @@ func (p configPlan) apply(expected string) (string, error) {
 }
 
 func clientState(client string, port int) map[string]any {
-	return clientconfig.ClientState(client, port)
+	return clientconfig.AgentState(client, port)
 }

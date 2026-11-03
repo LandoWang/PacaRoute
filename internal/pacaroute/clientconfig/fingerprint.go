@@ -5,4 +5,4 @@ import (
 	"encoding/hex"
 )
 
-func keyHash(key string) string { h := sha256.Sum256([]byte(key)); return hex.EncodeToString(h[:]) }
+func fingerprint(key string) string { h := sha256.Sum256([]byte(key)); return hex.EncodeToString(h[:]) }

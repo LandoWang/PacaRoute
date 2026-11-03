@@ -37,7 +37,7 @@ func backupPath(target, id string) (string, bool, error) {
 	}
 	return "", false, errors.New("backup does not belong to this Agent")
 }
-func readBackup(client, target, id string) ([]byte, bool, error) {
+func readBackup(agent, target, id string) ([]byte, bool, error) {
 	path, missing, e := backupPath(target, id)
 	if e != nil {
 		return nil, false, e
@@ -59,22 +59,22 @@ func readBackup(client, target, id string) ([]byte, bool, error) {
 		}
 		return nil, true, nil
 	}
-	if !validClientBytes(client, b) {
+	if !validClientBytes(agent, b) {
 		return nil, false, errors.New("invalid backup contents")
 	}
 	return b, false, nil
 }
-func validClientBytes(client string, b []byte) bool {
+func validClientBytes(agent string, b []byte) bool {
 	var m map[string]any
-	if client == "codex" {
+	if agent == "codex" {
 		return toml.Unmarshal(b, &m) == nil && m != nil
 	}
 	return json.Unmarshal(b, &m) == nil && m != nil
 }
 
 // ListBackups lists current and legacy backups for the selected Agent.
-func ListBackups(client string) (map[string]any, error) {
-	target, e := ClientPath(client)
+func ListBackups(agent string) (map[string]any, error) {
+	target, e := AgentConfigPath(agent)
 	if e != nil {
 		return nil, e
 	}
@@ -91,7 +91,7 @@ func ListBackups(client string) (map[string]any, error) {
 		if e != nil || !f.Mode().IsRegular() {
 			continue
 		}
-		b, missing, e := readBackup(client, target, id)
+		b, missing, e := readBackup(agent, target, id)
 		connected := strings.Contains(string(b), "copilot-bridge") || strings.Contains(string(b), "pacaroute")
 		rows = append(rows, configBackup{id, f.ModTime().UTC().Format(time.RFC3339), missing, connected, e == nil})
 	}
@@ -100,8 +100,8 @@ func ListBackups(client string) (map[string]any, error) {
 }
 
 // RestoreBackup previews or applies an exact configuration backup.
-func RestoreBackup(client, id, expected string, apply bool) (map[string]any, error) {
-	target, e := ClientPath(client)
+func RestoreBackup(agent, id, expected string, apply bool) (map[string]any, error) {
+	target, e := AgentConfigPath(agent)
 	if e != nil {
 		return nil, e
 	}
@@ -118,11 +118,11 @@ func RestoreBackup(client, id, expected string, apply bool) (map[string]any, err
 	if e != nil && !oldMissing {
 		return nil, e
 	}
-	next, missing, e := readBackup(client, target, id)
+	next, missing, e := readBackup(agent, target, id)
 	if e != nil {
 		return nil, e
 	}
-	fingerprint := keyHash(target + "\x00" + id + "\x00" + string(old) + "\x00" + string(next) + boolText(oldMissing) + boolText(missing))
+	fingerprint := fingerprint(target + "\x00" + id + "\x00" + string(old) + "\x00" + string(next) + boolText(oldMissing) + boolText(missing))
 	result := map[string]any{"path": target, "fingerprint": fingerprint, "changes": []string{"Restore the entire selected configuration backup", "Current configuration will first be backed up", "Open a new Agent session after restoring"}}
 	if !apply {
 		return result, nil

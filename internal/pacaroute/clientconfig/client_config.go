@@ -17,13 +17,13 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// ClientPath returns the configuration path for the selected Agent.
-func ClientPath(client string) (string, error) {
+// AgentConfigPath returns the configuration path for the selected Agent.
+func AgentConfigPath(agent string) (string, error) {
 	home, e := os.UserHomeDir()
 	if e != nil {
 		return "", e
 	}
-	switch client {
+	switch agent {
 	case "codex":
 		root := os.Getenv("CODEX_HOME")
 		if root == "" {
@@ -39,14 +39,14 @@ func ClientPath(client string) (string, error) {
 	}
 	return "", errors.New("select codex or claude-code")
 }
-func baseURL(port int, source, client string) string {
+func baseURL(port int, source, agent string) string {
 	base := fmt.Sprintf("http://localhost:%d", port)
 	if strings.HasPrefix(source, "pool:") {
 		base += "/pools/" + strings.TrimPrefix(source, "pool:")
 	} else if source != "" && source != "copilot" {
 		base += "/sources/" + source
 	}
-	if client == "codex" {
+	if agent == "codex" {
 		return base + "/codex"
 	}
 	return base + "/cc"
@@ -61,14 +61,14 @@ type Plan struct {
 	Changes     []string
 }
 
-// PlanClient previews an Agent configuration for a local PacaRoute service.
-func PlanClient(client, source, model string, port int) (Plan, error) {
-	return PlanConnection(client, baseURL(port, source, client), model, "pacaroute-local")
+// PlanLocal previews an Agent configuration for a local PacaRoute service.
+func PlanLocal(agent, source, model string, port int) (Plan, error) {
+	return PlanConnection(agent, baseURL(port, source, agent), model, "pacaroute-local")
 }
 
 // PlanConnection previews an Agent configuration without writing it.
-func PlanConnection(client, base, model, key string) (Plan, error) {
-	path, e := ClientPath(client)
+func PlanConnection(agent, base, model, key string) (Plan, error) {
+	path, e := AgentConfigPath(agent)
 	if e != nil {
 		return Plan{}, e
 	}
@@ -87,7 +87,7 @@ func PlanConnection(client, base, model, key string) (Plan, error) {
 		return Plan{}, errors.New("client configuration too large")
 	}
 	var next []byte
-	if client == "codex" {
+	if agent == "codex" {
 		next, e = configureTOML(old, base, model, key)
 	} else {
 		m := map[string]any{}
@@ -122,8 +122,8 @@ func PlanConnection(client, base, model, key string) (Plan, error) {
 	if e != nil {
 		return Plan{}, e
 	}
-	fingerprint := keyHash(string(old) + "\x00" + string(next) + fmt.Sprint(missing))
-	return Plan{path, old, next, missing, fingerprint, []string{"Agent: " + client, "Model: " + model, "Base URL: " + base, "Save a backup before applying"}}, nil
+	fingerprint := fingerprint(string(old) + "\x00" + string(next) + fmt.Sprint(missing))
+	return Plan{path, old, next, missing, fingerprint, []string{"Agent: " + agent, "Model: " + model, "Base URL: " + base, "Save a backup before applying"}}, nil
 }
 func configureTOML(old []byte, base, model, key string) ([]byte, error) {
 	before := map[string]any{}
@@ -209,10 +209,10 @@ func (p Plan) Apply(expected string) (string, error) {
 	return backup, atomicfile.Write(p.Path, p.next, 0600)
 }
 
-// ClientState reports the current Agent connection and local port drift.
-func ClientState(client string, port int) map[string]any {
-	path, e := ClientPath(client)
-	out := map[string]any{"id": client, "path": path, "connected": false, "drifted": false, "source": "copilot"}
+// AgentState reports the current Agent connection and local port drift.
+func AgentState(agent string, port int) map[string]any {
+	path, e := AgentConfigPath(agent)
+	out := map[string]any{"id": agent, "path": path, "connected": false, "drifted": false, "source": "copilot"}
 	if e != nil {
 		out["error"] = e.Error()
 		return out
@@ -226,7 +226,7 @@ func ClientState(client string, port int) map[string]any {
 		return out
 	}
 	base, model := "", ""
-	if client == "codex" {
+	if agent == "codex" {
 		var m map[string]any
 		if toml.Unmarshal(b, &m) != nil {
 			out["error"] = "Invalid TOML"
@@ -262,7 +262,7 @@ func ClientState(client string, port int) map[string]any {
 		}
 	}
 	out["source"] = source
-	out["connected"] = base == baseURL(port, source, client)
-	out["drifted"] = strings.Contains(base, "localhost:") && base != baseURL(port, source, client)
+	out["connected"] = base == baseURL(port, source, agent)
+	out["drifted"] = strings.Contains(base, "localhost:") && base != baseURL(port, source, agent)
 	return out
 }
