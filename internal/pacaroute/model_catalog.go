@@ -38,7 +38,7 @@ func (a *Auth) Models(ctx context.Context, id string) ([]Model, error) {
 	models := []Model{}
 	if s.Kind != "copilot" {
 		for _, m := range s.Deployments {
-			models = append(models, Model{m, m, s.Kind, s.SupportsAgentModel("claude-code", m), s.SupportsAgentModel("codex", m)})
+			models = append(models, Model{m, m, string(s.Kind), s.SupportsAgentModel("claude-code", m), s.SupportsAgentModel("codex", m)})
 		}
 		return models, nil
 	}

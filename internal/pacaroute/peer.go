@@ -35,12 +35,12 @@ func (s *Server) peerCatalog(w http.ResponseWriter, r *http.Request) {
 		problem(w, 401, "valid Client API key required")
 		return
 	}
-	if !client.AgentEnabled(peerGrant) {
+	if !client.AgentEnabled(GrantPeer) {
 		problem(w, 404, "endpoint not found")
 		return
 	}
 	models := map[string]*peerModel{}
-	for _, agent := range []string{"codex", "claude-code"} {
+	for _, agent := range []AgentProtocol{"codex", "claude-code"} {
 		for _, route := range c.peerClient(client, agent).Routes {
 			name := route.MatchModel
 			if name == "*" {
@@ -53,10 +53,10 @@ func (s *Server) peerCatalog(w http.ResponseWriter, r *http.Request) {
 			}
 			found := false
 			for _, agent := range entry.Agents {
-				found = found || agent == route.Agent
+				found = found || agent == string(route.Agent)
 			}
 			if !found {
-				entry.Agents = append(entry.Agents, route.Agent)
+				entry.Agents = append(entry.Agents, string(route.Agent))
 			}
 		}
 	}
@@ -71,14 +71,14 @@ func (s *Server) peerCatalog(w http.ResponseWriter, r *http.Request) {
 
 // Project only peer grants onto the wire protocol requested by a downstream router.
 // Direct Agent grants remain independent, including their sticky-session scope.
-func (c *Config) peerClient(client *Client, agent string) *Client {
+func (c *Config) peerClient(client *Client, agent AgentProtocol) *Client {
 	copy := *client
 	copy.LegacyDirect = false
-	copy.EnabledAgents = []string{agent}
+	copy.EnabledAgents = []GrantKind{agent.Grant()}
 	copy.Routes = nil
 	for _, route := range client.Routes {
-		if route.Agent == peerGrant && c.validateTarget(route.SourceID, route.Model, agent) == nil {
-			route.Agent = agent
+		if route.Agent == GrantPeer && c.validateTarget(route.SourceID, route.Model, agent.Grant()) == nil {
+			route.Agent = agent.Grant()
 			copy.Routes = append(copy.Routes, route)
 		}
 	}

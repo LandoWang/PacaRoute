@@ -210,7 +210,7 @@ func (s *ConfigStore) importLegacy() (Config, error) {
 		}
 	}
 	if _, exists := c.Client("default"); !exists {
-		c.Clients = append([]Client{{ID: "default", Name: "本机", Local: true, LegacyDirect: legacy, EnabledAgents: []string{"codex", "claude-code"}, Routes: []Route{}}}, c.Clients...)
+		c.Clients = append([]Client{{ID: "default", Name: "本机", Local: true, LegacyDirect: legacy, EnabledAgents: []GrantKind{"codex", "claude-code"}, Routes: []Route{}}}, c.Clients...)
 	}
 	c.Revision = ""
 	return c, c.Validate()

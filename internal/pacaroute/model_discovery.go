@@ -118,7 +118,7 @@ func (a *Auth) DiscoverModels(ctx context.Context, c *Config, source Source) (mo
 			if name == "" {
 				name = m.ID
 			}
-			out.Models = append(out.Models, Model{ID: m.ID, Name: name, Vendor: source.Kind, Codex: true, Claude: true})
+			out.Models = append(out.Models, Model{ID: m.ID, Name: name, Vendor: string(source.Kind), Codex: true, Claude: true})
 		}
 		if !body.HasMore || body.LastID == "" {
 			return out, nil

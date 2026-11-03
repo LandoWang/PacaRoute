@@ -52,7 +52,7 @@ func statStamp(path string) string {
 }
 func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (lease, error) {
 	p := c.SourceProxy(s.ID)
-	key := s.ID + ":" + s.Kind + ":" + s.AccountID + ":" + s.AuthMode + ":" + s.SubscriptionID + ":" + p.Mode + p.Address
+	key := s.ID + ":" + string(s.Kind) + ":" + s.AccountID + ":" + s.AuthMode + ":" + s.SubscriptionID + ":" + p.Mode + p.Address
 	// Bound concurrent refresh coordination without holding the global cache lock
 	// across network calls. Unrelated sources can keep using their own credentials.
 	var bucket uint32

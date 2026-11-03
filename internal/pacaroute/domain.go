@@ -6,19 +6,19 @@ import (
 )
 
 type Account struct {
-	Endpoint      string `json:"endpoint,omitempty"`
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Kind          string `json:"kind"`
-	OAuthClientID string `json:"oauth_client_id,omitempty"`
-	LoginMode     string `json:"login_mode,omitempty"`
+	Endpoint      string      `json:"endpoint,omitempty"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Kind          AccountKind `json:"kind"`
+	OAuthClientID string      `json:"oauth_client_id,omitempty"`
+	LoginMode     string      `json:"login_mode,omitempty"`
 }
 type Source struct {
 	Prices         map[string]ModelPrice `json:"prices,omitempty"`
 	AgentModels    map[string][]string   `json:"agent_models,omitempty"`
 	ID             string                `json:"id"`
 	Name           string                `json:"name"`
-	Kind           string                `json:"kind"`
+	Kind           SourceKind            `json:"kind"`
 	Endpoint       string                `json:"endpoint"`
 	AuthMode       string                `json:"auth_mode"`
 	AccountID      string                `json:"account_id,omitempty"`
@@ -45,13 +45,13 @@ type Member struct {
 	Weight   int    `json:"weight"`
 }
 type Pool struct {
-	MultiModel bool     `json:"multi_model,omitempty"`
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	Agent      string   `json:"agent"`
-	Model      string   `json:"model"`
-	Failover   bool     `json:"failover"`
-	Members    []Member `json:"members"`
+	MultiModel bool          `json:"multi_model,omitempty"`
+	ID         string        `json:"id"`
+	Name       string        `json:"name"`
+	Agent      AgentProtocol `json:"agent"`
+	Model      string        `json:"model"`
+	Failover   bool          `json:"failover"`
+	Members    []Member      `json:"members"`
 }
 
 // ModelNames is the pool's public catalog. A legacy pool exposes its single
@@ -90,17 +90,17 @@ func (p Pool) HasModel(model string) bool {
 }
 
 type Route struct {
-	ID         string `json:"id"`
-	Agent      string `json:"agent"`
-	MatchModel string `json:"match_model"`
-	SourceID   string `json:"source_id"`
-	Model      string `json:"model"`
+	ID         string    `json:"id"`
+	Agent      GrantKind `json:"agent"`
+	MatchModel string    `json:"match_model"`
+	SourceID   string    `json:"source_id"`
+	Model      string    `json:"model"`
 }
 type Client struct {
 	Quota         *ClientQuota `json:"quota,omitempty"`
 	Local         bool         `json:"local,omitempty"`
 	LegacyDirect  bool         `json:"legacy_direct,omitempty"`
-	EnabledAgents []string     `json:"enabled_agents"`
+	EnabledAgents []GrantKind  `json:"enabled_agents"`
 	ID            string       `json:"id"`
 	Name          string       `json:"name"`
 	Disabled      bool         `json:"disabled"`
@@ -181,14 +181,56 @@ func (c *Config) Proxy(id string) (Proxy, bool) {
 }
 func (c *Config) SourceProxy(id string) Proxy { p, _ := c.Proxy(c.Proxies.Bindings[id]); return p }
 
-// peerGrant shares Client grant and route fields with the Agent protocols
-// ("codex", "claude-code") but is an access grant for the /pacaroute
-// namespace, not a wire protocol. Source and account kinds that happen to use
-// the same "pacaroute" spelling are a separate concept.
-const peerGrant = "pacaroute"
+// GrantKind is what a Client grant or route permits. The two Agent protocols
+// are grants too; GrantPeer is an access grant for the /pacaroute namespace,
+// not a wire protocol. JSON keeps the plain string values.
+type GrantKind string
 
-func agentValid(a string) bool       { return a == "codex" || a == "claude-code" }
-func clientAgentValid(a string) bool { return agentValid(a) || a == peerGrant }
+const (
+	GrantCodex      GrantKind = "codex"
+	GrantClaudeCode GrantKind = "claude-code"
+	GrantPeer       GrantKind = "pacaroute"
+)
+
+// AgentProtocol is the downstream wire protocol of an Agent request.
+type AgentProtocol string
+
+const (
+	AgentCodex      AgentProtocol = "codex"
+	AgentClaudeCode AgentProtocol = "claude-code"
+)
+
+// Grant is the Client grant that permits direct use of this protocol.
+func (p AgentProtocol) Grant() GrantKind { return GrantKind(p) }
+
+// SourceKind identifies the upstream resource type of a Source. The peer
+// source kind shares the "pacaroute" spelling with GrantPeer but is unrelated.
+type SourceKind string
+
+const (
+	SourceCopilot     SourceKind = "copilot"
+	SourceAzureOpenAI SourceKind = "azure-openai"
+	SourceOpenAI      SourceKind = "openai"
+	SourceAnthropic   SourceKind = "anthropic"
+	SourcePeer        SourceKind = "pacaroute"
+)
+
+// AccountKind identifies the provider identity type of an Account.
+type AccountKind string
+
+const (
+	AccountGitHub    AccountKind = "github"
+	AccountAzure     AccountKind = "azure"
+	AccountOpenAI    AccountKind = "openai"
+	AccountAnthropic AccountKind = "anthropic"
+	AccountAPIKey    AccountKind = "api-key"
+	AccountPeer      AccountKind = "pacaroute"
+)
+
+func agentValid(a AgentProtocol) bool { return a == AgentCodex || a == AgentClaudeCode }
+func clientAgentValid(a GrantKind) bool {
+	return agentValid(AgentProtocol(a)) || a == GrantPeer
+}
 func (c *Config) Client(id string) (*Client, bool) {
 	for _, v := range c.Clients {
 		if v.ID == id {
@@ -198,12 +240,12 @@ func (c *Config) Client(id string) (*Client, bool) {
 	}
 	return nil, false
 }
-func (c *Client) AgentEnabled(agent string) bool {
+func (c *Client) AgentEnabled(agent GrantKind) bool {
 	if c == nil || c.Disabled {
 		return false
 	}
 	if c.EnabledAgents == nil {
-		return agentValid(agent)
+		return agentValid(AgentProtocol(agent))
 	}
 	for _, value := range c.EnabledAgents {
 		if value == agent {
@@ -212,27 +254,27 @@ func (c *Client) AgentEnabled(agent string) bool {
 	}
 	return false
 }
-func accountUsesAPIKey(kind string) bool {
+func accountUsesAPIKey(kind AccountKind) bool {
 	return kind == "openai" || kind == "anthropic" || kind == "api-key" || kind == "pacaroute"
 }
-func sourceAcceptsAccount(source, account string) bool {
+func sourceAcceptsAccount(source SourceKind, account AccountKind) bool {
 	switch source {
 	case "copilot":
 		return account == "github"
 	case "azure-openai":
 		return account == "azure"
 	case "openai", "anthropic":
-		return account == source || account == "api-key"
+		return string(account) == string(source) || account == "api-key"
 	case "pacaroute":
 		return account == "pacaroute"
 	}
 	return false
 }
-func (s Source) SupportsAgentModel(agent, model string) bool {
+func (s Source) SupportsAgentModel(agent AgentProtocol, model string) bool {
 	if s.Kind != "pacaroute" {
 		return true
 	}
-	for _, name := range s.AgentModels[agent] {
+	for _, name := range s.AgentModels[string(agent)] {
 		if name == model {
 			return true
 		}

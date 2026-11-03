@@ -10,7 +10,7 @@ type object = map[string]json.RawMessage
 func obj(b json.RawMessage) object     { v := object{}; _ = json.Unmarshal(b, &v); return v }
 func array(b json.RawMessage) []object { var v []object; _ = json.Unmarshal(b, &v); return v }
 
-func (t Target) upstreamProtocol(agent ...string) string {
+func (t Target) upstreamProtocol(agent ...AgentProtocol) string {
 	if t.Source.Kind == "pacaroute" && len(agent) > 0 {
 		return incomingProtocol(agent[0])
 	}
@@ -19,7 +19,7 @@ func (t Target) upstreamProtocol(agent ...string) string {
 	}
 	return "responses"
 }
-func incomingProtocol(agent string) string {
+func incomingProtocol(agent AgentProtocol) string {
 	if agent == "claude-code" {
 		return "messages"
 	}
@@ -27,7 +27,7 @@ func incomingProtocol(agent string) string {
 }
 
 // Native paths preserve opaque request and response fields. Only probed Copilot constraints are changed.
-func prepare(body object, t Target, agent string) ([]byte, *translation, error) {
+func prepare(body object, t Target, agent AgentProtocol) ([]byte, *translation, error) {
 	// RawMessage values are never modified in place; copying the top-level map
 	// isolates edits from the body that later failover targets reuse.
 	wire := make(object, len(body))

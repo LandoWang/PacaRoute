@@ -230,7 +230,7 @@ func TestTranslatedStreamErrorsRetainDetails(t *testing.T) {
 			} else {
 				c.Sources[0].Kind = "anthropic"
 			}
-			c.Clients[0].Routes[0].Agent = agent
+			c.Clients[0].Routes[0].Agent = GrantKind(agent)
 			saveTest(t, store, c)
 			r := httptest.NewRequest("POST", path, strings.NewReader(body))
 			r.Header.Set("Authorization", "Bearer alice-key")

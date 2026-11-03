@@ -65,7 +65,7 @@ func TestCopilotCatalogIncludesNativeMessagesModels(t *testing.T) {
 // existing Opus default and independent Codex pool remain unchanged.
 func TestExplicitSonnetRoutePrecedesDefaultModel(t *testing.T) {
 	c := fixtureConfig()
-	client := Client{ID: "default", Local: true, EnabledAgents: []string{"claude-code", "codex"}, Routes: []Route{
+	client := Client{ID: "default", Local: true, EnabledAgents: []GrantKind{"claude-code", "codex"}, Routes: []Route{
 		{ID: "sonnet-55", Agent: "claude-code", MatchModel: "claude-sonnet-5-5", SourceID: "copilot", Model: "claude-sonnet-5.5"},
 		{ID: "sonnet", Agent: "claude-code", MatchModel: "claude-sonnet-5", SourceID: "copilot", Model: "claude-sonnet-5"},
 		{ID: "opus-default", Agent: "claude-code", MatchModel: "*", SourceID: "copilot", Model: "claude-opus-5.5"},
@@ -77,7 +77,7 @@ func TestExplicitSonnetRoutePrecedesDefaultModel(t *testing.T) {
 		{"claude-code", "claude-opus-5-5", "copilot", "claude-opus-5.5"},
 		{"codex", "gpt-6-astra", "pool:balanced", "coding"},
 	} {
-		source, model, err := c.Resolve(&client, test.agent, test.request, "")
+		source, model, err := c.Resolve(&client, AgentProtocol(test.agent), test.request, "")
 		if err != nil || source != test.source || model != test.model {
 			t.Errorf("%s: wrong route (%s, %s, %v)", test.request, source, model, err)
 		}
@@ -86,7 +86,7 @@ func TestExplicitSonnetRoutePrecedesDefaultModel(t *testing.T) {
 
 func TestSelectedModelsRejectUnselectedRequests(t *testing.T) {
 	c := fixtureConfig()
-	client := Client{ID: "selected", EnabledAgents: []string{"claude-code", "codex"}, Routes: []Route{
+	client := Client{ID: "selected", EnabledAgents: []GrantKind{"claude-code", "codex"}, Routes: []Route{
 		{ID: "opus", Agent: "claude-code", MatchModel: "claude-opus-5.5", SourceID: "copilot", Model: "claude-opus-5.5"},
 		{ID: "sonnet", Agent: "claude-code", MatchModel: "claude-sonnet-5.5", SourceID: "copilot", Model: "claude-sonnet-5.5"},
 		{ID: "sonnet-alias", Agent: "claude-code", MatchModel: "claude-sonnet-5-5", SourceID: "copilot", Model: "claude-sonnet-5.5"},

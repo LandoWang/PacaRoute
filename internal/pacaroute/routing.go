@@ -29,8 +29,8 @@ type Target struct {
 	Sticky   bool
 }
 
-func endpointIdentity(s Source) string { return s.Kind + ":" + s.AccountID + ":" + s.Endpoint }
-func (r *Router) Targets(c *Config, client, agent, id, model, session string, continuation bool) ([]Target, error) {
+func endpointIdentity(s Source) string { return string(s.Kind) + ":" + s.AccountID + ":" + s.Endpoint }
+func (r *Router) Targets(c *Config, client string, agent AgentProtocol, id, model, session string, continuation bool) ([]Target, error) {
 	if !strings.HasPrefix(id, "pool:") {
 		s, ok := c.Source(id)
 		if !ok {
@@ -53,16 +53,16 @@ func (r *Router) Targets(c *Config, client, agent, id, model, session string, co
 	}
 	key := ""
 	if session != "" {
-		key = keyHash(client + "\x00" + agent + "\x00" + p.ID + "\x00" + session)
+		key = keyHash(client + "\x00" + string(agent) + "\x00" + p.ID + "\x00" + session)
 		if p.MultiModel {
-			key = keyHash(client + "\x00" + agent + "\x00" + p.ID + "\x00" + model + "\x00" + session)
+			key = keyHash(client + "\x00" + string(agent) + "\x00" + p.ID + "\x00" + model + "\x00" + session)
 		}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	prior, has := r.bindings[key]
 	if !has && !p.MultiModel && client == "local" && session != "" {
-		legacyKey := strings.ToUpper(keyHash(agent + "\n" + p.ID + "\n" + session))
+		legacyKey := strings.ToUpper(keyHash(string(agent) + "\n" + p.ID + "\n" + session))
 		if v, ok := r.legacy[legacyKey]; ok {
 			if source, found := c.Source(v.Source); found {
 				v.Key = key

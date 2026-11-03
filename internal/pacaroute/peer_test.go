@@ -18,7 +18,7 @@ func peerTestSource(endpoint string) Source {
 func peerTestServer(t *testing.T, endpoint string) *Server {
 	t.Helper()
 	store := storeForTest(t)
-	c := Config{Accounts: []Account{{ID: "remote", Name: "Remote PacaRoute", Kind: "pacaroute", Endpoint: endpoint}}, Sources: []Source{peerTestSource(endpoint)}, Clients: []Client{{ID: "outer", Name: "Outer", KeyHash: keyHash("outer-fixture-key"), EnabledAgents: []string{"codex", "claude-code"}, Routes: []Route{{ID: "coding", Agent: "codex", MatchModel: "outer-coding", SourceID: "peer", Model: "coding"}, {ID: "chat", Agent: "claude-code", MatchModel: "outer-chat", SourceID: "peer", Model: "chat"}}}}}
+	c := Config{Accounts: []Account{{ID: "remote", Name: "Remote PacaRoute", Kind: "pacaroute", Endpoint: endpoint}}, Sources: []Source{peerTestSource(endpoint)}, Clients: []Client{{ID: "outer", Name: "Outer", KeyHash: keyHash("outer-fixture-key"), EnabledAgents: []GrantKind{"codex", "claude-code"}, Routes: []Route{{ID: "coding", Agent: "codex", MatchModel: "outer-coding", SourceID: "peer", Model: "coding"}, {ID: "chat", Agent: "claude-code", MatchModel: "outer-chat", SourceID: "peer", Model: "chat"}}}}}
 	saveTest(t, store, c)
 	auth := NewAuth(store, "")
 	if err := auth.SaveAccountKey(context.Background(), "remote", "alice-key"); err != nil {
@@ -37,11 +37,11 @@ func peerTestServer(t *testing.T, endpoint string) *Server {
 func TestPeerCatalogClientScopeAndCapability(t *testing.T) {
 	remote, front, store := gatewayTest(t, func(w http.ResponseWriter, r *http.Request) { t.Error("catalog reached inference") })
 	c := cloneConfig(store.Snapshot())
-	c.Clients[0].EnabledAgents = []string{"pacaroute"}
+	c.Clients[0].EnabledAgents = []GrantKind{"pacaroute"}
 	c.Pools = []Pool{{ID: "codex-only", Name: "Private pool", Agent: "codex", Model: "deployed", Members: []Member{{ID: "member", SourceID: "test", Model: "deployed", Weight: 1}}}}
 	c.Clients[0].Routes[0].Agent = "pacaroute"
 	c.Clients[0].Routes[0].SourceID = "pool:codex-only"
-	c.Clients = append(c.Clients, Client{ID: "bob", Name: "Bob", EnabledAgents: []string{"pacaroute"}, KeyHash: keyHash("bob-key"), Routes: []Route{{ID: "other", Agent: "pacaroute", MatchModel: "private-model", SourceID: "test", Model: "deployed"}}})
+	c.Clients = append(c.Clients, Client{ID: "bob", Name: "Bob", EnabledAgents: []GrantKind{"pacaroute"}, KeyHash: keyHash("bob-key"), Routes: []Route{{ID: "other", Agent: "pacaroute", MatchModel: "private-model", SourceID: "test", Model: "deployed"}}})
 	saveTest(t, store, c)
 	for _, test := range []struct {
 		key  string

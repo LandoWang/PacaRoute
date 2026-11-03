@@ -80,7 +80,7 @@ func streamReadError(err error, terminal, last string) error {
 	return fmt.Errorf("upstream stream ended before %s (last event: %s): %w", terminal, streamDetail(last), err)
 }
 
-func emitStreamError(w io.Writer, agent, message string) error {
+func emitStreamError(w io.Writer, agent AgentProtocol, message string) error {
 	if agent == "codex" {
 		// Codex consumes response.failed, but ignores bare error events. This is
 		// a failure terminal only; never synthesize a successful completion.

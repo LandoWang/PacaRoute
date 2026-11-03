@@ -9,7 +9,7 @@ import (
 
 var legacySession = regexp.MustCompile(`(?:^|_)session_([A-Za-z0-9-]{1,128})$`)
 
-func sessionID(agent string, h http.Header, body map[string]json.RawMessage) string {
+func sessionID(agent AgentProtocol, h http.Header, body map[string]json.RawMessage) string {
 	names := []string{"X-PacaRoute-Session", "X-AgentLink-Session"}
 	if agent == "codex" {
 		names = append(names, "thread-id", "session-id", "session_id")

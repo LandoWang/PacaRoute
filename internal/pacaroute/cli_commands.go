@@ -28,7 +28,7 @@ func desktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, actio
 	case "configure":
 		client := a.get("client", "")
 		model := a.get("model", "")
-		if e := s.Snapshot().validateTarget(source, model, client); e != nil {
+		if e := s.Snapshot().validateTarget(source, model, GrantKind(client)); e != nil {
 			return nil, e
 		}
 		p, e := planClient(client, source, model, port)

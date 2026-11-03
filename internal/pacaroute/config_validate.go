@@ -124,7 +124,7 @@ func (c *Config) Validate() error {
 			}
 		}
 		for agent, models := range s.AgentModels {
-			if !agentValid(agent) {
+			if !agentValid(AgentProtocol(agent)) {
 				return errors.New("unknown Agent in discovered source models")
 			}
 			for _, model := range models {
@@ -179,7 +179,7 @@ func (c *Config) Validate() error {
 				return errors.New("invalid pool model alias")
 			}
 			weights[p.MemberModel(m)] += m.Weight
-			if e := c.validateTarget(m.SourceID, m.Model, p.Agent); e != nil {
+			if e := c.validateTarget(m.SourceID, m.Model, p.Agent.Grant()); e != nil {
 				return e
 			}
 		}
@@ -202,7 +202,7 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if v.EnabledAgents == nil {
-			v.EnabledAgents = []string{"codex", "claude-code"}
+			v.EnabledAgents = []GrantKind{"codex", "claude-code"}
 		}
 		if v.Routes == nil {
 			v.Routes = []Route{}
@@ -211,7 +211,7 @@ func (c *Config) Validate() error {
 			return errors.New("invalid client")
 		}
 		seen[v.ID] = true
-		agents := map[string]bool{}
+		agents := map[GrantKind]bool{}
 		for _, agent := range v.EnabledAgents {
 			if !clientAgentValid(agent) || agents[agent] {
 				return errors.New("invalid enabled Agent")
@@ -251,9 +251,9 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func (c *Config) validateTarget(id, model, agent string) error {
-	if agent == peerGrant {
-		for _, protocol := range []string{"codex", "claude-code"} {
+func (c *Config) validateTarget(id, model string, agent GrantKind) error {
+	if agent == GrantPeer {
+		for _, protocol := range []GrantKind{"codex", "claude-code"} {
 			if c.validateTarget(id, model, protocol) == nil {
 				return nil
 			}
@@ -262,7 +262,7 @@ func (c *Config) validateTarget(id, model, agent string) error {
 	}
 	if strings.HasPrefix(id, "pool:") {
 		p, ok := c.Pool(id)
-		if !ok || p.Agent != agent || !p.HasModel(model) {
+		if !ok || p.Agent.Grant() != agent || !p.HasModel(model) {
 			return errors.New("route must match the pool Agent and model")
 		}
 		return nil
@@ -271,7 +271,7 @@ func (c *Config) validateTarget(id, model, agent string) error {
 	if !ok || !modelIdentifier.MatchString(model) {
 		return errors.New("unknown source or invalid model")
 	}
-	if s.Kind == "pacaroute" && !s.SupportsAgentModel(agent, model) {
+	if s.Kind == "pacaroute" && !s.SupportsAgentModel(AgentProtocol(agent), model) {
 		return errors.New("remote PacaRoute does not expose this model for the selected Agent; refresh its model catalog")
 	}
 	if s.Kind != "copilot" {

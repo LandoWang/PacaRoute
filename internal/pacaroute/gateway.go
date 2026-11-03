@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func parseGatewayPath(path string) (agent, explicit, operation string) {
+func parseGatewayPath(path string) (agent AgentProtocol, explicit, operation string) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) >= 2 && (parts[0] == "sources" || parts[0] == "pools") {
 		explicit = parts[1]
@@ -57,7 +57,7 @@ type gatewayExchange struct {
 	client           *Client
 	peer             bool
 	hops             int
-	agent            string
+	agent            AgentProtocol
 	explicit         string
 	operation        string
 	affinityScope    string
@@ -115,9 +115,9 @@ func (s *Server) openExchange(w http.ResponseWriter, r *http.Request, peer bool)
 		return nil, false
 	}
 	agent, explicit, operation := parseGatewayPath(r.URL.Path)
-	grant := agent
+	grant := agent.Grant()
 	if peer {
-		grant = peerGrant
+		grant = GrantPeer
 	}
 	if !client.AgentEnabled(grant) {
 		problem(w, 404, "endpoint not found")
@@ -138,7 +138,7 @@ func (s *Server) agentModels(x *gatewayExchange) {
 	if !client.LegacyDirect {
 		models := []map[string]string{}
 		for _, route := range client.Routes {
-			if route.Agent == agent && (explicit == "" || explicit == route.SourceID) {
+			if route.Agent == agent.Grant() && (explicit == "" || explicit == route.SourceID) {
 				alias := route.MatchModel
 				if alias == "*" {
 					alias = route.Model
@@ -223,7 +223,7 @@ func (s *Server) admitQuota(x *gatewayExchange) bool {
 	if client != nil {
 		clientID = client.ID
 	}
-	x.activity = Activity{ID: strings.ReplaceAll(newID(), "-", ""), Timestamp: time.Now().UTC(), Kind: "request", Client: x.agent, ClientID: clientID}
+	x.activity = Activity{ID: strings.ReplaceAll(newID(), "-", ""), Timestamp: time.Now().UTC(), Kind: "request", Client: string(x.agent), ClientID: clientID}
 	quota, err := s.Quotas.Admit(x.activity, client.Quota)
 	if err != nil {
 		problem(w, 503, "Client quota ledger unavailable")
@@ -352,7 +352,7 @@ func (s *Server) attempt(x *gatewayExchange, i int, t Target) bool {
 }
 
 // upstreamPath maps the Agent operation to the target's native endpoint path.
-func upstreamPath(t Target, agent, protocol, operation string) string {
+func upstreamPath(t Target, agent AgentProtocol, protocol, operation string) string {
 	upstreamPath := "/responses"
 	if protocol == "messages" {
 		upstreamPath = "/v1/messages"
@@ -409,7 +409,7 @@ func (s *Server) send(x *gatewayExchange, t Target, wire []byte, protocol, upstr
 		if t.Source.Kind == "pacaroute" {
 			req.Header.Set(peerHopHeader, strconv.Itoa(x.hops+1))
 			if x.session != "" {
-				req.Header.Set("X-PacaRoute-Session", keyHash(s.AdminKey+"\x00"+x.affinityScope+"\x00"+x.agent+"\x00"+t.Source.ID+"\x00"+x.session))
+				req.Header.Set("X-PacaRoute-Session", keyHash(s.AdminKey+"\x00"+x.affinityScope+"\x00"+string(x.agent)+"\x00"+t.Source.ID+"\x00"+x.session))
 			}
 		}
 		if t.Source.Kind == "copilot" {

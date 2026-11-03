@@ -5,13 +5,13 @@ import (
 	"strings"
 )
 
-func (c *Config) Resolve(client *Client, agent, model, explicit string) (string, string, error) {
-	if !client.AgentEnabled(agent) {
+func (c *Config) Resolve(client *Client, agent AgentProtocol, model, explicit string) (string, string, error) {
+	if !client.AgentEnabled(agent.Grant()) {
 		return "", "", errors.New("Agent is not enabled for this Client")
 	}
 	if !client.LegacyDirect {
 		for _, r := range client.Routes {
-			if r.Agent == agent && (r.MatchModel == "*" || r.MatchModel == model) {
+			if r.Agent == agent.Grant() && (r.MatchModel == "*" || r.MatchModel == model) {
 				if explicit != "" && explicit != r.SourceID {
 					return "", "", errors.New("client route does not permit this source")
 				}
@@ -36,7 +36,7 @@ func (c *Config) Resolve(client *Client, agent, model, explicit string) (string,
 		}
 		return explicit, p.Model, nil
 	}
-	if e := c.validateTarget(explicit, model, agent); e != nil {
+	if e := c.validateTarget(explicit, model, agent.Grant()); e != nil {
 		return "", "", e
 	}
 	return explicit, model, nil

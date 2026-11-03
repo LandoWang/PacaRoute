@@ -105,9 +105,9 @@ func TestSQLiteConcurrentWritersAndImmutableSnapshot(t *testing.T) {
 func TestClientAgentGateAndDefaultAuthorization(t *testing.T) {
 	s := localTestServer(t)
 	c := cloneConfig(s.Store.Snapshot())
-	c.Clients[0].EnabledAgents = []string{"codex"}
+	c.Clients[0].EnabledAgents = []GrantKind{"codex"}
 	c.Clients[0].Routes = []Route{{ID: "main", Agent: "codex", MatchModel: "*", SourceID: "copilot", Model: "gpt-6-astra"}}
-	c.Clients = append(c.Clients, Client{ID: "alice", Name: "Alice", KeyHash: keyHash("synthetic-key"), EnabledAgents: []string{}, Routes: []Route{{ID: "old", Agent: "codex", MatchModel: "*", SourceID: "copilot", Model: "gpt-6-astra"}}})
+	c.Clients = append(c.Clients, Client{ID: "alice", Name: "Alice", KeyHash: keyHash("synthetic-key"), EnabledAgents: []GrantKind{}, Routes: []Route{{ID: "old", Agent: "codex", MatchModel: "*", SourceID: "copilot", Model: "gpt-6-astra"}}})
 	saveTest(t, s.Store, c)
 	for _, path := range []string{"/cc/messages", "/cc/models", "/sources/copilot/cc/models", "/pools/nope/cc/messages"} {
 		method := "POST"

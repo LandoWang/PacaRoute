@@ -12,7 +12,7 @@ import (
 // the service database. Keys enter on stdin and are never emitted in previews.
 func connectClient(a arguments, in io.Reader) (map[string]any, error) {
 	agent, model := a.get("agent", ""), a.get("model", "")
-	if !agentValid(agent) || !modelIdentifier.MatchString(model) {
+	if !agentValid(AgentProtocol(agent)) || !modelIdentifier.MatchString(model) {
 		return nil, errors.New("valid Agent and model alias required")
 	}
 	base := strings.TrimRight(a.get("url", ""), "/")
