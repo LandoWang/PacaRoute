@@ -2,13 +2,10 @@ package pacaroute
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,12 +32,6 @@ type desktopControl struct {
 	draining   map[*http.Server]bool
 	lastError  string
 }
-type desktopSettings struct {
-	CredentialRoot string `json:"credential_root,omitempty"`
-	Port           int    `json:"port"`
-	AdminPort      int    `json:"admin_port,omitempty"`
-	Serving        *bool  `json:"serving,omitempty"`
-}
 
 func (d *desktopControl) portValue() int      { d.mu.Lock(); defer d.mu.Unlock(); return d.port }
 func (d *desktopControl) managementPort() int { d.mu.Lock(); defer d.mu.Unlock(); return d.adminPort }
@@ -53,14 +44,6 @@ func (d *desktopControl) status() map[string]any {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return map[string]any{"serving": d.server != nil, "port": d.port, "admin_port": d.adminPort, "draining": len(d.draining), "error": d.lastError}
-}
-func (d *desktopControl) persist(port int, serving bool) error {
-	authority, err := filepath.Abs(d.auth.vault.root)
-	if err != nil {
-		return err
-	}
-	b, _ := json.Marshal(desktopSettings{Port: port, AdminPort: d.adminPort, Serving: &serving, CredentialRoot: authority})
-	return atomicWrite(filepath.Join(d.store.Root, "desktop-settings.json"), b, 0600)
 }
 func newHTTPServer(handler http.Handler) *http.Server {
 	return &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 64 << 10}
@@ -273,28 +256,6 @@ func (d *desktopControl) changePort(port int) (string, error) {
 		}
 	}
 	return fmt.Sprintf("http://127.0.0.1:%d/", d.adminPort), nil
-}
-func readDesktopSettings(root string) desktopSettings {
-	var v desktopSettings
-	b, _ := os.ReadFile(filepath.Join(root, "desktop-settings.json"))
-	_ = json.Unmarshal(b, &v)
-	return v
-}
-func desktopPort(a arguments, root string, fallback int) int {
-	if _, ok := a.flags["port"]; ok {
-		return fallback
-	}
-	v := readDesktopSettings(root)
-	if v.Port >= 1024 && v.Port <= 65535 {
-		return v.Port
-	}
-	return fallback
-}
-func saveDesktopSettings(root string, port int) error {
-	v := readDesktopSettings(root)
-	v.Port = port
-	b, _ := json.Marshal(v)
-	return atomicWrite(filepath.Join(root, "desktop-settings.json"), b, 0600)
 }
 
 func (d *desktopControl) startup(enabled bool) error {
