@@ -215,7 +215,7 @@ type DeviceLogin struct {
 func (a *Auth) BeginLogin(ctx context.Context, id string) (DeviceLogin, error) {
 	c := a.store.Snapshot()
 	account, ok := c.Account(id)
-	if !ok || account.Kind != "github" {
+	if !ok || account.Kind != AccountGitHub {
 		return DeviceLogin{}, errors.New("GitHub account not found")
 	}
 	clientID := account.OAuthClientID

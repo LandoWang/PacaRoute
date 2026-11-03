@@ -11,16 +11,16 @@ func obj(b json.RawMessage) object     { v := object{}; _ = json.Unmarshal(b, &v
 func array(b json.RawMessage) []object { var v []object; _ = json.Unmarshal(b, &v); return v }
 
 func (t Target) upstreamProtocol(agent ...AgentProtocol) string {
-	if t.Source.Kind == "pacaroute" && len(agent) > 0 {
+	if t.Source.Kind == SourcePeer && len(agent) > 0 {
 		return incomingProtocol(agent[0])
 	}
-	if t.Source.Kind == "anthropic" || t.Source.Kind == "copilot" && strings.HasPrefix(t.Model, "claude-") {
+	if t.Source.Kind == SourceAnthropic || t.Source.Kind == SourceCopilot && strings.HasPrefix(t.Model, "claude-") {
 		return "messages"
 	}
 	return "responses"
 }
 func incomingProtocol(agent AgentProtocol) string {
-	if agent == "claude-code" {
+	if agent == AgentClaudeCode {
 		return "messages"
 	}
 	return "responses"
@@ -48,7 +48,7 @@ func prepare(body object, t Target, agent AgentProtocol) ([]byte, *translation, 
 			return nil, nil, e
 		}
 	}
-	if t.Source.Kind == "copilot" {
+	if t.Source.Kind == SourceCopilot {
 		if t.upstreamProtocol() == "responses" {
 			delete(wire, "service_tier")
 			if string(wire["store"]) == "true" {

@@ -131,10 +131,10 @@ func (c *Config) Account(id string) (Account, bool) {
 		}
 	}
 	if id == "copilot" {
-		return Account{ID: id, Name: "GitHub Copilot", Kind: "github"}, true
+		return Account{ID: id, Name: "GitHub Copilot", Kind: AccountGitHub}, true
 	}
 	if id == "azure-local" {
-		return Account{ID: id, Name: "Local Azure CLI", Kind: "azure"}, true
+		return Account{ID: id, Name: "Local Azure CLI", Kind: AccountAzure}, true
 	}
 	return Account{}, false
 }
@@ -145,7 +145,7 @@ func (c *Config) Source(id string) (Source, bool) {
 		}
 	}
 	if id == "copilot" {
-		return Source{ID: id, Name: "GitHub Copilot", Kind: "copilot", AccountID: "copilot"}, true
+		return Source{ID: id, Name: "GitHub Copilot", Kind: SourceCopilot, AccountID: "copilot"}, true
 	}
 	return Source{}, false
 }
@@ -255,23 +255,23 @@ func (c *Client) AgentEnabled(agent GrantKind) bool {
 	return false
 }
 func accountUsesAPIKey(kind AccountKind) bool {
-	return kind == "openai" || kind == "anthropic" || kind == "api-key" || kind == "pacaroute"
+	return kind == AccountOpenAI || kind == AccountAnthropic || kind == AccountAPIKey || kind == AccountPeer
 }
 func sourceAcceptsAccount(source SourceKind, account AccountKind) bool {
 	switch source {
-	case "copilot":
-		return account == "github"
-	case "azure-openai":
-		return account == "azure"
-	case "openai", "anthropic":
-		return string(account) == string(source) || account == "api-key"
-	case "pacaroute":
-		return account == "pacaroute"
+	case SourceCopilot:
+		return account == AccountGitHub
+	case SourceAzureOpenAI:
+		return account == AccountAzure
+	case SourceOpenAI, SourceAnthropic:
+		return string(account) == string(source) || account == AccountAPIKey
+	case SourcePeer:
+		return account == AccountPeer
 	}
 	return false
 }
 func (s Source) SupportsAgentModel(agent AgentProtocol, model string) bool {
-	if s.Kind != "pacaroute" {
+	if s.Kind != SourcePeer {
 		return true
 	}
 	for _, name := range s.AgentModels[string(agent)] {

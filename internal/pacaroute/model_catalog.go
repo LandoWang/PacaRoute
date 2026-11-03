@@ -27,7 +27,7 @@ func (a *Auth) Models(ctx context.Context, id string) ([]Model, error) {
 		}
 		models := []Model{}
 		for _, name := range p.ModelNames() {
-			models = append(models, Model{name, name, "Source pool", p.Agent == "claude-code", p.Agent == "codex"})
+			models = append(models, Model{name, name, "Source pool", p.Agent == AgentClaudeCode, p.Agent == AgentCodex})
 		}
 		return models, nil
 	}
@@ -36,9 +36,9 @@ func (a *Auth) Models(ctx context.Context, id string) ([]Model, error) {
 		return nil, errors.New("source not found")
 	}
 	models := []Model{}
-	if s.Kind != "copilot" {
+	if s.Kind != SourceCopilot {
 		for _, m := range s.Deployments {
-			models = append(models, Model{m, m, string(s.Kind), s.SupportsAgentModel("claude-code", m), s.SupportsAgentModel("codex", m)})
+			models = append(models, Model{m, m, string(s.Kind), s.SupportsAgentModel(AgentClaudeCode, m), s.SupportsAgentModel(AgentCodex, m)})
 		}
 		return models, nil
 	}

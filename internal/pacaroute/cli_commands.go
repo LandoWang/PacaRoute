@@ -55,7 +55,7 @@ func desktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, actio
 	if accountUsesAPIKey(account.Kind) {
 		return map[string]any{"has_key": auth.HasAccountKey(accountID), "kind": account.Kind}, nil
 	}
-	if account.Kind == "azure" {
+	if account.Kind == AccountAzure {
 		if action == "login" || action == "logout" {
 			e := auth.AzureLogin(ctx, accountID, action == "logout", emit)
 			return map[string]any{"logged_in": action == "login"}, e

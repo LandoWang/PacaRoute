@@ -25,10 +25,10 @@ func parseGatewayPath(path string) (agent AgentProtocol, explicit, operation str
 		parts = parts[2:]
 	}
 	if len(parts) > 0 && parts[0] == "codex" {
-		agent = "codex"
+		agent = AgentCodex
 		parts = parts[1:]
 	} else if len(parts) > 0 && parts[0] == "cc" {
-		agent = "claude-code"
+		agent = AgentClaudeCode
 		parts = parts[1:]
 	}
 	if len(parts) > 0 && parts[0] == "v1" {
@@ -37,9 +37,9 @@ func parseGatewayPath(path string) (agent AgentProtocol, explicit, operation str
 	operation = strings.Join(parts, "/")
 	if agent == "" {
 		if operation == "messages" || operation == "messages/count_tokens" {
-			agent = "claude-code"
+			agent = AgentClaudeCode
 		} else {
-			agent = "codex"
+			agent = AgentCodex
 		}
 	}
 	return
@@ -162,7 +162,7 @@ func (s *Server) agentModels(x *gatewayExchange) {
 	// the compatible subset rather than advertising unsupported protocols.
 	compatible := []Model{}
 	for _, model := range models {
-		if agent == "codex" && model.Codex || agent == "claude-code" && model.Claude {
+		if agent == AgentCodex && model.Codex || agent == AgentClaudeCode && model.Claude {
 			compatible = append(compatible, model)
 		}
 	}
@@ -336,7 +336,7 @@ func (s *Server) attempt(x *gatewayExchange, i int, t Target) bool {
 			return false
 		}
 	}
-	if agent == "codex" && protocol == "responses" && (t.Source.Kind == "copilot" || t.Source.Kind == "pacaroute" && res.Header.Get("X-Reasoning-Included") == "true") {
+	if agent == AgentCodex && protocol == "responses" && (t.Source.Kind == SourceCopilot || t.Source.Kind == SourcePeer && res.Header.Get("X-Reasoning-Included") == "true") {
 		w.Header().Set("X-Reasoning-Included", "true")
 	}
 	w.Header().Set("X-PacaRoute-Request", activity.ID)
@@ -360,9 +360,9 @@ func upstreamPath(t Target, agent AgentProtocol, protocol, operation string) str
 	if operation == "messages/count_tokens" {
 		upstreamPath += "/count_tokens"
 	}
-	if t.Source.Kind == "pacaroute" {
+	if t.Source.Kind == SourcePeer {
 		prefix := "/codex"
-		if agent == "claude-code" {
+		if agent == AgentClaudeCode {
 			prefix = "/cc"
 		}
 		upstreamPath = prefix + "/" + operation
@@ -383,7 +383,7 @@ func (s *Server) send(x *gatewayExchange, t Target, wire []byte, protocol, upstr
 			break
 		}
 		base := t.Source.Endpoint
-		if t.Source.Kind == "copilot" {
+		if t.Source.Kind == SourceCopilot {
 			base = l.Endpoint
 		}
 		if strings.HasSuffix(strings.TrimRight(base, "/"), "/v1") && strings.HasPrefix(upstreamPath, "/v1/") {
@@ -406,13 +406,13 @@ func (s *Server) send(x *gatewayExchange, t Target, wire []byte, protocol, upstr
 			req.Header.Set("anthropic-version", "2023-06-01")
 		}
 		req.Header.Set(l.Header, l.Value)
-		if t.Source.Kind == "pacaroute" {
+		if t.Source.Kind == SourcePeer {
 			req.Header.Set(peerHopHeader, strconv.Itoa(x.hops+1))
 			if x.session != "" {
 				req.Header.Set("X-PacaRoute-Session", keyHash(s.AdminKey+"\x00"+x.affinityScope+"\x00"+string(x.agent)+"\x00"+t.Source.ID+"\x00"+x.session))
 			}
 		}
-		if t.Source.Kind == "copilot" {
+		if t.Source.Kind == SourceCopilot {
 			s.Auth.copilotHeaders(req, l, bytes.Contains(wire, []byte("input_image")) || bytes.Contains(wire, []byte(`"image"`)))
 			req.Header.Set("X-Initiator", "agent")
 			req.Header.Set("X-Request-Id", newID())
@@ -422,7 +422,7 @@ func (s *Server) send(x *gatewayExchange, t Target, wire []byte, protocol, upstr
 		if e != nil {
 			break
 		}
-		if authAttempt == 0 && (res.StatusCode == 401 || res.StatusCode == 403) && t.Source.Kind == "copilot" {
+		if authAttempt == 0 && (res.StatusCode == 401 || res.StatusCode == 403) && t.Source.Kind == SourceCopilot {
 			io.Copy(io.Discard, io.LimitReader(res.Body, 65536))
 			res.Body.Close()
 			res = nil

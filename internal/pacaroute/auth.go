@@ -63,7 +63,7 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 	gate.Lock()
 	defer gate.Unlock()
 	stamp := ""
-	if s.Kind == "copilot" {
+	if s.Kind == SourceCopilot {
 		stamp = statStamp(a.vault.githubPath(s.AccountID))
 	} else if s.AuthMode == "api-key" {
 		stamp = statStamp(a.vault.secretPath(s.ID)) + statStamp(a.vault.accountKeyPath(s.AccountID)) + statStamp(a.vault.secretPath(s.ID)+".revision") + statStamp(a.vault.accountKeyPath(s.AccountID)+".revision")
@@ -83,7 +83,7 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 	var l lease
 	var e error
 	switch {
-	case s.Kind == "copilot":
+	case s.Kind == SourceCopilot:
 		l, e = a.copilotLocked(ctx, s.AccountID, p, force)
 	case s.AuthMode == "api-key":
 		if secret == "" {
@@ -114,11 +114,11 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 			return l, errors.New("source API key is missing; save it in PacaRoute")
 		}
 		l = lease{Header: "Authorization", Value: "Bearer " + secret, Expires: time.Now().Add(24 * time.Hour)}
-		if s.Kind == "azure-openai" {
+		if s.Kind == SourceAzureOpenAI {
 			l.Header = "api-key"
 			l.Value = secret
 		}
-		if s.Kind == "anthropic" {
+		if s.Kind == SourceAnthropic {
 			l.Header = "x-api-key"
 			l.Value = secret
 		}

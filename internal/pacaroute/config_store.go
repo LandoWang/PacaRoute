@@ -144,14 +144,14 @@ func materializeLegacyIdentities(c *Config) bool {
 		}
 	}
 	if needsCopilot {
-		c.Sources = append(c.Sources, Source{ID: "copilot", Name: "GitHub Copilot", Kind: "copilot", AccountID: "copilot", Deployments: []string{}})
+		c.Sources = append(c.Sources, Source{ID: "copilot", Name: "GitHub Copilot", Kind: SourceCopilot, AccountID: "copilot", Deployments: []string{}})
 		changed = true
 	}
 	for i := range c.Sources {
 		source := &c.Sources[i]
 		if source.AccountID == "" {
 			source.AccountID = "azure-local"
-			if source.Kind == "copilot" {
+			if source.Kind == SourceCopilot {
 				source.AccountID = "copilot"
 			}
 			changed = true
@@ -164,9 +164,9 @@ func materializeLegacyIdentities(c *Config) bool {
 			found = found || account.ID == source.AccountID
 		}
 		if !found {
-			account := Account{ID: "copilot", Name: "GitHub", Kind: "github", LoginMode: "device"}
+			account := Account{ID: "copilot", Name: "GitHub", Kind: AccountGitHub, LoginMode: "device"}
 			if source.AccountID == "azure-local" {
-				account = Account{ID: "azure-local", Name: "Azure CLI", Kind: "azure", LoginMode: "azure-cli"}
+				account = Account{ID: "azure-local", Name: "Azure CLI", Kind: AccountAzure, LoginMode: "azure-cli"}
 			}
 			c.Accounts = append(c.Accounts, account)
 			changed = true
@@ -210,7 +210,7 @@ func (s *ConfigStore) importLegacy() (Config, error) {
 		}
 	}
 	if _, exists := c.Client("default"); !exists {
-		c.Clients = append([]Client{{ID: "default", Name: "本机", Local: true, LegacyDirect: legacy, EnabledAgents: []GrantKind{"codex", "claude-code"}, Routes: []Route{}}}, c.Clients...)
+		c.Clients = append([]Client{{ID: "default", Name: "本机", Local: true, LegacyDirect: legacy, EnabledAgents: []GrantKind{GrantCodex, GrantClaudeCode}, Routes: []Route{}}}, c.Clients...)
 	}
 	c.Revision = ""
 	return c, c.Validate()

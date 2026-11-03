@@ -20,15 +20,15 @@ func (a *Auth) DiscoverModels(ctx context.Context, c *Config, source Source) (mo
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	out := modelDiscovery{Models: []Model{}, ResourceID: source.ResourceID, SubscriptionID: source.SubscriptionID}
-	if source.Kind == "pacaroute" {
+	if source.Kind == SourcePeer {
 		return a.discoverPeer(ctx, c, source)
 	}
-	if source.Kind == "copilot" {
+	if source.Kind == SourceCopilot {
 		models, e := a.Models(ctx, source.ID)
 		out.Models = models
 		return out, e
 	}
-	if source.Kind == "azure-openai" {
+	if source.Kind == SourceAzureOpenAI {
 		subscription := source.SubscriptionID
 		if source.ResourceID != "" {
 			parts := strings.Split(source.ResourceID, "/")
@@ -75,7 +75,7 @@ func (a *Auth) DiscoverModels(ctx context.Context, c *Config, source Source) (mo
 		return out, e
 	}
 	endpoint := strings.TrimRight(source.Endpoint, "/")
-	if source.Kind == "anthropic" && !strings.HasSuffix(endpoint, "/v1") {
+	if source.Kind == SourceAnthropic && !strings.HasSuffix(endpoint, "/v1") {
 		endpoint += "/v1"
 	}
 	endpoint += "/models"
@@ -86,7 +86,7 @@ func (a *Auth) DiscoverModels(ctx context.Context, c *Config, source Source) (mo
 		}
 		req.Header.Set(lease.Header, lease.Value)
 		req.Header.Set("Accept", "application/json")
-		if source.Kind == "anthropic" {
+		if source.Kind == SourceAnthropic {
 			req.Header.Set("anthropic-version", "2023-06-01")
 		}
 		response, e := a.http.client(c.SourceProxy(source.ID)).Do(req)

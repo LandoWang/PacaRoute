@@ -33,16 +33,16 @@ func (c *Config) Validate() error {
 
 	seen := map[string]bool{}
 	for _, a := range c.Accounts {
-		if !validID(a.ID) || seen[a.ID] || strings.TrimSpace(a.Name) == "" || (a.Kind != "github" && a.Kind != "azure" && !accountUsesAPIKey(a.Kind)) {
+		if !validID(a.ID) || seen[a.ID] || strings.TrimSpace(a.Name) == "" || (a.Kind != AccountGitHub && a.Kind != AccountAzure && !accountUsesAPIKey(a.Kind)) {
 			return fmt.Errorf("invalid or duplicate account %q", a.ID)
 		}
-		if a.LoginMode != "" && !((a.Kind == "azure" && (a.LoginMode == "azure-cli" || a.LoginMode == "device")) || (a.Kind == "github" && (a.LoginMode == "device" || a.LoginMode == "oauth-app"))) {
+		if a.LoginMode != "" && !((a.Kind == AccountAzure && (a.LoginMode == "azure-cli" || a.LoginMode == "device")) || (a.Kind == AccountGitHub && (a.LoginMode == "device" || a.LoginMode == "oauth-app"))) {
 			return errors.New("unsupported account login method")
 		}
 		if a.LoginMode == "oauth-app" && strings.TrimSpace(a.OAuthClientID) == "" {
 			return errors.New("OAuth App client ID required")
 		}
-		if a.Kind == "pacaroute" && !validPeerEndpoint(a.Endpoint) {
+		if a.Kind == AccountPeer && !validPeerEndpoint(a.Endpoint) {
 			return errors.New("PacaRoute account requires an HTTP(S) service address without credentials")
 		}
 		seen[a.ID] = true
@@ -62,17 +62,17 @@ func (c *Config) Validate() error {
 			}
 		}
 		if s.Kind == "" {
-			s.Kind = "azure-openai"
+			s.Kind = SourceAzureOpenAI
 		}
 		if s.AuthMode == "" {
-			if s.Kind == "openai" || s.Kind == "anthropic" || s.Kind == "pacaroute" {
+			if s.Kind == SourceOpenAI || s.Kind == SourceAnthropic || s.Kind == SourcePeer {
 				s.AuthMode = "api-key"
 			} else {
 				s.AuthMode = "azure-cli"
 			}
 		}
 		if s.AccountID == "" {
-			if s.Kind == "copilot" {
+			if s.Kind == SourceCopilot {
 				if s.Deployments == nil {
 					s.Deployments = []string{}
 				}
@@ -86,29 +86,29 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("invalid source/account %q", s.ID)
 		}
 		seen[s.ID] = true
-		if s.Kind == "copilot" {
-			if a.Kind != "github" {
+		if s.Kind == SourceCopilot {
+			if a.Kind != AccountGitHub {
 				return errors.New("Copilot source requires GitHub account")
 			}
 			continue
 		}
-		if s.Kind != "azure-openai" && s.Kind != "openai" && s.Kind != "anthropic" && s.Kind != "pacaroute" {
+		if s.Kind != SourceAzureOpenAI && s.Kind != SourceOpenAI && s.Kind != SourceAnthropic && s.Kind != SourcePeer {
 			return fmt.Errorf("unsupported source kind %q", s.Kind)
 		}
-		if (s.Kind == "openai" || s.Kind == "anthropic" || s.Kind == "pacaroute") && (s.AuthMode != "api-key" || !sourceAcceptsAccount(s.Kind, a.Kind)) {
+		if (s.Kind == SourceOpenAI || s.Kind == SourceAnthropic || s.Kind == SourcePeer) && (s.AuthMode != "api-key" || !sourceAcceptsAccount(s.Kind, a.Kind)) {
 			return errors.New("API source requires API-key account and authentication")
 		}
 		if s.Deployments == nil {
 			s.Deployments = []string{}
 		}
-		if s.Kind == "azure-openai" && (a.Kind != "azure" || (s.AuthMode != "azure-cli" && s.AuthMode != "api-key")) {
+		if s.Kind == SourceAzureOpenAI && (a.Kind != AccountAzure || (s.AuthMode != "azure-cli" && s.AuthMode != "api-key")) {
 			return errors.New("invalid Azure authentication")
 		}
 		u, e := url.Parse(s.Endpoint)
-		if e != nil || (u.Scheme != "https" && !(s.Kind == "pacaroute" && validPeerEndpoint(s.Endpoint))) || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		if e != nil || (u.Scheme != "https" && !(s.Kind == SourcePeer && validPeerEndpoint(s.Endpoint))) || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 			return fmt.Errorf("source %s requires an HTTPS endpoint without credentials", s.ID)
 		}
-		if s.Kind == "azure-openai" {
+		if s.Kind == SourceAzureOpenAI {
 			if u.Path != "" && u.Path != "/" && strings.TrimSuffix(u.Path, "/") != "/openai/v1" {
 				return errors.New("Azure endpoint must be a resource URL or /openai/v1")
 			}
@@ -202,7 +202,7 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if v.EnabledAgents == nil {
-			v.EnabledAgents = []GrantKind{"codex", "claude-code"}
+			v.EnabledAgents = []GrantKind{GrantCodex, GrantClaudeCode}
 		}
 		if v.Routes == nil {
 			v.Routes = []Route{}
@@ -253,7 +253,7 @@ func (c *Config) Validate() error {
 }
 func (c *Config) validateTarget(id, model string, agent GrantKind) error {
 	if agent == GrantPeer {
-		for _, protocol := range []GrantKind{"codex", "claude-code"} {
+		for _, protocol := range []GrantKind{GrantCodex, GrantClaudeCode} {
 			if c.validateTarget(id, model, protocol) == nil {
 				return nil
 			}
@@ -271,10 +271,10 @@ func (c *Config) validateTarget(id, model string, agent GrantKind) error {
 	if !ok || !modelIdentifier.MatchString(model) {
 		return errors.New("unknown source or invalid model")
 	}
-	if s.Kind == "pacaroute" && !s.SupportsAgentModel(AgentProtocol(agent), model) {
+	if s.Kind == SourcePeer && !s.SupportsAgentModel(AgentProtocol(agent), model) {
 		return errors.New("remote PacaRoute does not expose this model for the selected Agent; refresh its model catalog")
 	}
-	if s.Kind != "copilot" {
+	if s.Kind != SourceCopilot {
 		for _, v := range s.Deployments {
 			if v == model {
 				return nil

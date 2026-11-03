@@ -81,7 +81,7 @@ func streamReadError(err error, terminal, last string) error {
 }
 
 func emitStreamError(w io.Writer, agent AgentProtocol, message string) error {
-	if agent == "codex" {
+	if agent == AgentCodex {
 		// Codex consumes response.failed, but ignores bare error events. This is
 		// a failure terminal only; never synthesize a successful completion.
 		return emitSSE(w, "response.failed", map[string]any{"type": "response.failed", "response": map[string]any{"status": "failed", "error": map[string]string{"code": "server_error", "message": message}}})
