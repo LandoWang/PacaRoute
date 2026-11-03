@@ -3,30 +3,8 @@ package pacaroute
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"time"
 )
-
-type ClientQuota struct {
-	WindowSeconds int64  `json:"window_seconds"`
-	Requests      int64  `json:"requests,omitempty"`
-	InputTokens   int64  `json:"input_tokens,omitempty"`
-	Cost          string `json:"cost_usd,omitempty"`
-}
-
-func (q *ClientQuota) validate() error {
-	if q == nil {
-		return nil
-	}
-	if q.WindowSeconds < 60 || q.WindowSeconds > 366*24*3600 || q.Requests < 0 || q.Requests > 1e12 || q.InputTokens < 0 || q.InputTokens > 1e15 {
-		return errors.New("invalid Client quota window or limit")
-	}
-	if q.Cost != "" {
-		_, e := moneyMicros(q.Cost)
-		return e
-	}
-	return nil
-}
 
 type QuotaStore struct{ db *sql.DB }
 type QuotaState struct {
@@ -96,14 +74,6 @@ func billingEvent(tx *sql.Tx, id, phase string, at time.Time, payload any) error
 	}
 	_, e = tx.Exec(`INSERT INTO billing_events(event_id,request_id,phase,at_ms,payload) VALUES(?,?,?,?,?)`, id+":"+phase, id, phase, at.UnixMilli(), string(b))
 	return e
-}
-
-func (q *ClientQuota) enforced() bool {
-	if q == nil {
-		return false
-	}
-	cost, _ := moneyMicros(q.Cost)
-	return q.Requests > 0 || q.InputTokens > 0 || cost > 0
 }
 
 // Requests reserve a slot atomically. Token/cost admission uses confirmed usage;

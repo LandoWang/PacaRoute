@@ -1,7 +1,10 @@
 package pacaroute
 
 import (
+	"errors"
+	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -280,4 +283,68 @@ func (s Source) SupportsAgentModel(agent AgentProtocol, model string) bool {
 		}
 	}
 	return false
+}
+
+// Amounts are decimal USD strings in configuration and integer micro-USD in the
+// ledger. A price snapshot travels with every settlement; history is immutable.
+type ModelPrice struct {
+	Input      string `json:"input_usd"`
+	Cached     string `json:"cached_usd"`
+	Output     string `json:"output_usd"`
+	CacheWrite string `json:"cache_write_usd,omitempty"`
+}
+
+var moneyPattern = regexp.MustCompile(`^[0-9]{1,9}(\.[0-9]{1,6})?$`)
+
+func moneyMicros(value string) (int64, error) {
+	if !moneyPattern.MatchString(value) {
+		return 0, errors.New("USD amounts need at most six decimal places")
+	}
+	parts := strings.SplitN(value, ".", 2)
+	fraction := ""
+	if len(parts) == 2 {
+		fraction = parts[1]
+	}
+	return strconv.ParseInt(parts[0]+fraction+strings.Repeat("0", 6-len(fraction)), 10, 64)
+}
+func moneyText(micros int64) string { return fmt.Sprintf("%d.%06d", micros/1000000, micros%1000000) }
+func (p ModelPrice) validate() error {
+	for _, v := range []string{p.Input, p.Cached, p.Output} {
+		if _, e := moneyMicros(v); e != nil {
+			return e
+		}
+	}
+	if p.CacheWrite != "" {
+		_, e := moneyMicros(p.CacheWrite)
+		return e
+	}
+	return nil
+}
+
+type ClientQuota struct {
+	WindowSeconds int64  `json:"window_seconds"`
+	Requests      int64  `json:"requests,omitempty"`
+	InputTokens   int64  `json:"input_tokens,omitempty"`
+	Cost          string `json:"cost_usd,omitempty"`
+}
+
+func (q *ClientQuota) validate() error {
+	if q == nil {
+		return nil
+	}
+	if q.WindowSeconds < 60 || q.WindowSeconds > 366*24*3600 || q.Requests < 0 || q.Requests > 1e12 || q.InputTokens < 0 || q.InputTokens > 1e15 {
+		return errors.New("invalid Client quota window or limit")
+	}
+	if q.Cost != "" {
+		_, e := moneyMicros(q.Cost)
+		return e
+	}
+	return nil
+}
+func (q *ClientQuota) enforced() bool {
+	if q == nil {
+		return false
+	}
+	cost, _ := moneyMicros(q.Cost)
+	return q.Requests > 0 || q.InputTokens > 0 || cost > 0
 }
