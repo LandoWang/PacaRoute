@@ -7,6 +7,7 @@ import {
 } from "react";
 import { api } from "../api/transport";
 import { type Config, type Status } from "../api/types";
+import { startPolling } from "./polling";
 export type AppState = {
   config: Config;
   status: Status;
@@ -25,34 +26,19 @@ export function useLoad<T>(path: string, interval = 0) {
     [loading, setLoading] = useState(true),
     [revision, setRevision] = useState(0);
   useEffect(() => {
-    const controller = new AbortController();
-    let pending = false;
-    const load = async () => {
-      if (pending) return;
-      pending = true;
+    setLoading(true);
+    setData(undefined);
+    return startPolling(async (signal) => {
       try {
-        const v = await api<T>(path, "GET", undefined, controller.signal);
+        const v = await api<T>(path, "GET", undefined, signal);
         setData(v);
         setError("");
       } catch (e) {
-        if (!controller.signal.aborted) setError((e as Error).message);
+        if (!signal.aborted) setError((e as Error).message);
       } finally {
-        pending = false;
-        if (!controller.signal.aborted) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
-    };
-    setLoading(true);
-    setData(undefined);
-    void load();
-    const timer = interval
-      ? setInterval(() => {
-          if (!document.hidden) void load();
-        }, interval)
-      : undefined;
-    return () => {
-      controller.abort();
-      clearInterval(timer);
-    };
+    }, interval);
   }, [path, interval, revision]);
   return { data, error, loading, refresh: () => setRevision((v) => v + 1) };
 }

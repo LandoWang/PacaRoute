@@ -30,6 +30,7 @@ import { Settings } from "../features/settings/settings-page";
 import { Sources } from "../features/sources/sources-page";
 import { UsagePage } from "../features/usage/usage-page";
 import { saveConfig } from "./config-save";
+import { startPolling } from "./polling";
 import { Login } from "./login";
 import { StateContext } from "./state";
 const pages = [
@@ -122,25 +123,20 @@ export function App() {
   }, []);
   useEffect(() => {
     if (!auth) return;
-    let pending = false;
-    const tick = setInterval(() => {
-      if (!document.hidden && !pending) {
-        pending = true;
-        void api<Status>("status")
+    return startPolling(
+      (signal) =>
+        api<Status>("status", "GET", undefined, signal)
           .then((value) => {
             setStatus(value);
             setError("");
           })
           .catch((e) => {
-            if (!(e instanceof APIError && e.status === 401))
+            if (!signal.aborted && !(e instanceof APIError && e.status === 401))
               setError("服务连接中断，请从托盘检查服务状态。");
-          })
-          .finally(() => {
-            pending = false;
-          });
-      }
-    }, 5000);
-    return () => clearInterval(tick);
+          }),
+      5000,
+      false,
+    );
   }, [auth]);
   function navigate(id: string) {
     location.hash = "/" + id;
