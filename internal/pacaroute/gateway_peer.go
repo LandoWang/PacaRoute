@@ -39,7 +39,7 @@ func (s *Server) peerCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	models := map[string]*peerModel{}
 	for _, agent := range []AgentProtocol{AgentCodex, AgentClaudeCode} {
-		for _, route := range c.peerClient(client, agent).Routes {
+		for _, route := range peerClientView(c, client, agent).Routes {
 			name := route.MatchModel
 			if name == "*" {
 				name = route.Model

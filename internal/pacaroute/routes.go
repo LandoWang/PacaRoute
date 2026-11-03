@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func (c *Config) Resolve(client *Client, agent AgentProtocol, model, explicit string) (string, string, error) {
+func resolveRoute(c *Config, client *Client, agent AgentProtocol, model, explicit string) (string, string, error) {
 	if !client.AgentEnabled(agent.Grant()) {
 		return "", "", errors.New("Agent is not enabled for this Client")
 	}
@@ -44,7 +44,7 @@ func (c *Config) Resolve(client *Client, agent AgentProtocol, model, explicit st
 
 // Project only peer grants onto the wire protocol requested by a downstream router.
 // Direct Agent grants remain independent, including their sticky-session scope.
-func (c *Config) peerClient(client *Client, agent AgentProtocol) *Client {
+func peerClientView(c *Config, client *Client, agent AgentProtocol) *Client {
 	copy := *client
 	copy.LegacyDirect = false
 	copy.EnabledAgents = []GrantKind{agent.Grant()}

@@ -54,7 +54,7 @@ func TestSQLiteMigrationDefaultDeletionAndInvalidSave(t *testing.T) {
 	if d.LegacyDirect {
 		t.Fatal("fresh Client has implicit routes")
 	}
-	if _, _, e = fresh.Snapshot().Resolve(d, "codex", "gpt-6-astra", ""); e == nil {
+	if _, _, e = resolveRoute(fresh.Snapshot(), d, "codex", "gpt-6-astra", ""); e == nil {
 		t.Fatal("unconfigured default permitted")
 	}
 }
@@ -156,7 +156,7 @@ func TestClientAgentGateAndDefaultAuthorization(t *testing.T) {
 	if _, ok := s.authenticate(r, s.Store.Snapshot()); ok {
 		t.Fatal("deleted default bypass")
 	}
-	if _, _, e := s.Store.Snapshot().Resolve(nil, "codex", "gpt-6-astra", ""); e == nil {
+	if _, _, e := resolveRoute(s.Store.Snapshot(), nil, "codex", "gpt-6-astra", ""); e == nil {
 		t.Fatal("nil Client bypass")
 	}
 }

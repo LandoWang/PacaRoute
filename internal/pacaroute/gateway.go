@@ -103,7 +103,7 @@ func (s *Server) openExchange(w http.ResponseWriter, r *http.Request, peer bool)
 	}
 	affinityScope := affinityClient(client)
 	if peer {
-		client = c.peerClient(client, agent)
+		client = peerClientView(c, client, agent)
 		affinityScope += "\x00pacaroute"
 	}
 	return &gatewayExchange{w: w, r: r, config: c, client: client, peer: peer, hops: hops, agent: agent, explicit: explicit, operation: operation, affinityScope: affinityScope}, true
@@ -174,7 +174,7 @@ func (x *gatewayExchange) decode() bool {
 func (s *Server) selectTargets(x *gatewayExchange) bool {
 	w := x.w
 	model := rawString(x.body["model"])
-	id, model, e := x.config.Resolve(x.client, x.agent, model, x.explicit)
+	id, model, e := resolveRoute(x.config, x.client, x.agent, model, x.explicit)
 	if e != nil {
 		problem(w, 403, e.Error())
 		return false
