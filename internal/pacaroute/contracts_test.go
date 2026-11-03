@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
+	"github.com/LandoWang/pacaroute/internal/pacaroute/clientconfig"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
@@ -390,7 +391,7 @@ func TestConfigPreviewBacksUpAndRejectsStaleApply(t *testing.T) {
 	path := filepath.Join(home, "config.toml")
 	original := []byte("# keep comment\nmodel = \"old\"\nmodel_provider = \"azure\"\n[model_providers.azure]\nbase_url = \"https://example.openai.azure.com/openai/v1\"\n[features]\nplugins = false\n")
 	os.WriteFile(path, original, 0600)
-	p, e := planClient("codex", "copilot", "gpt-6-astra", 45678)
+	p, e := clientconfig.PlanLocal("codex", "copilot", "gpt-6-astra", 45678)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -398,11 +399,11 @@ func TestConfigPreviewBacksUpAndRejectsStaleApply(t *testing.T) {
 		t.Fatal("preview changed config")
 	}
 	os.WriteFile(path, append(original, []byte("# concurrent edit\n")...), 0600)
-	if _, e = p.apply(p.fingerprint); e == nil {
+	if _, e = p.Apply(p.Fingerprint); e == nil {
 		t.Fatal("stale preview overwrote concurrent edit")
 	}
 	os.WriteFile(path, original, 0600)
-	backup, e := p.apply(p.fingerprint)
+	backup, e := p.Apply(p.Fingerprint)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -487,11 +488,11 @@ func TestRestoreBackupPreservesExactBytesAndRejectsTraversal(t *testing.T) {
 	original := []byte("{\n  \"env\": {\"CUSTOM\": \"keep\"}, \"theme\": \"dark\"\n}\n")
 	path := filepath.Join(home, "settings.json")
 	os.WriteFile(path, original, 0600)
-	p, e := planClient("claude-code", "copilot", "claude-opus-5.5", 45678)
+	p, e := clientconfig.PlanLocal("claude-code", "copilot", "claude-opus-5.5", 45678)
 	if e != nil {
 		t.Fatal(e)
 	}
-	backup, e := p.apply(p.fingerprint)
+	backup, e := p.Apply(p.Fingerprint)
 	if e != nil {
 		t.Fatal(e)
 	}

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/clientconfig"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -199,7 +200,7 @@ func TestConnectPreservesConfigurationAndKeepsKeyOffOutput(t *testing.T) {
 			root := t.TempDir()
 			t.Setenv("CODEX_HOME", root)
 			t.Setenv("CLAUDE_CONFIG_DIR", root)
-			path, _ := clientPath(agent)
+			path, _ := clientconfig.AgentConfigPath(agent)
 			old := []byte("model=\"old\"\n[features]\nweb_search=false\n")
 			if agent == "claude-code" {
 				old = []byte(`{"permissions":{"allow":["Read"]},"env":{"CUSTOM":"keep","ANTHROPIC_API_KEY":"old"}}`)

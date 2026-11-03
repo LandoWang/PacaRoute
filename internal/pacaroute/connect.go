@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/clientconfig"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -44,13 +45,13 @@ func connectClient(a arguments, in io.Reader) (map[string]any, error) {
 	if agent == "claude-code" {
 		suffix = "/cc"
 	}
-	p, e := planConnection(agent, base+suffix, model, key)
+	p, e := clientconfig.PlanConnection(agent, base+suffix, model, key)
 	if e != nil {
 		return nil, e
 	}
-	result := map[string]any{"path": p.path, "changes": p.changes}
+	result := map[string]any{"path": p.Path, "changes": p.Changes}
 	if a.get("apply", "") == "true" {
-		backup, e := p.apply(p.fingerprint)
+		backup, e := p.Apply(p.Fingerprint)
 		if e != nil {
 			return nil, e
 		}

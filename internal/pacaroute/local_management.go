@@ -3,6 +3,7 @@ package pacaroute
 import (
 	"net/http"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/clientconfig"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -39,14 +40,14 @@ func (s *Server) localAPI(w http.ResponseWriter, r *http.Request, path string) {
 			problem(w, 400, e.Error())
 			return
 		}
-		plan, e := planClient(v.Client, v.Source, v.Model, s.servicePort())
+		plan, e := clientconfig.PlanLocal(v.Client, v.Source, v.Model, s.servicePort())
 		if e != nil {
 			problem(w, 400, e.Error())
 			return
 		}
-		result := map[string]any{"path": plan.path, "fingerprint": plan.fingerprint, "changes": plan.changes}
+		result := map[string]any{"path": plan.Path, "fingerprint": plan.Fingerprint, "changes": plan.Changes}
 		if v.Apply {
-			backup, e := plan.apply(v.Fingerprint)
+			backup, e := plan.Apply(v.Fingerprint)
 			if e != nil {
 				problem(w, 409, e.Error())
 				return

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/clientconfig"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -35,13 +36,13 @@ func desktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, actio
 		if e := s.Snapshot().ValidateTarget(source, model, domain.GrantKind(client)); e != nil {
 			return nil, e
 		}
-		p, e := planClient(client, source, model, port)
+		p, e := clientconfig.PlanLocal(client, source, model, port)
 		if e != nil {
 			return nil, e
 		}
-		v := map[string]any{"path": p.path, "fingerprint": p.fingerprint, "changes": p.changes}
+		v := map[string]any{"path": p.Path, "fingerprint": p.Fingerprint, "changes": p.Changes}
 		if a.get("apply", "") == "true" {
-			backup, e := p.apply(a.get("fingerprint", ""))
+			backup, e := p.Apply(a.get("fingerprint", ""))
 			if e != nil {
 				return nil, e
 			}
