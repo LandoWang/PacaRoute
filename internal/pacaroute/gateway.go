@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
@@ -254,23 +255,23 @@ func (s *Server) attempt(x *gatewayExchange, i int, t routing.Target) bool {
 	activity.Source = t.Source.ID
 	activity.Model = t.Model
 	activity.Attempts = i + 1
-	protocol := t.UpstreamProtocol(agent)
-	wire, tr, e := prepare(x.body, t.Source.Kind, t.Model, agent, protocol)
+	upstreamProto := t.UpstreamProtocol(agent)
+	wire, tr, e := protocol.Prepare(x.body, t.Source.Kind, t.Model, agent, upstreamProto)
 	if e != nil {
 		activity.Status = 400
 		activity.Error = e.Error()
 		problem(w, 400, e.Error())
 		return false
 	}
-	if operation == "messages/count_tokens" && protocol != "messages" {
+	if operation == "messages/count_tokens" && upstreamProto != "messages" {
 		activity.Status = 422
 		activity.Error = "token counting is unavailable on this Responses source"
 		problem(w, 422, activity.Error)
 		return false
 	}
-	x.upstreamMessages = protocol == "messages"
+	x.upstreamMessages = upstreamProto == "messages"
 	s.trace(activity.ID, fmt.Sprintf("upstream-%d-req.json", i), wire)
-	res, e := s.send(x, t, wire, protocol, upstreamPath(t, agent, protocol, operation))
+	res, e := s.send(x, t, wire, upstreamProto, upstreamPath(t, agent, upstreamProto, operation))
 	if e != nil || res == nil {
 		if x.r.Context().Err() != nil {
 			// The Client left before any upstream response. This is not a
@@ -320,14 +321,14 @@ func (s *Server) attempt(x *gatewayExchange, i int, t routing.Target) bool {
 			return false
 		}
 	}
-	if agent == domain.AgentCodex && protocol == "responses" && (t.Source.Kind == domain.SourceCopilot || t.Source.Kind == domain.SourcePeer && res.Header.Get("X-Reasoning-Included") == "true") {
+	if agent == domain.AgentCodex && upstreamProto == "responses" && (t.Source.Kind == domain.SourceCopilot || t.Source.Kind == domain.SourcePeer && res.Header.Get("X-Reasoning-Included") == "true") {
 		w.Header().Set("X-Reasoning-Included", "true")
 	}
 	w.Header().Set("X-PacaRoute-Request", activity.ID)
 	w.Header().Set("X-PacaRoute-Source", t.Source.ID)
 	w.Header().Set("Cache-Control", "no-cache")
 	if strings.Contains(res.Header.Get("Content-Type"), "text/event-stream") {
-		s.relayStream(x, t, tr, protocol, res)
+		s.relayStream(x, t, tr, upstreamProto, res)
 	} else {
 		s.relayJSON(x, tr, res)
 	}

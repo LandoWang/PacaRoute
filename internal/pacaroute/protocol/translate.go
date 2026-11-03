@@ -1,4 +1,4 @@
-package pacaroute
+package protocol
 
 import (
 	"encoding/json"
@@ -22,7 +22,7 @@ func textContent(b json.RawMessage) string {
 
 // Tool output may contain screenshots. Preserve their order and reject unsupported
 // blocks instead of silently turning a multimodal tool result into empty text.
-func toolOutput(b json.RawMessage, to string) (json.RawMessage, error) {
+func ToolOutput(b json.RawMessage, to string) (json.RawMessage, error) {
 	var text string
 	if json.Unmarshal(b, &text) == nil {
 		return jsonBytes(text), nil
@@ -74,17 +74,17 @@ func toolOutput(b json.RawMessage, to string) (json.RawMessage, error) {
 	return jsonBytes(result), nil
 }
 
-type toolIdentity struct {
+type ToolIdentity struct {
 	Name      string
 	Namespace string
 	Custom    bool
 }
-type translation struct {
-	from, to, model string
-	toolNames       map[string]toolIdentity
+type Translation struct {
+	From, To, Model string
+	ToolNames       map[string]ToolIdentity
 }
 
-func messagesToResponses(m object, tr *translation) (object, error) {
+func MessagesToResponses(m object, tr *Translation) (object, error) {
 	out := object{"model": m["model"], "stream": m["stream"], "store": jsonBytes(false)}
 	if s := textContent(m["system"]); s != "" {
 		out["instructions"] = jsonBytes(s)
@@ -123,7 +123,7 @@ func messagesToResponses(m object, tr *translation) (object, error) {
 				input = append(input, object{"type": jsonBytes("function_call"), "call_id": b["id"], "name": b["name"], "arguments": jsonBytes(string(b["input"]))})
 			case "tool_result":
 				flush()
-				output, err := toolOutput(b["content"], "responses")
+				output, err := ToolOutput(b["content"], "responses")
 				if err != nil {
 					return nil, err
 				}
@@ -166,7 +166,7 @@ func messagesToResponses(m object, tr *translation) (object, error) {
 	}
 	return out, nil
 }
-func responsesToMessages(m object, tr *translation) (object, error) {
+func ResponsesToMessages(m object, tr *Translation) (object, error) {
 	out := object{"model": m["model"], "stream": m["stream"], "max_tokens": jsonBytes(16384)}
 	if m["max_output_tokens"] != nil {
 		out["max_tokens"] = m["max_output_tokens"]
@@ -194,10 +194,10 @@ func responsesToMessages(m object, tr *translation) (object, error) {
 			if ns != "" {
 				upstream = ns + "__" + name
 			}
-			if _, exists := tr.toolNames[upstream]; exists {
+			if _, exists := tr.ToolNames[upstream]; exists {
 				return errors.New("translated tool name collision")
 			}
-			tr.toolNames[upstream] = toolIdentity{name, ns, typ == "custom"}
+			tr.ToolNames[upstream] = ToolIdentity{name, ns, typ == "custom"}
 			schema := t["parameters"]
 			if typ == "custom" {
 				schema = jsonBytes(map[string]any{"type": "object", "properties": map[string]any{"input": map[string]string{"type": "string", "description": "Exact raw tool input"}}, "required": []string{"input"}})
@@ -276,7 +276,7 @@ func responsesToMessages(m object, tr *translation) (object, error) {
 			}
 			appendMessage("assistant", []object{{"type": jsonBytes("tool_use"), "id": item["call_id"], "name": jsonBytes(name), "input": args}})
 		case "function_call_output", "custom_tool_call_output":
-			content, err := toolOutput(item["output"], "messages")
+			content, err := ToolOutput(item["output"], "messages")
 			if err != nil {
 				return nil, err
 			}

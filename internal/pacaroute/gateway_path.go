@@ -39,9 +39,9 @@ func parseGatewayPath(path string) (agent domain.AgentProtocol, explicit, operat
 }
 
 // upstreamPath maps the Agent operation to the target's native endpoint path.
-func upstreamPath(t routing.Target, agent domain.AgentProtocol, protocol, operation string) string {
+func upstreamPath(t routing.Target, agent domain.AgentProtocol, upstreamProto, operation string) string {
 	upstreamPath := "/responses"
-	if protocol == "messages" {
+	if upstreamProto == "messages" {
 		upstreamPath = "/v1/messages"
 	}
 	if operation == "messages/count_tokens" {

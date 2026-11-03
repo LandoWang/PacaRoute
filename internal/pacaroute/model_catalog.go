@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -95,7 +97,7 @@ func (a *catalog) Models(ctx context.Context, id string) ([]domain.Model, error)
 			responses = strings.HasPrefix(m.ID, "gpt-")
 			messages = strings.HasPrefix(m.ID, "claude-")
 		}
-		_, known := copilotResponseEfforts[m.ID]
+		_, known := protocol.CopilotResponseEfforts[m.ID]
 		codex := responses && known
 		// Native Messages models are advertised by the upstream catalog.
 		claude := codex || messages

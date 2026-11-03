@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
 )
 
@@ -16,7 +18,7 @@ const maxUpstreamJSON = 32 << 20
 
 // relayStream relays or translates this one committed upstream stream. After
 // the downstream status is written no other source may take over the response.
-func (s *Server) relayStream(x *gatewayExchange, t routing.Target, tr *translation, protocol string, res *http.Response) {
+func (s *Server) relayStream(x *gatewayExchange, t routing.Target, tr *protocol.Translation, upstreamProto string, res *http.Response) {
 	w, r, agent, activity := x.w, x.r, x.agent, &x.activity
 	var e error
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -28,40 +30,40 @@ func (s *Server) relayStream(x *gatewayExchange, t routing.Target, tr *translati
 		reader = io.TeeReader(reader, &trace)
 	}
 	if tr != nil {
-		if tr.to == "responses" {
-			e = tr.streamResponses(w, reader, &x.usage)
+		if tr.To == "responses" {
+			e = tr.StreamResponses(w, reader, &x.usage)
 		} else {
-			e = tr.streamMessages(w, reader, &x.usage)
+			e = tr.StreamMessages(w, reader, &x.usage)
 		}
 	} else {
-		e = relaySSE(w, struct {
+		e = protocol.RelaySSE(w, struct {
 			io.Reader
 			io.Closer
-		}{reader, res.Body}, &x.usage, protocol)
+		}{reader, res.Body}, &x.usage, upstreamProto)
 	}
 	s.trace(activity.ID, "upstream-res.sse", trace.Bytes())
 	if e != nil {
-		var downstream *downstreamStreamError
-		var upstream *upstreamStreamError
+		var downstream *protocol.DownstreamStreamError
+		var upstream *protocol.UpstreamStreamError
 		upstreamFailure := errors.As(e, &upstream)
 		if errors.As(e, &downstream) || (r.Context().Err() != nil && !upstreamFailure) {
 			activity.Status = statusClientClosedRequest
 			activity.Error = "client disconnected before stream completion"
 		} else {
 			activity.Status = 502
-			activity.Error = "stream interrupted before completion: " + streamDetail(e.Error())
+			activity.Error = "stream interrupted before completion: " + protocol.StreamDetail(e.Error())
 			// Never replay a started response. Cool down this source/model so
 			// the next client retry can recover under the existing pool rules.
 			s.Router.Fail(t, activity.Error)
-			if !upstreamFailure || !upstream.forwarded {
-				_ = emitStreamError(w, agent, activity.Error)
+			if !upstreamFailure || !upstream.Forwarded {
+				_ = protocol.EmitStreamError(w, agent, activity.Error)
 			}
 		}
 	}
 }
 
 // relayJSON relays a bounded non-stream response, translating it when needed.
-func (s *Server) relayJSON(x *gatewayExchange, tr *translation, res *http.Response) {
+func (s *Server) relayJSON(x *gatewayExchange, tr *protocol.Translation, res *http.Response) {
 	w, activity := x.w, &x.activity
 	var e error
 	data, err := io.ReadAll(io.LimitReader(res.Body, maxUpstreamJSON+1))
@@ -71,7 +73,7 @@ func (s *Server) relayJSON(x *gatewayExchange, tr *translation, res *http.Respon
 		x.usage.Observe(data)
 		s.trace(activity.ID, "upstream-res.json", data)
 		if tr != nil && x.operation != "messages/count_tokens" {
-			data, e = tr.responseJSON(data)
+			data, e = tr.ResponseJSON(data)
 		}
 		if e == nil {
 			w.Header().Set("Content-Type", "application/json")

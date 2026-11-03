@@ -1,4 +1,4 @@
-package pacaroute
+package protocol
 
 import (
 	"encoding/json"
@@ -9,9 +9,9 @@ import (
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
-func (tr *translation) responseJSON(body []byte) ([]byte, error) {
+func (tr *Translation) ResponseJSON(body []byte) ([]byte, error) {
 	m := obj(body)
-	if tr.to == "responses" {
+	if tr.To == "responses" {
 		blocks := []any{}
 		hasTool := false
 		for _, v := range array(m["output"]) {
@@ -46,11 +46,11 @@ func (tr *translation) responseJSON(body []byte) ([]byte, error) {
 			u.Observe(jsonBytes(m))
 			reported = map[string]any{"input_tokens": u.Input, "output_tokens": u.Output}
 		}
-		return json.Marshal(map[string]any{"id": "msg_" + domain.NewID(), "type": "message", "role": "assistant", "model": tr.model, "content": blocks, "stop_reason": reason, "stop_sequence": nil, "usage": reported})
+		return json.Marshal(map[string]any{"id": "msg_" + domain.NewID(), "type": "message", "role": "assistant", "model": tr.Model, "content": blocks, "stop_reason": reason, "stop_sequence": nil, "usage": reported})
 	}
-	return tr.messagesJSON(m)
+	return tr.MessagesJSON(m)
 }
-func (tr *translation) messagesJSON(m object) ([]byte, error) {
+func (tr *Translation) MessagesJSON(m object) ([]byte, error) {
 	output := []any{}
 	for _, b := range array(m["content"]) {
 		switch rawString(b["type"]) {
@@ -70,13 +70,13 @@ func (tr *translation) messagesJSON(m object) ([]byte, error) {
 	u := usage.Usage{}
 	u.Observe(jsonBytes(m))
 	reported := u.ResponsesUsage()
-	return json.Marshal(map[string]any{"id": "resp_" + domain.NewID(), "object": "response", "status": status, "model": tr.model, "output": output, "usage": reported, "incomplete_details": incomplete})
+	return json.Marshal(map[string]any{"id": "resp_" + domain.NewID(), "object": "response", "status": status, "model": tr.Model, "output": output, "usage": reported, "incomplete_details": incomplete})
 }
-func (tr *translation) toolItem(b object) map[string]any {
+func (tr *Translation) toolItem(b object) map[string]any {
 	name := rawString(b["name"])
-	identity, ok := tr.toolNames[name]
+	identity, ok := tr.ToolNames[name]
 	if !ok {
-		identity = toolIdentity{Name: name}
+		identity = ToolIdentity{Name: name}
 	}
 	v := map[string]any{"id": "fc_" + rawString(b["id"]), "type": "function_call", "call_id": rawString(b["id"]), "name": identity.Name, "arguments": string(b["input"]), "status": "completed"}
 	if identity.Namespace != "" {

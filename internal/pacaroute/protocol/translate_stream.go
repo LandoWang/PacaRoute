@@ -1,4 +1,4 @@
-package pacaroute
+package protocol
 
 import (
 	"bytes"
@@ -25,8 +25,8 @@ func emitSSE(w io.Writer, event string, v any) error {
 }
 
 // Responses->Messages state machine opens each content block exactly once and closes it before message_stop.
-func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *usage.Usage) error {
-	rd := newSSE(r)
+func (tr *Translation) StreamResponses(w io.Writer, r io.Reader, u *usage.Usage) error {
+	rd := NewSSE(r)
 	last := "none"
 	id := "msg_" + strings.ReplaceAll(domain.NewID(), "-", "")
 	started := false
@@ -39,7 +39,7 @@ func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *usage.Usage)
 			return nil
 		}
 		started = true
-		return emitSSE(w, "message_start", map[string]any{"type": "message_start", "message": map[string]any{"id": id, "type": "message", "role": "assistant", "model": tr.model, "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": map[string]int{"input_tokens": 0, "output_tokens": 0}}})
+		return emitSSE(w, "message_start", map[string]any{"type": "message_start", "message": map[string]any{"id": id, "type": "message", "role": "assistant", "model": tr.Model, "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": map[string]int{"input_tokens": 0, "output_tokens": 0}}})
 	}
 	open := func(key string, block any) (int, error) {
 		if n, ok := indices[key]; ok {
@@ -58,7 +58,7 @@ func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *usage.Usage)
 		return emitSSE(w, "content_block_stop", map[string]any{"type": "content_block_stop", "index": n})
 	}
 	for {
-		_, data, e := rd.next()
+		_, data, e := rd.Next()
 		if e != nil {
 			return streamReadError(e, "response.completed", last)
 		}
@@ -129,8 +129,8 @@ func (tr *translation) streamResponses(w io.Writer, r io.Reader, u *usage.Usage)
 		}
 	}
 }
-func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *usage.Usage) error {
-	rd := newSSE(r)
+func (tr *Translation) StreamMessages(w io.Writer, r io.Reader, u *usage.Usage) error {
+	rd := NewSSE(r)
 	last := "none"
 	id := "resp_" + domain.NewID()
 	sequence := 0
@@ -148,14 +148,14 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *usage.Usage) 
 		return emitSSE(w, typ, v)
 	}
 	response := func(status string) map[string]any {
-		v := map[string]any{"id": id, "object": "response", "status": status, "model": tr.model, "output": output, "usage": u.ResponsesUsage()}
+		v := map[string]any{"id": id, "object": "response", "status": status, "model": tr.Model, "output": output, "usage": u.ResponsesUsage()}
 		if status == "incomplete" {
 			v["incomplete_details"] = map[string]string{"reason": "max_output_tokens"}
 		}
 		return v
 	}
 	for {
-		_, data, e := rd.next()
+		_, data, e := rd.Next()
 		if e != nil {
 			return streamReadError(e, "message_stop", last)
 		}

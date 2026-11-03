@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
@@ -175,7 +177,7 @@ func TestNativeSSEUsageAndWireFidelity(t *testing.T) {
 	input := "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"usage\":{\"input_tokens\":10,\"output_tokens\":0}}}\n\nevent: future.event\ndata: {\"type\":\"future.event\",\"text\":\"羊驼\"}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":100,\"output_tokens\":23,\"input_tokens_details\":{\"cached_tokens\":70}}}}\n\n"
 	var out bytes.Buffer
 	u := usage.Usage{}
-	if e := relaySSE(&out, strings.NewReader(input), &u, "responses"); e != nil {
+	if e := protocol.RelaySSE(&out, strings.NewReader(input), &u, "responses"); e != nil {
 		t.Fatal(e)
 	}
 	if out.String() != input {
@@ -184,14 +186,14 @@ func TestNativeSSEUsageAndWireFidelity(t *testing.T) {
 	if u.Input == nil || *u.Input != 100 || u.Output == nil || *u.Output != 23 || u.CacheRead == nil || *u.CacheRead != 70 {
 		t.Fatalf("usage=%+v", u)
 	}
-	if relaySSE(io.Discard, strings.NewReader("data: {\"type\":\"response.created\"}\n\n"), &usage.Usage{}, "responses") == nil {
+	if protocol.RelaySSE(io.Discard, strings.NewReader("data: {\"type\":\"response.created\"}\n\n"), &usage.Usage{}, "responses") == nil {
 		t.Fatal("truncated stream treated as success")
 	}
 }
 func TestNativeToolEchoPreservesCustomNamespaceAndOpaqueFields(t *testing.T) {
 	body := obj([]byte(`{"model":"alias","stream":true,"unknown":{"keep":"exact"},"tools":[{"type":"custom","name":"exec","format":{"type":"grammar","syntax":"lark","definition":"start: /.+/"}}],"input":[{"type":"custom_tool_call","call_id":"call-a","name":"exec","namespace":"functions","input":"await do_work()"},{"type":"custom_tool_call_output","call_id":"call-a","output":"done"}]}`))
 	target := routing.Target{Source: domain.Source{Kind: "copilot"}, Model: "gpt-6-astra"}
-	b, tr, e := prepare(body, target.Source.Kind, target.Model, "codex", target.UpstreamProtocol("codex"))
+	b, tr, e := protocol.Prepare(body, target.Source.Kind, target.Model, "codex", target.UpstreamProtocol("codex"))
 	if e != nil || tr != nil {
 		t.Fatal("native path translated")
 	}
@@ -413,8 +415,8 @@ func TestConfigPreviewBacksUpAndRejectsStaleApply(t *testing.T) {
 }
 func TestCrossProtocolToolPairs(t *testing.T) {
 	body := obj([]byte(`{"model":"gpt-6-astra","messages":[{"role":"assistant","content":[{"type":"tool_use","id":"call-a","name":"Bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-a","content":"/tmp"}]}],"tools":[{"name":"Bash","input_schema":{"type":"object","properties":{"command":{"type":"string"}}}}]}`))
-	tr := &translation{to: "responses", model: "alias"}
-	wire, e := messagesToResponses(body, tr)
+	tr := &protocol.Translation{To: "responses", Model: "alias"}
+	wire, e := protocol.MessagesToResponses(body, tr)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -423,7 +425,7 @@ func TestCrossProtocolToolPairs(t *testing.T) {
 		t.Fatal("tool pairing lost")
 	}
 	upstream := `{"id":"resp-1","status":"completed","output":[{"type":"function_call","call_id":"call-b","name":"Bash","arguments":"{\"command\":\"ls\"}"}],"usage":{"input_tokens":10,"output_tokens":5}}`
-	reply, e := tr.responseJSON([]byte(upstream))
+	reply, e := tr.ResponseJSON([]byte(upstream))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -451,15 +453,15 @@ data: {"type":"response.completed","response":{"usage":{"input_tokens":12,"outpu
 
 `
 	var out bytes.Buffer
-	tr := translation{from: "messages", to: "responses", model: "alias"}
-	if e := tr.streamResponses(&out, strings.NewReader(stream), &usage.Usage{}); e != nil {
+	tr := protocol.Translation{From: "messages", To: "responses", Model: "alias"}
+	if e := tr.StreamResponses(&out, strings.NewReader(stream), &usage.Usage{}); e != nil {
 		t.Fatal(e)
 	}
-	rd := newSSE(&out)
+	rd := protocol.NewSSE(&out)
 	starts, stops := 0, 0
 	text := ""
 	for {
-		_, data, e := rd.next()
+		_, data, e := rd.Next()
 		if e != nil {
 			break
 		}
@@ -613,7 +615,7 @@ func TestRotatingCredentialRefreshSerializesAcrossProcesses(t *testing.T) {
 // Screenshot-bearing tool results retain text, image bytes and ordering in both directions.
 func TestCrossProtocolToolImagesRoundTrip(t *testing.T) {
 	original := json.RawMessage(`[{"type":"text","text":"screenshot"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AQID"}}]`)
-	wire, err := toolOutput(original, "responses")
+	wire, err := protocol.ToolOutput(original, "responses")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -621,7 +623,7 @@ func TestCrossProtocolToolImagesRoundTrip(t *testing.T) {
 	if len(blocks) != 2 || rawString(blocks[1]["image_url"]) != "data:image/png;base64,AQID" {
 		t.Fatalf("lost screenshot: %s", wire)
 	}
-	back, err := toolOutput(wire, "messages")
+	back, err := protocol.ToolOutput(wire, "messages")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -629,14 +631,14 @@ func TestCrossProtocolToolImagesRoundTrip(t *testing.T) {
 	if len(blocks) != 2 || rawString(blocks[0]["text"]) != "screenshot" || rawString(obj(blocks[1]["source"])["data"]) != "AQID" {
 		t.Fatalf("lost image on return: %s", back)
 	}
-	if _, err = toolOutput(json.RawMessage(`[{"type":"audio","data":"opaque"}]`), "responses"); err == nil {
+	if _, err = protocol.ToolOutput(json.RawMessage(`[{"type":"audio","data":"opaque"}]`), "responses"); err == nil {
 		t.Fatal("unsupported block silently dropped")
 	}
 }
 
 func TestNonStreamingMessagesUsageNormalizesCache(t *testing.T) {
-	tr := translation{to: "messages"}
-	body, err := tr.messagesJSON(obj([]byte(`{"content":[],"usage":{"input_tokens":10,"output_tokens":4,"cache_read_input_tokens":100,"cache_creation_input_tokens":20}}`)))
+	tr := protocol.Translation{To: "messages"}
+	body, err := tr.MessagesJSON(obj([]byte(`{"content":[],"usage":{"input_tokens":10,"output_tokens":4,"cache_read_input_tokens":100,"cache_creation_input_tokens":20}}`)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -687,8 +689,8 @@ func TestAPIKeyRotationAcrossAuthorities(t *testing.T) {
 }
 
 func TestResponsesAssistantReplayIsNotPrefill(t *testing.T) {
-	tr := &translation{toolNames: map[string]toolIdentity{}}
-	wire, err := responsesToMessages(obj([]byte(`{"model":"claude-opus-5.5","input":[{"role":"assistant","content":"Working on it."}]}`)), tr)
+	tr := &protocol.Translation{ToolNames: map[string]protocol.ToolIdentity{}}
+	wire, err := protocol.ResponsesToMessages(obj([]byte(`{"model":"claude-opus-5.5","input":[{"role":"assistant","content":"Working on it."}]}`)), tr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -708,7 +710,7 @@ func TestTerminalFrameDoesNotWaitForTransportEOF(t *testing.T) {
 		tail := &terminalReadFailure{}
 		wire := "data: " + frame + "\n\n"
 		var output bytes.Buffer
-		if err := relaySSE(&output, io.MultiReader(strings.NewReader(wire), tail), &usage.Usage{}, "responses"); err != nil {
+		if err := protocol.RelaySSE(&output, io.MultiReader(strings.NewReader(wire), tail), &usage.Usage{}, "responses"); err != nil {
 			t.Fatal("completed response counted as failure", err)
 		}
 		if tail.calls != 0 || output.String() != wire {

@@ -1,4 +1,4 @@
-package pacaroute
+package protocol
 
 import (
 	"bufio"
@@ -19,7 +19,7 @@ import (
 const maxSSEFrame = 8 << 20
 
 // A downstream disconnect must not penalize the source selected by the pool.
-type downstreamStreamError struct{ error }
+type DownstreamStreamError struct{ error }
 
 func writeStreamFrame(w io.Writer, frame []byte) error {
 	n, err := w.Write(frame)
@@ -37,17 +37,17 @@ func writeStreamFrame(w io.Writer, frame []byte) error {
 		}
 	}
 	if err != nil {
-		return &downstreamStreamError{err}
+		return &DownstreamStreamError{err}
 	}
 	return nil
 }
 
-type upstreamStreamError struct {
+type UpstreamStreamError struct {
 	event, code, message string
-	forwarded            bool
+	Forwarded            bool
 }
 
-func (e *upstreamStreamError) Error() string {
+func (e *UpstreamStreamError) Error() string {
 	detail := e.event
 	if e.code != "" {
 		detail += " (" + e.code + ")"
@@ -70,11 +70,11 @@ func streamEventError(m object, forwarded bool) error {
 	if code == "" && detail != nil && rawString(detail["type"]) != "error" {
 		code = rawString(detail["type"])
 	}
-	return &upstreamStreamError{event: streamDetail(typ), code: streamDetail(code), message: streamDetail(rawString(detail["message"])), forwarded: forwarded}
+	return &UpstreamStreamError{event: StreamDetail(typ), code: StreamDetail(code), message: StreamDetail(rawString(detail["message"])), Forwarded: forwarded}
 }
 
 // Keep diagnostic fields useful without persisting entire upstream payloads.
-func streamDetail(s string) string {
+func StreamDetail(s string) string {
 	s = strings.Join(strings.Fields(s), " ")
 	r := []rune(s)
 	if len(r) > 2048 {
@@ -84,10 +84,10 @@ func streamDetail(s string) string {
 }
 
 func streamReadError(err error, terminal, last string) error {
-	return fmt.Errorf("upstream stream ended before %s (last event: %s): %w", terminal, streamDetail(last), err)
+	return fmt.Errorf("upstream stream ended before %s (last event: %s): %w", terminal, StreamDetail(last), err)
 }
 
-func emitStreamError(w io.Writer, agent domain.AgentProtocol, message string) error {
+func EmitStreamError(w io.Writer, agent domain.AgentProtocol, message string) error {
 	if agent == domain.AgentCodex {
 		// Codex consumes response.failed, but ignores bare error events. This is
 		// a failure terminal only; never synthesize a successful completion.
@@ -99,8 +99,8 @@ func emitStreamError(w io.Writer, agent domain.AgentProtocol, message string) er
 // Incremental, bounded SSE parser. Unknown frames remain byte-for-byte on the native path.
 type sseReader struct{ r *bufio.Reader }
 
-func newSSE(r io.Reader) *sseReader { return &sseReader{bufio.NewReaderSize(r, 32768)} }
-func (s *sseReader) next() ([]byte, []byte, error) {
+func NewSSE(r io.Reader) *sseReader { return &sseReader{bufio.NewReaderSize(r, 32768)} }
+func (s *sseReader) Next() ([]byte, []byte, error) {
 	var frame, data bytes.Buffer
 	for {
 		line, e := s.r.ReadSlice('\n')
@@ -141,8 +141,8 @@ func (s *sseReader) next() ([]byte, []byte, error) {
 	}
 }
 
-func relaySSE(w io.Writer, r io.Reader, u *usage.Usage, protocol string) error {
-	rd := newSSE(r)
+func RelaySSE(w io.Writer, r io.Reader, u *usage.Usage, protocol string) error {
+	rd := NewSSE(r)
 	last := "none"
 	var pending error
 	var errorDeadline *time.Timer
@@ -152,7 +152,7 @@ func relaySSE(w io.Writer, r io.Reader, u *usage.Usage, protocol string) error {
 		}
 	}()
 	for {
-		frame, data, e := rd.next()
+		frame, data, e := rd.Next()
 		if e != nil {
 			if pending != nil {
 				return pending

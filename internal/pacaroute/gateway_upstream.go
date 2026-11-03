@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -20,7 +21,7 @@ var forwardedRequestHeaders = append(append([]string{"anthropic-version", "anthr
 
 // send performs one upstream request with an immutable Auth lease. A rejected
 // Copilot lease is refreshed and retried once; no other retry happens here.
-func (s *Server) send(x *gatewayExchange, t routing.Target, wire []byte, protocol, upstreamPath string) (*http.Response, error) {
+func (s *Server) send(x *gatewayExchange, t routing.Target, wire []byte, upstreamProto, upstreamPath string) (*http.Response, error) {
 	r, c := x.r, x.config
 	var res *http.Response
 	var e error
@@ -50,8 +51,8 @@ func (s *Server) send(x *gatewayExchange, t routing.Target, wire []byte, protoco
 				req.Header.Set(k, v)
 			}
 		}
-		if protocol == "messages" && req.Header.Get("anthropic-version") == "" {
-			req.Header.Set("anthropic-version", anthropicVersion)
+		if upstreamProto == "messages" && req.Header.Get("anthropic-version") == "" {
+			req.Header.Set("anthropic-version", protocol.AnthropicVersion)
 		}
 		req.Header.Set(l.Header, l.Value)
 		if t.Source.Kind == domain.SourcePeer {

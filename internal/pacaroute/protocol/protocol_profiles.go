@@ -1,15 +1,15 @@
-package pacaroute
+package protocol
 
 import "strings"
 
 // Probe-backed model profiles carried forward from the previous gateway.
-var copilotResponseEfforts = map[string]string{
+var CopilotResponseEfforts = map[string]string{
 	"gpt-5.3-codex": "none low medium high xhigh", "gpt-5.4": "none low medium high xhigh", "gpt-5.4-mini": "none low medium high xhigh", "gpt-5.4-nano": "none low medium high xhigh", "gpt-5.5": "none low medium high xhigh",
 	"gpt-5.6-luna": "none low medium high xhigh max", "gpt-5.6-sol": "none low medium high xhigh max", "gpt-5.6-sol-fast": "none low medium high xhigh max", "gpt-5.6-terra": "none low medium high xhigh max", "gpt-6-luna": "none low medium high xhigh max", "gpt-6-sol": "none low medium high xhigh max", "gpt-6.1-terra": "none low medium high xhigh max",
 	"gpt-6-astra": "low medium high xhigh max", "gpt-6.1-sol": "low medium high xhigh max", "gpt-5-mini": "minimal low medium high", "mai-code-1.1-flash": "minimal low medium high", "mai-code-2-flash": "minimal none low medium high xhigh max"}
 
 func clampEffort(wire object, model string) {
-	accepted, ok := copilotResponseEfforts[model]
+	accepted, ok := CopilotResponseEfforts[model]
 	if !ok {
 		return
 	}

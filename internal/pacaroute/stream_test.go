@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -184,7 +186,7 @@ func TestClientStreamDisconnectDoesNotCooldownSource(t *testing.T) {
 func TestBareDoneIsNotSemanticCompletion(t *testing.T) {
 	var out strings.Builder
 	wire := partialResponse + "data: [DONE]\n\n"
-	err := relaySSE(&out, strings.NewReader(wire), &usage.Usage{}, "responses")
+	err := protocol.RelaySSE(&out, strings.NewReader(wire), &usage.Usage{}, "responses")
 	if !errors.Is(err, io.EOF) || out.String() != wire {
 		t.Fatal("sentinel hid missing terminal or native bytes changed", err)
 	}
@@ -196,9 +198,9 @@ func TestAzureErrorDoesNotHideFollowingFailureTerminal(t *testing.T) {
 	wire := "data: {\"type\":\"error\",\"error\":{\"code\":\"rate_limit_reached\",\"message\":\"deployment throughput exceeded\"}}\n\n" +
 		"event: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"id\":\"resp_qa\",\"status\":\"failed\",\"error\":{\"code\":\"rate_limit_exceeded\",\"message\":\"deployment throughput exceeded\"},\"unknown\":42}}\n\n"
 	var out strings.Builder
-	err := relaySSE(&out, strings.NewReader(wire), &usage.Usage{}, "responses")
-	var failure *upstreamStreamError
-	if !errors.As(err, &failure) || !failure.forwarded || out.String() != wire || !strings.Contains(err.Error(), "rate_limit_exceeded") {
+	err := protocol.RelaySSE(&out, strings.NewReader(wire), &usage.Usage{}, "responses")
+	var failure *protocol.UpstreamStreamError
+	if !errors.As(err, &failure) || !failure.Forwarded || out.String() != wire || !strings.Contains(err.Error(), "rate_limit_exceeded") {
 		t.Fatal("Azure failure terminal was discarded", err, out.String())
 	}
 }
@@ -208,7 +210,7 @@ func TestErroredResponsesStreamDoesNotWaitIndefinitely(t *testing.T) {
 	defer writer.Close()
 	go func() { _, _ = io.WriteString(writer, "data: {\"type\":\"error\",\"message\":\"failed\"}\n\n") }()
 	result := make(chan error, 1)
-	go func() { result <- relaySSE(io.Discard, reader, &usage.Usage{}, "responses") }()
+	go func() { result <- protocol.RelaySSE(io.Discard, reader, &usage.Usage{}, "responses") }()
 	select {
 	case err := <-result:
 		if err == nil || !strings.Contains(err.Error(), "failed") {
@@ -264,7 +266,7 @@ func TestSSEReaderLongLineIsLinear(t *testing.T) {
 	var before, after runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&before)
-	frame, data, err := newSSE(bytes.NewReader(payload)).next()
+	frame, data, err := protocol.NewSSE(bytes.NewReader(payload)).Next()
 	runtime.ReadMemStats(&after)
 	if err != nil {
 		t.Fatal(err)

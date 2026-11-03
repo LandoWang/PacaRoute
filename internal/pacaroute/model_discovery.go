@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -92,7 +94,7 @@ func (a *catalog) DiscoverModels(ctx context.Context, c *domain.Config, source d
 		req.Header.Set(lease.Header, lease.Value)
 		req.Header.Set("Accept", "application/json")
 		if source.Kind == domain.SourceAnthropic {
-			req.Header.Set("anthropic-version", anthropicVersion)
+			req.Header.Set("anthropic-version", protocol.AnthropicVersion)
 		}
 		response, e := a.http.Client(c.SourceProxy(source.ID)).Do(req)
 		if e != nil {

@@ -1,4 +1,4 @@
-package pacaroute
+package protocol
 
 import (
 	"encoding/json"
@@ -7,13 +7,13 @@ import (
 )
 
 // anthropicVersion is sent on Messages requests that do not carry one.
-const anthropicVersion = "2023-06-01"
+const AnthropicVersion = "2023-06-01"
 
 // Native paths preserve opaque request and response fields. Only probed Copilot constraints are changed.
 // prepare builds the upstream body for a source kind, actual model and chosen
 // upstream protocol. Native paths keep unknown fields; a protocol mismatch
 // selects an explicit translation.
-func prepare(body object, kind domain.SourceKind, model string, agent domain.AgentProtocol, upstream string) ([]byte, *translation, error) {
+func Prepare(body object, kind domain.SourceKind, model string, agent domain.AgentProtocol, upstream string) ([]byte, *Translation, error) {
 	// RawMessage values are never modified in place; copying the top-level map
 	// isolates edits from the body that later failover targets reuse.
 	wire := make(object, len(body))
@@ -21,14 +21,14 @@ func prepare(body object, kind domain.SourceKind, model string, agent domain.Age
 		wire[k] = v
 	}
 	wire["model"] = jsonBytes(model)
-	var tr *translation
+	var tr *Translation
 	var e error
 	if domain.IncomingProtocol(agent) != upstream {
-		tr = &translation{from: domain.IncomingProtocol(agent), to: upstream, model: rawString(body["model"]), toolNames: map[string]toolIdentity{}}
-		if tr.to == "responses" {
-			wire, e = messagesToResponses(wire, tr)
+		tr = &Translation{From: domain.IncomingProtocol(agent), To: upstream, Model: rawString(body["model"]), ToolNames: map[string]ToolIdentity{}}
+		if tr.To == "responses" {
+			wire, e = MessagesToResponses(wire, tr)
 		} else {
-			wire, e = responsesToMessages(wire, tr)
+			wire, e = ResponsesToMessages(wire, tr)
 		}
 		if e != nil {
 			return nil, nil, e

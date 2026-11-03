@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
 )
 
@@ -62,9 +64,9 @@ func TestTranslatedMaxTokensToolUseIsNotUpstreamFailure(t *testing.T) {
 // arguments were cut off by max_tokens must therefore never be completed; it is
 // reported as an incomplete item inside response.incomplete (max_output_tokens).
 func TestTranslatedTruncatedToolCallIsNotCompleted(t *testing.T) {
-	tr := &translation{from: "responses", to: "messages", model: "coding", toolNames: map[string]toolIdentity{}}
+	tr := &protocol.Translation{From: "responses", To: "messages", Model: "coding", ToolNames: map[string]protocol.ToolIdentity{}}
 	var out bytes.Buffer
-	if err := tr.streamMessages(&out, strings.NewReader(truncatedToolTurn("max_tokens")), &usage.Usage{}); err != nil {
+	if err := tr.StreamMessages(&out, strings.NewReader(truncatedToolTurn("max_tokens")), &usage.Usage{}); err != nil {
 		t.Fatalf("max_tokens turn failed: %v", err)
 	}
 	body := out.String()
@@ -80,7 +82,7 @@ func TestTranslatedTruncatedToolCallIsNotCompleted(t *testing.T) {
 	}
 	frames := strings.Split(strings.TrimSpace(body), "\n\n")
 	final := frames[len(frames)-1]
-	_, data, _ := newSSE(strings.NewReader(final + "\n\n")).next()
+	_, data, _ := protocol.NewSSE(strings.NewReader(final + "\n\n")).Next()
 	response := obj(obj(data)["response"])
 	if rawString(obj(data)["type"]) != "response.incomplete" || rawString(obj(response["incomplete_details"])["reason"]) != "max_output_tokens" {
 		t.Fatalf("terminal is not response.incomplete(max_output_tokens): %s", final)
@@ -94,11 +96,11 @@ func TestTranslatedTruncatedToolCallIsNotCompleted(t *testing.T) {
 // Invalid tool arguments without a max_tokens stop remain an upstream stream error,
 // and complete tool calls are still completed.
 func TestTranslatedToolCallStopReasonsUnchanged(t *testing.T) {
-	tr := &translation{from: "responses", to: "messages", model: "coding", toolNames: map[string]toolIdentity{}}
+	tr := &protocol.Translation{From: "responses", To: "messages", Model: "coding", ToolNames: map[string]protocol.ToolIdentity{}}
 	var out bytes.Buffer
 	for _, reason := range []string{"end_turn", "tool_use"} {
 		out.Reset()
-		if err := tr.streamMessages(&out, strings.NewReader(truncatedToolTurn(reason)), &usage.Usage{}); err == nil || !strings.Contains(err.Error(), "invalid streamed tool arguments") {
+		if err := tr.StreamMessages(&out, strings.NewReader(truncatedToolTurn(reason)), &usage.Usage{}); err == nil || !strings.Contains(err.Error(), "invalid streamed tool arguments") {
 			t.Fatalf("stop_reason %s with invalid arguments: err=%v", reason, err)
 		}
 		if strings.Contains(out.String(), `"type":"response.output_item.done"`) {
@@ -107,7 +109,7 @@ func TestTranslatedToolCallStopReasonsUnchanged(t *testing.T) {
 	}
 	out.Reset()
 	complete := strings.Replace(truncatedToolTurn("tool_use"), `{\"patch\":\"*** Begin`, `{\"patch\":\"*** Begin\"}`, 1)
-	if err := tr.streamMessages(&out, strings.NewReader(complete), &usage.Usage{}); err != nil {
+	if err := tr.StreamMessages(&out, strings.NewReader(complete), &usage.Usage{}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), `"type":"response.output_item.done"`) || !strings.Contains(out.String(), `"type":"response.completed"`) {
@@ -117,8 +119,8 @@ func TestTranslatedToolCallStopReasonsUnchanged(t *testing.T) {
 
 // The non-streaming translation of the same truncation is not an error either.
 func TestTranslatedNonStreamMaxTokensToolUse(t *testing.T) {
-	tr := &translation{from: "responses", to: "messages", model: "coding", toolNames: map[string]toolIdentity{}}
-	body, err := tr.responseJSON([]byte(`{"type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"apply_patch","input":{}}],"stop_reason":"max_tokens","usage":{"input_tokens":10,"output_tokens":16384}}`))
+	tr := &protocol.Translation{From: "responses", To: "messages", Model: "coding", ToolNames: map[string]protocol.ToolIdentity{}}
+	body, err := tr.ResponseJSON([]byte(`{"type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"apply_patch","input":{}}],"stop_reason":"max_tokens","usage":{"input_tokens":10,"output_tokens":16384}}`))
 	if err != nil {
 		t.Fatalf("non-stream max_tokens tool_use failed: %v", err)
 	}
