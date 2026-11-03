@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+const (
+	credentialLockWait = 10 * time.Second
+	apiKeyLeaseTTL     = 24 * time.Hour
+	lockSuffix         = ".lock"
+)
+
 type lease struct {
 	Header      string
 	Value       string
@@ -127,7 +133,7 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 		if secret == "" {
 			return l, errors.New("source API key is missing; save it in PacaRoute")
 		}
-		l = lease{Header: "Authorization", Value: "Bearer " + secret, Expires: time.Now().Add(24 * time.Hour)}
+		l = lease{Header: "Authorization", Value: "Bearer " + secret, Expires: time.Now().Add(apiKeyLeaseTTL)}
 		if s.Kind == SourceAzureOpenAI {
 			l.Header = "api-key"
 			l.Value = secret

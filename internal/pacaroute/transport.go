@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const maxJSONBody = 8 << 20
+
 type transports struct {
 	mu     sync.Mutex
 	values map[string]*http.Client
@@ -69,11 +71,11 @@ func proxyEnv(p Proxy) []string {
 	return out
 }
 func readJSONBody(r io.Reader, out any) error {
-	b, e := io.ReadAll(io.LimitReader(r, 8<<20+1))
+	b, e := io.ReadAll(io.LimitReader(r, maxJSONBody+1))
 	if e != nil {
 		return e
 	}
-	if len(b) > 8<<20 {
+	if len(b) > maxJSONBody {
 		return errors.New("response too large")
 	}
 	return json.Unmarshal(b, out)

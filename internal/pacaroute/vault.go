@@ -57,7 +57,7 @@ func (v *vault) init() {
 		// Minimal containers may have no OS machine-id. Keep a stable per-install identity in the persistent data volume.
 		if machine == "" && runtime.GOOS != "darwin" && v.root != "" {
 			path := filepath.Join(v.root, "machine-id")
-			unlock, e := fileLock(context.Background(), path+".lock", 5*time.Second)
+			unlock, e := fileLock(context.Background(), path+lockSuffix, 5*time.Second)
 			if e != nil {
 				v.err = e
 				return

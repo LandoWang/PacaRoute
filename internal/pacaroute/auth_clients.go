@@ -9,7 +9,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 // Credentials are versioned by the committed hash. Failed config commits and
@@ -30,7 +29,7 @@ func (a *Auth) SaveClientKey(ctx context.Context, c Client, key string) error {
 	if key == "" || !validSecret(key) || !constantEqual([]byte(keyHash(key)), []byte(c.KeyHash)) {
 		return errors.New("key does not match this Client")
 	}
-	unlock, err := fileLock(ctx, path+".lock", 10*time.Second)
+	unlock, err := fileLock(ctx, path+lockSuffix, credentialLockWait)
 	if err != nil {
 		return err
 	}

@@ -141,7 +141,7 @@ func commandJSON(ctx context.Context, env []string, args ...string) (json.RawMes
 	if e != nil {
 		return nil, errors.New("Azure CLI failed; sign in to this account and check the selected subscription")
 	}
-	if len(b) > 8<<20 || !json.Valid(b) {
+	if len(b) > maxJSONBody || !json.Valid(b) {
 		return nil, errors.New("invalid Azure CLI response")
 	}
 	return b, nil

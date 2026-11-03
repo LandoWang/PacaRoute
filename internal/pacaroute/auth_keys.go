@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"strings"
-	"time"
 )
 
 func (a *Auth) SetKeys(keys map[string]string) error {
@@ -32,7 +31,7 @@ func (a *Auth) SaveKey(ctx context.Context, id, key string) error {
 	if !validID(id) || key == "" || !validSecret(key) {
 		return errors.New("invalid API key")
 	}
-	unlock, e := fileLock(ctx, a.vault.secretPath(id)+".lock", 10*time.Second)
+	unlock, e := fileLock(ctx, a.vault.secretPath(id)+lockSuffix, credentialLockWait)
 	if e != nil {
 		return e
 	}
@@ -81,7 +80,7 @@ func (a *Auth) SaveAccountKey(ctx context.Context, id, key string) error {
 		return errors.New("select a key-based account and a valid API key")
 	}
 	path := a.vault.accountKeyPath(id)
-	unlock, e := fileLock(ctx, path+".lock", 10*time.Second)
+	unlock, e := fileLock(ctx, path+lockSuffix, credentialLockWait)
 	if e != nil {
 		return e
 	}

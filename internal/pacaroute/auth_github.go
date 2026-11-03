@@ -80,7 +80,7 @@ func (a *Auth) credentialLocked(ctx context.Context, id string, p Proxy, force b
 }
 func (a *Auth) copilotLocked(ctx context.Context, id string, p Proxy, force bool) (lease, error) {
 	path := a.vault.githubPath(id)
-	unlock, e := fileLock(ctx, path+".lock", 30*time.Second)
+	unlock, e := fileLock(ctx, path+lockSuffix, 30*time.Second)
 	if e != nil {
 		return lease{}, e
 	}
@@ -280,7 +280,7 @@ func (a *Auth) CompleteLogin(ctx context.Context, d DeviceLogin) error {
 			return errors.New("GitHub device login was not authorized")
 		}
 		record := credential{Version: d.Version, AccessToken: v.AccessToken, AccessExpires: expiry(v.ExpiresIn), RefreshToken: v.RefreshToken, RefreshExpires: expiry(v.RefreshExpiresIn), TokenType: v.TokenType, Scope: v.Scope, OAuthClientID: d.ClientID, CredentialID: strings.ReplaceAll(newID(), "-", "")}
-		unlock, e := fileLock(ctx, a.vault.githubPath(d.AccountID)+".lock", 10*time.Second)
+		unlock, e := fileLock(ctx, a.vault.githubPath(d.AccountID)+lockSuffix, credentialLockWait)
 		if e != nil {
 			return e
 		}
@@ -298,7 +298,7 @@ func (a *Auth) Logout(ctx context.Context, id string) error {
 		return errors.New("invalid account")
 	}
 	path := a.vault.githubPath(id)
-	unlock, e := fileLock(ctx, path+".lock", 10*time.Second)
+	unlock, e := fileLock(ctx, path+lockSuffix, credentialLockWait)
 	if e != nil {
 		return e
 	}
@@ -318,7 +318,7 @@ func (a *Auth) Logout(ctx context.Context, id string) error {
 func (a *Auth) AccountInfo(ctx context.Context, id string) (map[string]any, error) {
 	c := a.config.Snapshot()
 	p, _ := c.Proxy(c.Proxies.AccountProxyID)
-	unlock, e := fileLock(ctx, a.vault.githubPath(id)+".lock", 30*time.Second)
+	unlock, e := fileLock(ctx, a.vault.githubPath(id)+lockSuffix, 30*time.Second)
 	if e != nil {
 		return nil, e
 	}

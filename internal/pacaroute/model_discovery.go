@@ -88,7 +88,7 @@ func (a *catalog) DiscoverModels(ctx context.Context, c *Config, source Source) 
 		req.Header.Set(lease.Header, lease.Value)
 		req.Header.Set("Accept", "application/json")
 		if source.Kind == SourceAnthropic {
-			req.Header.Set("anthropic-version", "2023-06-01")
+			req.Header.Set("anthropic-version", anthropicVersion)
 		}
 		response, e := a.http.client(c.SourceProxy(source.ID)).Do(req)
 		if e != nil {
