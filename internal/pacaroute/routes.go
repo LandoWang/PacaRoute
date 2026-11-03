@@ -2,7 +2,6 @@ package pacaroute
 
 import (
 	"errors"
-	"strings"
 )
 
 func resolveRoute(c *Config, client *Client, agent AgentProtocol, model, explicit string) (string, string, error) {
@@ -23,7 +22,7 @@ func resolveRoute(c *Config, client *Client, agent AgentProtocol, model, explici
 	if explicit == "" {
 		explicit = "copilot"
 	}
-	if strings.HasPrefix(explicit, "pool:") {
+	if isPoolTarget(explicit) {
 		p, ok := c.Pool(explicit)
 		if !ok || p.Agent != agent {
 			return "", "", errors.New("pool not found for Agent")

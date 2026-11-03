@@ -7,7 +7,7 @@ func parseGatewayPath(path string) (agent AgentProtocol, explicit, operation str
 	if len(parts) >= 2 && (parts[0] == "sources" || parts[0] == "pools") {
 		explicit = parts[1]
 		if parts[0] == "pools" {
-			explicit = "pool:" + explicit
+			explicit = poolTarget(explicit)
 		}
 		parts = parts[2:]
 	}

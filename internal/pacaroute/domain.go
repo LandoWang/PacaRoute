@@ -156,7 +156,7 @@ func (c *Config) Source(id string) (Source, bool) {
 }
 func (c *Config) Pool(id string) (Pool, bool) {
 	for _, p := range c.Pools {
-		if p.ID == strings.TrimPrefix(id, "pool:") {
+		if name, _ := poolID(id); p.ID == name {
 			return p, true
 		}
 	}
@@ -287,3 +287,16 @@ func sharedAzure(c *Config, id string) bool {
 	account, _ := c.Account(id)
 	return id == "" || id == "azure-local" || account.LoginMode == "azure-cli"
 }
+
+// poolTargetPrefix marks a route or pool-member target that names a pool.
+const poolTargetPrefix = "pool:"
+
+// poolTarget is the route target naming the pool with this ID.
+func poolTarget(id string) string { return poolTargetPrefix + id }
+
+// poolID returns the pool ID named by a route target; a target without the
+// pool prefix is returned unchanged with ok false.
+func poolID(target string) (id string, ok bool) { return strings.CutPrefix(target, poolTargetPrefix) }
+
+// isPoolTarget reports whether a route target names a pool.
+func isPoolTarget(target string) bool { return strings.HasPrefix(target, poolTargetPrefix) }

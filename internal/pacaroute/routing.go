@@ -32,7 +32,7 @@ type Target struct {
 
 func endpointIdentity(s Source) string { return string(s.Kind) + ":" + s.AccountID + ":" + s.Endpoint }
 func (r *Router) Targets(c *Config, scope string, agent AgentProtocol, id, model, session string, continuation bool) ([]Target, error) {
-	if !strings.HasPrefix(id, "pool:") {
+	if !isPoolTarget(id) {
 		s, ok := c.Source(id)
 		if !ok {
 			return nil, errors.New("source not found")

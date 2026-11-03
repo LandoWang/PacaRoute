@@ -207,7 +207,7 @@ func (c *Config) validatePools() error {
 		sum := 0
 		weights := map[string]int{}
 		for _, m := range p.Members {
-			if strings.HasPrefix(m.SourceID, "pool:") {
+			if isPoolTarget(m.SourceID) {
 				return errors.New("nested pools are not supported")
 			}
 			if !validID(m.ID) || ids[m.ID] || m.Weight < 0 || m.Weight > 1000000 {
@@ -297,7 +297,7 @@ func (c *Config) validateTarget(id, model string, agent GrantKind) error {
 		}
 		return errors.New("PacaRoute target must expose this model for Codex or Claude Code")
 	}
-	if strings.HasPrefix(id, "pool:") {
+	if isPoolTarget(id) {
 		p, ok := c.Pool(id)
 		if !ok || p.Agent.Grant() != agent || !p.HasModel(model) {
 			return errors.New("route must match the pool Agent and model")

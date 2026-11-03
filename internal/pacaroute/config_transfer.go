@@ -237,8 +237,8 @@ func planConfigImport(current *Config, b ConfigBundle, mode, namespace string) (
 		}
 		for i := range client.Routes {
 			route := &client.Routes[i]
-			if strings.HasPrefix(route.SourceID, "pool:") {
-				route.SourceID = "pool:" + poolMap[strings.TrimPrefix(route.SourceID, "pool:")]
+			if id, ok := poolID(route.SourceID); ok {
+				route.SourceID = poolTarget(poolMap[id])
 			} else {
 				route.SourceID = sourceMap[route.SourceID]
 			}
