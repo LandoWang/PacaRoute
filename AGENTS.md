@@ -16,6 +16,10 @@ material; .NET/AOT/source-generation rules apply only when editing that legacy c
 - `bash scripts/build-pacaroute.sh artifacts/pacaroute-cli`
 
 Go code is in `internal/pacaroute`; `cmd/pacaroute` is the thin CLI entry point.
+Lower layers are child packages that never import the root: `domain` (configuration
+records, kinds, validation), `usage`, `quota`, `transport`, `routing`, `protocol`, and the
+leaves `atomicfile`, `clientconfig` and `oscred`. Auth, catalog, configuration storage,
+gateway, management and runtime remain in the root package, one responsibility per file.
 The React UI is in `apps/web`, compiled independently and embedded from
 `internal/pacaroute/web`. Local management/configuration code and the desktop tray are in
 `internal/pacaroute`. Historical SwiftUI sources remain in `apps/macos`. Architecture is documented in `docs/pipeline-design.md`

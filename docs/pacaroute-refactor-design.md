@@ -317,6 +317,15 @@ become stable.
 | `transport` | Proxy-specific bounded HTTP pools and process transport helpers | `transport.go`, command platform files |
 | `runtime` | Composition, listener lifetime, shutdown, tray and startup integration | `cli.go`, `desktop_control.go`, `desktop_tray.go`, `startup_*` |
 
+Implemented layout (refactor of 2026-11): `domain`, `usage`, `quota`, `transport`,
+`routing` and `protocol` are child packages of `internal/pacaroute`, next to the leaf
+packages `atomicfile`, `clientconfig` and `oscred`; dependencies point only downward.
+Auth, catalog, configuration storage/import, gateway, management and runtime stay in the
+root package behind file boundaries and the consumer-owned interfaces `configReader`,
+`leaseProvider` and `serviceControl`. Extracting them further first requires white-box
+tests that no longer write credential records or reach into store and server internals
+from outside their owner, so that the vault never has to be exported (§5).
+
 These names are a starting point. Avoid import cycles: domain values do not import
 HTTP, SQLite, React, desktop code or credential implementations. Gateway composes
 capabilities through small consumer-owned interfaces; Auth and Router do not call
