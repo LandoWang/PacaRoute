@@ -1,0 +1,46 @@
+import { type Config, type Agent } from "../../api/types";
+import { Select } from "../../components/ui";
+import { sources } from "../../domain/config";
+export function TargetPicker({
+  config,
+  agent,
+  value,
+  onChange,
+  includePools = true,
+}: {
+  config: Config;
+  agent?: Agent;
+  value: string;
+  onChange: (v: string) => void;
+  includePools?: boolean;
+}) {
+  return (
+    <Select value={value} onChange={(e) => onChange(e.target.value)} required>
+      <option value="">选择来源或来源池</option>
+      <optgroup label="模型来源">
+        {sources(config).map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+            {config.source_state.paused.includes(s.id) ? " · 已暂停" : ""}
+          </option>
+        ))}
+      </optgroup>
+      {includePools &&
+        config.pools.some(
+          (p) => !agent || agent === "pacaroute" || p.agent === agent,
+        ) && (
+          <optgroup label="来源池">
+            {config.pools
+              .filter(
+                (p) => !agent || agent === "pacaroute" || p.agent === agent,
+              )
+              .map((p) => (
+                <option key={p.id} value={"pool:" + p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </optgroup>
+        )}
+    </Select>
+  );
+}
