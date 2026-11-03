@@ -1,6 +1,6 @@
 //go:build darwin && desktop
 
-package pacaroute
+package oscred
 
 /*
 #cgo LDFLAGS: -framework CoreFoundation -framework Security
@@ -40,7 +40,7 @@ import (
 	"unsafe"
 )
 
-func systemSourceKey(id string) (string, error) {
+func SourceKey(id string) (string, error) {
 	name := C.CString(id)
 	defer C.free(unsafe.Pointer(name))
 	var data unsafe.Pointer
@@ -57,7 +57,7 @@ func systemSourceKey(id string) (string, error) {
 	defer clear(b)
 	return string(b), nil
 }
-func saveSystemSourceKey(id, key string) error {
+func SaveSourceKey(id, key string) error {
 	name := C.CString(id)
 	defer C.free(unsafe.Pointer(name))
 	data := C.CBytes([]byte(key))
