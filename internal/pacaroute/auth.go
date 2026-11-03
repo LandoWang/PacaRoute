@@ -23,9 +23,13 @@ type cachedLease struct {
 	stamp string
 }
 
+type configReader interface {
+	Snapshot() *Config
+}
+
 // Auth is the only runtime owner of credential records, persistence and rotation.
 type Auth struct {
-	store                    *ConfigStore
+	config                   configReader
 	systemKeys               bool
 	vault                    vault
 	http                     transports
@@ -41,7 +45,7 @@ func NewAuth(s *ConfigStore, credentialRoot string) *Auth {
 	if credentialRoot == "" {
 		credentialRoot = s.Root
 	}
-	a := &Auth{store: s, vault: vault{root: credentialRoot}, leases: map[string]cachedLease{}, keys: map[string]string{}, session: newID(), machine: newID(), device: newID()}
+	a := &Auth{config: s, vault: vault{root: credentialRoot}, leases: map[string]cachedLease{}, keys: map[string]string{}, session: newID(), machine: newID(), device: newID()}
 	for i := range a.leaseGates {
 		a.leaseGates[i] = make(chan struct{}, 1)
 	}

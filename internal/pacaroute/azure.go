@@ -13,7 +13,7 @@ import (
 )
 
 func (a *Auth) AzureAction(ctx context.Context, id, action, subscription, resource string) (map[string]any, error) {
-	c := a.store.Snapshot()
+	c := a.config.Snapshot()
 	p, _ := c.Proxy(c.Proxies.AccountProxyID)
 	env := a.azureEnv(c, id, p)
 	args := []string{"account", "list", "--query", "[].{id:id,name:name,state:state,isDefault:isDefault,user:{name:user.name}}", "-o", "json"}
@@ -77,10 +77,10 @@ func (a *Auth) AzureAction(ctx context.Context, id, action, subscription, resour
 	return out, nil
 }
 func (a *Auth) AzureLogin(ctx context.Context, id string, logout bool, emit func(any)) error {
-	if sharedAzure(a.store.Snapshot(), id) {
+	if sharedAzure(a.config.Snapshot(), id) {
 		return errors.New("use az login in your terminal for the shared Azure CLI account, or add an isolated Azure account")
 	}
-	c := a.store.Snapshot()
+	c := a.config.Snapshot()
 	p, _ := c.Proxy(c.Proxies.AccountProxyID)
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
