@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+// maxSSEFrame bounds one SSE event and each of its lines.
+const maxSSEFrame = 8 << 20
+
 // A downstream disconnect must not penalize the source selected by the pool.
 type downstreamStreamError struct{ error }
 
@@ -97,7 +100,7 @@ func (s *sseReader) next() ([]byte, []byte, error) {
 	var frame, data bytes.Buffer
 	for {
 		line, e := s.r.ReadSlice('\n')
-		if frame.Len()+len(line) > 8<<20 {
+		if frame.Len()+len(line) > maxSSEFrame {
 			return nil, nil, fmt.Errorf("SSE event exceeds 8 MiB")
 		}
 		frame.Write(line)
@@ -108,7 +111,7 @@ func (s *sseReader) next() ([]byte, []byte, error) {
 				part, e = s.r.ReadSlice('\n')
 				line = append(line, part...)
 				frame.Write(part)
-				if len(line) > 8<<20 {
+				if len(line) > maxSSEFrame {
 					return nil, nil, fmt.Errorf("SSE line too large")
 				}
 			}

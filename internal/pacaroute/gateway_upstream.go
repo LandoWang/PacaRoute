@@ -10,6 +10,10 @@ import (
 	"strings"
 )
 
+// forwardedRequestHeaders are copied from the Agent request to the upstream:
+// Anthropic protocol options followed by the Agent session headers.
+var forwardedRequestHeaders = append(append([]string{"anthropic-version", "anthropic-beta"}, codexSessionHeaders...), claudeSessionHeaders...)
+
 // send performs one upstream request with an immutable Auth lease. A rejected
 // Copilot lease is refreshed and retried once; no other retry happens here.
 func (s *Server) send(x *gatewayExchange, t Target, wire []byte, protocol, upstreamPath string) (*http.Response, error) {
@@ -37,19 +41,19 @@ func (s *Server) send(x *gatewayExchange, t Target, wire []byte, protocol, upstr
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", r.Header.Get("Accept"))
-		for _, k := range []string{"anthropic-version", "anthropic-beta", "thread-id", "session-id", "session_id", "X-Claude-Code-Session-Id"} {
+		for _, k := range forwardedRequestHeaders {
 			if v := r.Header.Get(k); v != "" {
 				req.Header.Set(k, v)
 			}
 		}
 		if protocol == "messages" && req.Header.Get("anthropic-version") == "" {
-			req.Header.Set("anthropic-version", "2023-06-01")
+			req.Header.Set("anthropic-version", anthropicVersion)
 		}
 		req.Header.Set(l.Header, l.Value)
 		if t.Source.Kind == SourcePeer {
 			req.Header.Set(peerHopHeader, strconv.Itoa(x.hops+1))
 			if x.session != "" {
-				req.Header.Set("X-PacaRoute-Session", peerSessionHash(s.AdminKey, x.affinityScope, x.agent, t.Source.ID, x.session))
+				req.Header.Set(peerSessionHeader, peerSessionHash(s.AdminKey, x.affinityScope, x.agent, t.Source.ID, x.session))
 			}
 		}
 		if t.Source.Kind == SourceCopilot {

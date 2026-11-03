@@ -62,7 +62,7 @@ func readBackup(agent, target, id string) ([]byte, bool, error) {
 	if e != nil {
 		return nil, false, e
 	}
-	if !f.Mode().IsRegular() || f.Size() > 4<<20 {
+	if !f.Mode().IsRegular() || f.Size() > maxAgentConfigFile {
 		return nil, false, errors.New("invalid backup file")
 	}
 	b, e := os.ReadFile(path)

@@ -7,14 +7,23 @@ import (
 	"strings"
 )
 
+// peerSessionHeader carries a router-derived session identity between PacaRoute
+// installations. Agent session headers are listed in lookup order.
+const peerSessionHeader = "X-PacaRoute-Session"
+
+var (
+	codexSessionHeaders  = []string{"thread-id", "session-id", "session_id"}
+	claudeSessionHeaders = []string{"X-Claude-Code-Session-Id"}
+)
+
 var legacySession = regexp.MustCompile(`(?:^|_)session_([A-Za-z0-9-]{1,128})$`)
 
 func sessionID(agent AgentProtocol, h http.Header, body map[string]json.RawMessage) string {
-	names := []string{"X-PacaRoute-Session", "X-AgentLink-Session"}
+	names := []string{peerSessionHeader, "X-AgentLink-Session"}
 	if agent == AgentCodex {
-		names = append(names, "thread-id", "session-id", "session_id")
+		names = append(names, codexSessionHeaders...)
 	} else {
-		names = append(names, "X-Claude-Code-Session-Id")
+		names = append(names, claudeSessionHeaders...)
 	}
 	valid := func(v string) bool {
 		return v != "" && len(v) <= 512 && strings.IndexFunc(v, func(r rune) bool { return r < 32 || r == 127 }) < 0

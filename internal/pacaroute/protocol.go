@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 )
 
+// anthropicVersion is sent on Messages requests that do not carry one.
+const anthropicVersion = "2023-06-01"
+
 type object = map[string]json.RawMessage
 
 func obj(b json.RawMessage) object     { v := object{}; _ = json.Unmarshal(b, &v); return v }

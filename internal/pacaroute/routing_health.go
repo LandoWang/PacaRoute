@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+// retryHintHeaders are the upstream retry hints relayed to the Agent and read
+// for throttle cooldowns.
+var retryHintHeaders = []string{"Retry-After", "Retry-After-Ms", "X-Ms-Retry-After-Ms"}
+
 type Cooldown struct {
 	Kind     string    `json:"kind"`
 	SourceID string    `json:"source_id"`

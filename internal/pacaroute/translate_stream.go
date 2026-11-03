@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+// maxToolArguments bounds the streamed arguments of one translated tool call.
+const maxToolArguments = 8 << 20
+
 func emitSSE(w io.Writer, event string, v any) error {
 	b, e := json.Marshal(v)
 	if e != nil {
@@ -216,7 +219,7 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 			case "input_json_delta":
 				s := rawString(d["partial_json"])
 				buf.WriteString(s)
-				if buf.Len() > 8<<20 {
+				if buf.Len() > maxToolArguments {
 					return errors.New("tool arguments too large")
 				}
 				if item["type"] != "custom_tool_call" {

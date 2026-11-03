@@ -17,6 +17,9 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+// maxAgentConfigFile bounds an Agent configuration file read for editing.
+const maxAgentConfigFile = 4 << 20
+
 // AgentConfigPath returns the configuration path for the selected Agent.
 func AgentConfigPath(agent string) (string, error) {
 	home, e := os.UserHomeDir()
@@ -83,7 +86,7 @@ func PlanConnection(agent, base, model, key string) (Plan, error) {
 	if missing {
 		e = nil
 	}
-	if len(old) > 4<<20 {
+	if len(old) > maxAgentConfigFile {
 		return Plan{}, errors.New("client configuration too large")
 	}
 	var next []byte

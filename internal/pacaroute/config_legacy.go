@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 )
 
+// maxLegacyConfigFile bounds each split legacy configuration file.
+const maxLegacyConfigFile = 4 << 20
+
 var configFiles = []string{"accounts.json", "sources.json", "source-pools.json", "proxies.json", "clients.json", "source-state.json"}
 
 // Fresh installations have no pre-created accounts or sources. Existing routes
@@ -21,7 +24,7 @@ func (s *ConfigStore) materializeLegacyIdentities() error {
 	if err := s.db.QueryRow(`SELECT version,revision,document FROM configuration WHERE id=1`).Scan(&version, &revision, &document); err != nil {
 		return err
 	}
-	if version != 1 || len(document) > 24<<20 {
+	if version != 1 || len(document) > maxConfigDocument {
 		return errors.New("unsupported or oversized configuration document")
 	}
 	if err := json.Unmarshal([]byte(document), &c); err != nil {
@@ -109,7 +112,7 @@ func (s *ConfigStore) importLegacy() (Config, error) {
 	// The old journal denotes a committed transaction; use it in preference to
 	// partially replaced split files. Preserve every legacy file for rollback.
 	if b, e := os.ReadFile(filepath.Join(s.Root, "config.transaction.json")); e == nil {
-		if len(b) > 24<<20 {
+		if len(b) > maxConfigDocument {
 			return c, errors.New("legacy transaction too large")
 		}
 		if e = json.Unmarshal(b, &c); e != nil {
@@ -128,7 +131,7 @@ func (s *ConfigStore) importLegacy() (Config, error) {
 				return c, e
 			}
 			legacy = true
-			if len(b) > 4<<20 {
+			if len(b) > maxLegacyConfigFile {
 				return c, fmt.Errorf("legacy %s too large", name)
 			}
 			if e = json.Unmarshal(b, parts[i]); e != nil {

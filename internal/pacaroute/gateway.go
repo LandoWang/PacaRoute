@@ -11,6 +11,17 @@ import (
 	"time"
 )
 
+const (
+	// maxRequestBody bounds an Agent request body.
+	maxRequestBody = 32 << 20
+	// maxUpstreamErrorBody bounds a relayed upstream error response.
+	maxUpstreamErrorBody = 2 << 20
+	// statusClientClosedRequest records an Agent that left before completion.
+	statusClientClosedRequest = 499
+	// statusLoopDetected answers a request that reached the peer hop limit.
+	statusLoopDetected = 508
+)
+
 func (s *Server) gateway(w http.ResponseWriter, r *http.Request) { s.gatewayFor(w, r, false) }
 
 // gatewayExchange is the execution state of one Agent request. It owns the
@@ -78,7 +89,7 @@ func (s *Server) openExchange(w http.ResponseWriter, r *http.Request, peer bool)
 		return nil, false
 	}
 	if hops >= maxPeerHops {
-		problem(w, 508, "PacaRoute forwarding loop or hop limit reached")
+		problem(w, statusLoopDetected, "PacaRoute forwarding loop or hop limit reached")
 		return nil, false
 	}
 	agent, explicit, operation := parseGatewayPath(r.URL.Path)
@@ -143,7 +154,7 @@ func (x *gatewayExchange) decode() bool {
 		problem(w, 404, "endpoint not found")
 		return false
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 32<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
 	b, e := io.ReadAll(r.Body)
 	if e != nil {
 		problem(w, 413, "request body exceeds 32 MiB")
@@ -258,7 +269,7 @@ func (s *Server) attempt(x *gatewayExchange, i int, t Target) bool {
 		if x.r.Context().Err() != nil {
 			// The Client left before any upstream response. This is not a
 			// source failure: do not cool the member or try another target.
-			activity.Status = 499
+			activity.Status = statusClientClosedRequest
 			activity.Error = "client disconnected before upstream response"
 			return false
 		}
@@ -284,13 +295,13 @@ func (s *Server) attempt(x *gatewayExchange, i int, t Target) bool {
 		activity.Error = fmt.Sprintf("upstream returned HTTP %d", res.StatusCode)
 		s.Router.FailResponse(t, res.StatusCode, res.Header)
 		w.Header().Set("Content-Type", res.Header.Get("Content-Type"))
-		for _, header := range []string{"Retry-After", "Retry-After-Ms", "X-Ms-Retry-After-Ms"} {
+		for _, header := range retryHintHeaders {
 			if value := res.Header.Get(header); value != "" {
 				w.Header().Set(header, value)
 			}
 		}
 		w.WriteHeader(res.StatusCode)
-		_, _ = io.Copy(w, io.LimitReader(res.Body, 2<<20))
+		_, _ = io.Copy(w, io.LimitReader(res.Body, maxUpstreamErrorBody))
 		res.Body.Close()
 		return false
 	}

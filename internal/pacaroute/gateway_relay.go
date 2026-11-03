@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 )
 
+// maxUpstreamJSON bounds a non-stream upstream response.
+const maxUpstreamJSON = 32 << 20
+
 // relayStream relays or translates this one committed upstream stream. After
 // the downstream status is written no other source may take over the response.
 func (s *Server) relayStream(x *gatewayExchange, t Target, tr *translation, protocol string, res *http.Response) {
@@ -40,7 +43,7 @@ func (s *Server) relayStream(x *gatewayExchange, t Target, tr *translation, prot
 		var upstream *upstreamStreamError
 		upstreamFailure := errors.As(e, &upstream)
 		if errors.As(e, &downstream) || (r.Context().Err() != nil && !upstreamFailure) {
-			activity.Status = 499
+			activity.Status = statusClientClosedRequest
 			activity.Error = "client disconnected before stream completion"
 		} else {
 			activity.Status = 502
@@ -59,8 +62,8 @@ func (s *Server) relayStream(x *gatewayExchange, t Target, tr *translation, prot
 func (s *Server) relayJSON(x *gatewayExchange, tr *translation, res *http.Response) {
 	w, activity := x.w, &x.activity
 	var e error
-	data, err := io.ReadAll(io.LimitReader(res.Body, 32<<20+1))
-	if err != nil || len(data) > 32<<20 {
+	data, err := io.ReadAll(io.LimitReader(res.Body, maxUpstreamJSON+1))
+	if err != nil || len(data) > maxUpstreamJSON {
 		e = errors.New("upstream response incomplete or too large")
 	} else {
 		x.usage.observe(data)

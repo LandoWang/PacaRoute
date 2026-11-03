@@ -13,6 +13,13 @@ import (
 	"time"
 )
 
+const (
+	// maxAffinityJournal bounds the affinity journal read at startup.
+	maxAffinityJournal = 96 << 20
+	// maxLegacyJournal bounds the previous application's session journal.
+	maxLegacyJournal = 64 << 20
+)
+
 type binding struct {
 	Key      string    `json:"key"`
 	Member   string    `json:"member"`
@@ -28,7 +35,7 @@ func NewRouter(root string) (*Router, error) {
 	legacyPath := filepath.Join(root, "runtime", "source-pool-sessions.jsonl")
 	if f, e := os.Open(legacyPath); e == nil {
 		defer f.Close()
-		scan := bufio.NewScanner(io.LimitReader(f, 64<<20))
+		scan := bufio.NewScanner(io.LimitReader(f, maxLegacyJournal))
 		scan.Buffer(make([]byte, 4096), 65536)
 		for scan.Scan() {
 			var v struct {
@@ -57,7 +64,7 @@ func NewRouter(root string) (*Router, error) {
 	if e != nil {
 		return nil, e
 	}
-	if info.Size() > 96<<20 {
+	if info.Size() > maxAffinityJournal {
 		return nil, errors.New("affinity journal exceeds limit")
 	}
 	reader := bufio.NewReader(f)

@@ -7,6 +7,9 @@ import (
 	"net/http"
 )
 
+// maxManagementRequest bounds a management API JSON request.
+const maxManagementRequest = 4 << 20
+
 func (s *Server) admin(r *http.Request) bool {
 	if key := bearer(r); key != "" {
 		return constantEqual([]byte(key), []byte(s.AdminKey))
@@ -18,7 +21,7 @@ func (s *Server) admin(r *http.Request) bool {
 	return r.Method == "GET" || s.sameOrigin(r)
 }
 func decodeRequest(w http.ResponseWriter, r *http.Request, v any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, 4<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, maxManagementRequest)
 	d := json.NewDecoder(r.Body)
 	if e := d.Decode(v); e != nil {
 		return errors.New("invalid JSON request")

@@ -14,6 +14,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// maxConfigDocument bounds the stored configuration graph document.
+const maxConfigDocument = 24 << 20
+
 // A revisioned document keeps cross-entity validation and publication atomic.
 // Request routing uses immutable memory snapshots; external writers are observed
 // at most once per second, or immediately through Reload.
@@ -114,7 +117,7 @@ func (s *ConfigStore) readLocked() error {
 		s.lastError = ""
 		return nil
 	}
-	if len(document) > 24<<20 {
+	if len(document) > maxConfigDocument {
 		return errors.New("configuration too large")
 	}
 	var c Config
@@ -194,7 +197,7 @@ func (s *ConfigStore) Save(c Config, expected string) error {
 	if e != nil {
 		return e
 	}
-	if len(b) > 24<<20 {
+	if len(b) > maxConfigDocument {
 		return errors.New("configuration too large")
 	}
 	result, e := s.db.Exec(`UPDATE configuration SET document=?,revision=revision+1 WHERE id=1 AND revision=?`, string(b), s.current.Revision)
