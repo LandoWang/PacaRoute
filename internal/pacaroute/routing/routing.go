@@ -1,4 +1,4 @@
-package pacaroute
+package routing
 
 import (
 	"crypto/sha256"
@@ -143,7 +143,7 @@ func (r *Router) Targets(c *domain.Config, scope string, agent domain.AgentProto
 // SHA-256 hex output is a storage contract shared with existing journals.
 func affinityHash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }
 
-func (t Target) upstreamProtocol(agent ...domain.AgentProtocol) string {
+func (t Target) UpstreamProtocol(agent ...domain.AgentProtocol) string {
 	if t.Source.Kind == domain.SourcePeer && len(agent) > 0 {
 		return domain.IncomingProtocol(agent[0])
 	}

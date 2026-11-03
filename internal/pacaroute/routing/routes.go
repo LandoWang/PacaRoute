@@ -1,4 +1,4 @@
-package pacaroute
+package routing
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
-func resolveRoute(c *domain.Config, client *domain.Client, agent domain.AgentProtocol, model, explicit string) (string, string, error) {
+func ResolveRoute(c *domain.Config, client *domain.Client, agent domain.AgentProtocol, model, explicit string) (string, string, error) {
 	if !client.AgentEnabled(agent.Grant()) {
 		return "", "", errors.New("Agent is not enabled for this Client")
 	}
@@ -45,7 +45,7 @@ func resolveRoute(c *domain.Config, client *domain.Client, agent domain.AgentPro
 
 // Project only peer grants onto the wire protocol requested by a downstream router.
 // Direct Agent grants remain independent, including their sticky-session scope.
-func peerClientView(c *domain.Config, client *domain.Client, agent domain.AgentProtocol) *domain.Client {
+func PeerClientView(c *domain.Config, client *domain.Client, agent domain.AgentProtocol) *domain.Client {
 	copy := *client
 	copy.LegacyDirect = false
 	copy.EnabledAgents = []domain.GrantKind{agent.Grant()}

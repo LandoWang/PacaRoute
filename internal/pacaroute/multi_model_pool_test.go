@@ -6,12 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
-func multiModelFixture(t *testing.T) (*Router, domain.Config) {
+func multiModelFixture(t *testing.T) (*routing.Router, domain.Config) {
 	t.Helper()
-	r, err := NewRouter(t.TempDir())
+	r, err := routing.NewRouter(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +70,7 @@ func TestMultiModelPoolThrottleWeightsAndStickyScope(t *testing.T) {
 	}
 	pool := c.Pools[0]
 	source, _ := c.Source("a")
-	r.FailResponse(Target{Source: source, Model: "gpt-6-astra", Pool: &pool}, 429, http.Header{"Retry-After": []string{"120"}})
+	r.FailResponse(routing.Target{Source: source, Model: "gpt-6-astra", Pool: &pool}, 429, http.Header{"Retry-After": []string{"120"}})
 	after := distribution(10000)
 	if after["a"] != 0 || after["b"] < 5700 || after["b"] > 6300 || after["b"]+after["c"] != 10000 {
 		t.Fatal("remaining 30:20 weights did not become 60:40", after)
@@ -77,7 +79,7 @@ func TestMultiModelPoolThrottleWeightsAndStickyScope(t *testing.T) {
 	if err != nil || !other[0].Sticky || other[0].Affinity != first[0].Affinity {
 		t.Fatal("throttle leaked into another model or disturbed its session")
 	}
-	r.FailResponse(Target{Source: source, Model: "other-deployment", Pool: &pool}, 429, http.Header{"Retry-After": []string{"5"}})
+	r.FailResponse(routing.Target{Source: source, Model: "other-deployment", Pool: &pool}, 429, http.Header{"Retry-After": []string{"5"}})
 	health := r.Health(&c)
 	if len(health.Cooldowns) != 2 || health.Pools[0].Models[0].Available != 2 || health.Pools[0].Models[1].Available != 0 {
 		t.Fatal("model-level exhaustion hidden", health)
@@ -87,7 +89,7 @@ func TestMultiModelPoolThrottleWeightsAndStickyScope(t *testing.T) {
 	}
 	// A late concurrent error cannot shorten the longer provider retry hint.
 	until := health.Cooldowns[0].Until
-	r.FailResponse(Target{Source: source, Model: "gpt-6-astra", Pool: &pool}, 429, http.Header{"Retry-After": []string{"1"}})
+	r.FailResponse(routing.Target{Source: source, Model: "gpt-6-astra", Pool: &pool}, 429, http.Header{"Retry-After": []string{"1"}})
 	if !r.Health(&c).Cooldowns[0].Until.Equal(until) {
 		t.Fatal("parallel throttle shortened recovery time")
 	}
@@ -97,7 +99,7 @@ func TestMultiModelPoolThrottleWeightsAndStickyScope(t *testing.T) {
 		t.Fatal("expired throttle did not restore original allocation")
 	}
 	third, _ := c.Source("c")
-	r.FailResponse(Target{Source: third, Model: "gpt-6-astra", Pool: &pool}, 429, http.Header{"Retry-After": []string{"20"}})
+	r.FailResponse(routing.Target{Source: third, Model: "gpt-6-astra", Pool: &pool}, 429, http.Header{"Retry-After": []string{"20"}})
 	fiveToThree := distribution(10000)
 	if fiveToThree["c"] != 0 || fiveToThree["a"] < 5950 || fiveToThree["a"] > 6550 || fiveToThree["a"]+fiveToThree["b"] != 10000 {
 		t.Fatal("remaining 50:30 weights did not become 62.5:37.5", fiveToThree)
@@ -113,7 +115,7 @@ func TestMultiModelPoolAliasesValidationAndDirectThrottle(t *testing.T) {
 		t.Fatal(err)
 	}
 	source, _ := c.Source("a")
-	r.FailResponse(Target{Source: source, Model: "gpt-6-astra"}, 429, http.Header{"X-Ms-Retry-After-Ms": []string{"2500"}})
+	r.FailResponse(routing.Target{Source: source, Model: "gpt-6-astra"}, 429, http.Header{"X-Ms-Retry-After-Ms": []string{"2500"}})
 	for _, alias := range []string{"same-deployment", "missing"} {
 		if _, err := r.Targets(&c, "alice", "codex", "pool:big", alias, "session", false); err == nil {
 			t.Fatal("unknown or throttled alias accepted", alias)
@@ -150,7 +152,7 @@ func TestModelThrottleRetryHintBounds(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			r, c := multiModelFixture(t)
 			source, _ := c.Source("a")
-			r.FailResponse(Target{Source: source, Model: "gpt-6-astra"}, 429, http.Header{"Retry-After": []string{test.hint}})
+			r.FailResponse(routing.Target{Source: source, Model: "gpt-6-astra"}, 429, http.Header{"Retry-After": []string{test.hint}})
 			h := r.Health(&c)
 			remaining := h.Cooldowns[0].Until.Sub(h.ObservedAt)
 			if remaining > test.expected || remaining < test.expected-2*time.Second {

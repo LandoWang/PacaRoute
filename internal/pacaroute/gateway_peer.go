@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -41,7 +43,7 @@ func (s *Server) peerCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	models := map[string]*peerModel{}
 	for _, agent := range []domain.AgentProtocol{domain.AgentCodex, domain.AgentClaudeCode} {
-		for _, route := range peerClientView(c, client, agent).Routes {
+		for _, route := range routing.PeerClientView(c, client, agent).Routes {
 			name := route.MatchModel
 			if name == "*" {
 				name = route.Model

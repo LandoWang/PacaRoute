@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -112,7 +114,7 @@ func TestGatewayBindingSurvivesRestartAtZeroWeight(t *testing.T) {
 		}
 	}
 	saveTest(t, store, c)
-	restarted, err := NewRouter(store.Root)
+	restarted, err := routing.NewRouter(store.Root)
 	if err != nil {
 		t.Fatal(err)
 	}

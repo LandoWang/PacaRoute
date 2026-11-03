@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -18,7 +20,7 @@ var forwardedRequestHeaders = append(append([]string{"anthropic-version", "anthr
 
 // send performs one upstream request with an immutable Auth lease. A rejected
 // Copilot lease is refreshed and retried once; no other retry happens here.
-func (s *Server) send(x *gatewayExchange, t Target, wire []byte, protocol, upstreamPath string) (*http.Response, error) {
+func (s *Server) send(x *gatewayExchange, t routing.Target, wire []byte, protocol, upstreamPath string) (*http.Response, error) {
 	r, c := x.r, x.config
 	var res *http.Response
 	var e error

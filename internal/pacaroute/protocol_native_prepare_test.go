@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -20,12 +22,12 @@ func TestNativePrepareDoesNotCloneLargePayload(t *testing.T) {
 		"unknown_extension": json.RawMessage(`{"opaque":{"number":1234567890123456789}}`),
 	}
 	before := jsonBytes(body)
-	target := Target{Source: domain.Source{Kind: "azure-openai"}, Model: "deployment"}
+	target := routing.Target{Source: domain.Source{Kind: "azure-openai"}, Model: "deployment"}
 	expected, err := json.Marshal(map[string]json.RawMessage{"model": jsonBytes("deployment"), "input": body["input"], "unknown_extension": body["unknown_extension"]})
 	if err != nil {
 		t.Fatal(err)
 	}
-	wire, tr, err := prepare(body, target.Source.Kind, target.Model, "codex", target.upstreamProtocol("codex"))
+	wire, tr, err := prepare(body, target.Source.Kind, target.Model, "codex", target.UpstreamProtocol("codex"))
 	if err != nil || tr != nil {
 		t.Fatalf("native prepare: %v %v", tr, err)
 	}
@@ -42,7 +44,7 @@ func TestNativePrepareDoesNotCloneLargePayload(t *testing.T) {
 	for i := 0; i < 9; i++ {
 		var before, after runtime.MemStats
 		runtime.ReadMemStats(&before)
-		_, _, _ = prepare(body, target.Source.Kind, target.Model, "codex", target.upstreamProtocol("codex"))
+		_, _, _ = prepare(body, target.Source.Kind, target.Model, "codex", target.UpstreamProtocol("codex"))
 		runtime.ReadMemStats(&after)
 		allocated = min(allocated, after.TotalAlloc-before.TotalAlloc)
 	}

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -79,7 +81,7 @@ func TestExplicitSonnetRoutePrecedesDefaultModel(t *testing.T) {
 		{"claude-code", "claude-opus-5-5", "copilot", "claude-opus-5.5"},
 		{"codex", "gpt-6-astra", "pool:balanced", "coding"},
 	} {
-		source, model, err := resolveRoute(&c, &client, domain.AgentProtocol(test.agent), test.request, "")
+		source, model, err := routing.ResolveRoute(&c, &client, domain.AgentProtocol(test.agent), test.request, "")
 		if err != nil || source != test.source || model != test.model {
 			t.Errorf("%s: wrong route (%s, %s, %v)", test.request, source, model, err)
 		}
@@ -95,13 +97,13 @@ func TestSelectedModelsRejectUnselectedRequests(t *testing.T) {
 		{ID: "codex", Agent: "codex", MatchModel: "*", SourceID: "pool:balanced", Model: "coding"},
 	}}
 	for _, requested := range []string{"claude-sonnet-5.5", "claude-sonnet-5-5"} {
-		source, model, err := resolveRoute(&c, &client, "claude-code", requested, "")
+		source, model, err := routing.ResolveRoute(&c, &client, "claude-code", requested, "")
 		if err != nil || source != "copilot" || model != "claude-sonnet-5.5" {
 			t.Fatalf("selected Sonnet changed: %s %s %v", source, model, err)
 		}
 	}
 	for _, requested := range []string{"claude-haiku-4.5", "gpt-6-astra", ""} {
-		if _, _, err := resolveRoute(&c, &client, "claude-code", requested, ""); err == nil {
+		if _, _, err := routing.ResolveRoute(&c, &client, "claude-code", requested, ""); err == nil {
 			t.Fatalf("unselected model %q accepted", requested)
 		}
 	}

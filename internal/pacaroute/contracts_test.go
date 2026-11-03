@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -107,7 +109,7 @@ func TestConfigurationCrashTransactionRollsForward(t *testing.T) {
 func TestWeightedSessionsStickyRestartAndClientIsolation(t *testing.T) {
 	c := fixtureConfig()
 	root := t.TempDir()
-	r, e := NewRouter(root)
+	r, e := routing.NewRouter(root)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -133,7 +135,7 @@ func TestWeightedSessionsStickyRestartAndClientIsolation(t *testing.T) {
 			c.Pools[0].Members[i].Weight = 100
 		}
 	}
-	r2, e := NewRouter(root)
+	r2, e := routing.NewRouter(root)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -188,8 +190,8 @@ func TestNativeSSEUsageAndWireFidelity(t *testing.T) {
 }
 func TestNativeToolEchoPreservesCustomNamespaceAndOpaqueFields(t *testing.T) {
 	body := obj([]byte(`{"model":"alias","stream":true,"unknown":{"keep":"exact"},"tools":[{"type":"custom","name":"exec","format":{"type":"grammar","syntax":"lark","definition":"start: /.+/"}}],"input":[{"type":"custom_tool_call","call_id":"call-a","name":"exec","namespace":"functions","input":"await do_work()"},{"type":"custom_tool_call_output","call_id":"call-a","output":"done"}]}`))
-	target := Target{Source: domain.Source{Kind: "copilot"}, Model: "gpt-6-astra"}
-	b, tr, e := prepare(body, target.Source.Kind, target.Model, "codex", target.upstreamProtocol("codex"))
+	target := routing.Target{Source: domain.Source{Kind: "copilot"}, Model: "gpt-6-astra"}
+	b, tr, e := prepare(body, target.Source.Kind, target.Model, "codex", target.UpstreamProtocol("codex"))
 	if e != nil || tr != nil {
 		t.Fatal("native path translated")
 	}

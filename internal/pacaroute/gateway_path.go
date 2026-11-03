@@ -3,6 +3,8 @@ package pacaroute
 import (
 	"strings"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -37,7 +39,7 @@ func parseGatewayPath(path string) (agent domain.AgentProtocol, explicit, operat
 }
 
 // upstreamPath maps the Agent operation to the target's native endpoint path.
-func upstreamPath(t Target, agent domain.AgentProtocol, protocol, operation string) string {
+func upstreamPath(t routing.Target, agent domain.AgentProtocol, protocol, operation string) string {
 	upstreamPath := "/responses"
 	if protocol == "messages" {
 		upstreamPath = "/v1/messages"

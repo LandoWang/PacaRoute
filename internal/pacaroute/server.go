@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/quota"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
@@ -21,7 +23,7 @@ type Server struct {
 	Store           *ConfigStore
 	Auth            *Auth
 	Catalog         *catalog
-	Router          *Router
+	Router          *routing.Router
 	Activity        *usage.ActivityStore
 	Quotas          *quota.QuotaStore
 	AllowLocal      bool
@@ -37,7 +39,7 @@ type Server struct {
 }
 
 func NewServer(store *ConfigStore, auth *Auth) (*Server, error) {
-	r, e := NewRouter(store.Root)
+	r, e := routing.NewRouter(store.Root)
 	if e != nil {
 		return nil, e
 	}

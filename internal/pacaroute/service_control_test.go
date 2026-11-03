@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
 )
 
 // Stopping inference immediately closes admission, lets accepted streams finish,
@@ -94,7 +96,7 @@ func TestIndependentManagementAndDrainingService(t *testing.T) {
 	}
 	previousRouter, previousAuth, previousActivity := s.Router, s.Auth, s.Activity
 	source, _ := store.Snapshot().Source("test")
-	s.Router.FailResponse(Target{Source: source, Model: "deployed"}, 429, http.Header{"Retry-After": []string{"123"}})
+	s.Router.FailResponse(routing.Target{Source: source, Model: "deployed"}, 429, http.Header{"Retry-After": []string{"123"}})
 	status, b = call(adminURL, "PUT", "/api/service", `{"serving":true}`, s.AdminKey)
 	if status != 200 {
 		t.Fatal("restart failed", string(b))

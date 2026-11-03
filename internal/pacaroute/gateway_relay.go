@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
 )
 
 // maxUpstreamJSON bounds a non-stream upstream response.
@@ -14,7 +16,7 @@ const maxUpstreamJSON = 32 << 20
 
 // relayStream relays or translates this one committed upstream stream. After
 // the downstream status is written no other source may take over the response.
-func (s *Server) relayStream(x *gatewayExchange, t Target, tr *translation, protocol string, res *http.Response) {
+func (s *Server) relayStream(x *gatewayExchange, t routing.Target, tr *translation, protocol string, res *http.Response) {
 	w, r, agent, activity := x.w, x.r, x.agent, &x.activity
 	var e error
 	w.Header().Set("Content-Type", "text/event-stream")

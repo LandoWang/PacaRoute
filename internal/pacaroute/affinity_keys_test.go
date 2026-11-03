@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -44,7 +46,7 @@ func TestAffinityKeysArePersistentContract(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "runtime", "source-pool-sessions.jsonl"), []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	imported, err := NewRouter(root)
+	imported, err := routing.NewRouter(root)
 	if err != nil {
 		t.Fatal(err)
 	}

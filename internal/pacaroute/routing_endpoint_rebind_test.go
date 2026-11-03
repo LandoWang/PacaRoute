@@ -3,6 +3,8 @@ package pacaroute
 import (
 	"testing"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -21,11 +23,11 @@ func TestEndpointEditRebindsSuccessfulSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	router, err := NewRouter(root)
+	router, err := routing.NewRouter(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	selectTargets := func(r *Router, continuation bool) ([]Target, error) {
+	selectTargets := func(r *routing.Router, continuation bool) ([]routing.Target, error) {
 		return r.Targets(&c, "alice", "codex", "pool:balanced", "coding", "same-session", continuation)
 	}
 	before, err := selectTargets(router, false)
@@ -51,7 +53,7 @@ func TestEndpointEditRebindsSuccessfulSession(t *testing.T) {
 	if _, err = selectTargets(router, true); err != nil {
 		t.Errorf("successful new-endpoint request did not rebind: %v", err)
 	}
-	reopened, err := NewRouter(root)
+	reopened, err := routing.NewRouter(root)
 	if err != nil {
 		t.Fatal(err)
 	}

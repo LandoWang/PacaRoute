@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -60,7 +62,7 @@ func TestRoutingHealthIsAuthenticatedManagementState(t *testing.T) {
 			}
 			continue
 		}
-		var status struct{ Routing RoutingHealth }
+		var status struct{ Routing routing.RoutingHealth }
 		if json.Unmarshal(w.Body.Bytes(), &status) != nil || len(status.Routing.Cooldowns) != 1 || status.Routing.Pools[0].Available != 1 {
 			t.Fatal("status API omits runtime health", w.Body.String())
 		}

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -46,7 +48,7 @@ type gatewayExchange struct {
 	raw              []byte
 	body             object
 	session          string
-	targets          []Target
+	targets          []routing.Target
 	activity         usage.Activity
 	usage            usage.Usage
 	upstreamMessages bool
@@ -107,7 +109,7 @@ func (s *Server) openExchange(w http.ResponseWriter, r *http.Request, peer bool)
 	}
 	affinityScope := affinityClient(client)
 	if peer {
-		client = peerClientView(c, client, agent)
+		client = routing.PeerClientView(c, client, agent)
 		affinityScope += "\x00pacaroute"
 	}
 	return &gatewayExchange{w: w, r: r, config: c, client: client, peer: peer, hops: hops, agent: agent, explicit: explicit, operation: operation, affinityScope: affinityScope}, true
@@ -178,7 +180,7 @@ func (x *gatewayExchange) decode() bool {
 func (s *Server) selectTargets(x *gatewayExchange) bool {
 	w := x.w
 	model := rawString(x.body["model"])
-	id, model, e := resolveRoute(x.config, x.client, x.agent, model, x.explicit)
+	id, model, e := routing.ResolveRoute(x.config, x.client, x.agent, model, x.explicit)
 	if e != nil {
 		problem(w, 403, e.Error())
 		return false
@@ -246,13 +248,13 @@ func (s *Server) finishExchange(x *gatewayExchange) {
 // attempt sends the request to target i and answers the Agent, unless the
 // failure is eligible for the next target before any response was committed.
 // It reports whether the caller should continue with the next target.
-func (s *Server) attempt(x *gatewayExchange, i int, t Target) bool {
+func (s *Server) attempt(x *gatewayExchange, i int, t routing.Target) bool {
 	w, agent, operation, activity := x.w, x.agent, x.operation, &x.activity
 	activity.Error = ""
 	activity.Source = t.Source.ID
 	activity.Model = t.Model
 	activity.Attempts = i + 1
-	protocol := t.upstreamProtocol(agent)
+	protocol := t.UpstreamProtocol(agent)
 	wire, tr, e := prepare(x.body, t.Source.Kind, t.Model, agent, protocol)
 	if e != nil {
 		activity.Status = 400
@@ -299,7 +301,7 @@ func (s *Server) attempt(x *gatewayExchange, i int, t Target) bool {
 		activity.Error = fmt.Sprintf("upstream returned HTTP %d", res.StatusCode)
 		s.Router.FailResponse(t, res.StatusCode, res.Header)
 		w.Header().Set("Content-Type", res.Header.Get("Content-Type"))
-		for _, header := range retryHintHeaders {
+		for _, header := range routing.RetryHintHeaders {
 			if value := res.Header.Get(header); value != "" {
 				w.Header().Set(header, value)
 			}
