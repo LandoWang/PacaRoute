@@ -146,16 +146,7 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 	case "serve":
 		return serve(ctx, a, s, auth, port, in, emit, fail)
 	case "ui":
-		if _, explicit := a.flags["port"]; !explicit {
-			if saved := readDesktopSettings(root); saved.AdminPort > 0 {
-				port = saved.AdminPort
-			}
-		}
-		if e := openManagement(root, port); e != nil {
-			return fail(e)
-		}
-		emit(map[string]any{"url": fmt.Sprintf("http://127.0.0.1:%d", port)})
-		return 0
+		return uiCommand(a, root, port, emit, fail)
 	case "desktop":
 		if action == "" {
 			return runDesktop(ctx, a, s, auth, port, emit, fail)
@@ -197,95 +188,127 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 		emit(usage.NewActivityStore(root).Recent(true))
 		return 0
 	case "key":
-		if action != "set" {
-			return fail(errors.New("use key set --source ID"))
-		}
-		b, e := io.ReadAll(io.LimitReader(in, 16385))
-		if e != nil {
-			return fail(e)
-		}
-		if account := a.get("account", ""); account != "" {
-			e = auth.SaveAccountKey(ctx, account, strings.TrimSpace(string(b)))
-		} else {
-			e = auth.SaveKey(ctx, a.get("source", ""), strings.TrimSpace(string(b)))
-		}
-		if e != nil {
-			return fail(e)
-		}
-		emit(map[string]bool{"ok": true})
-		return 0
+		return keyCommand(ctx, a, auth, action, in, emit, fail)
 	case "metadata":
-		c := cloneConfig(s.Snapshot())
-		var target any
-		kind := a.get("kind", "")
-		switch kind {
-		case "accounts":
-			target = &c.Accounts
-		case "sources":
-			target = &c.Sources
-		case "pools":
-			target = &c.Pools
-		case "proxies":
-			target = &c.Proxies
-		case "source-state":
-			target = &c.SourceState
-		default:
-			return fail(errors.New("unknown metadata kind"))
-		}
-		if e = transport.ReadJSONBody(in, target); e != nil {
-			return fail(e)
-		}
-		if kind == "sources" {
-			paused := []string{}
-			for _, id := range c.SourceState.Paused {
-				if _, ok := c.Source(id); ok {
-					paused = append(paused, id)
-				}
-			}
-			c.SourceState.Paused = paused
-			for id := range c.Proxies.Bindings {
-				if _, ok := c.Source(id); !ok {
-					delete(c.Proxies.Bindings, id)
-				}
-			}
-		}
-		if e = s.Save(c, c.Revision); e != nil {
-			return fail(e)
-		}
-		emit(map[string]any{"ok": true, "event": "result"})
-		return 0
+		return metadataCommand(a, s, in, emit, fail)
 	case "config":
-		if action == "export" || action == "import" {
-			v, err := configTransferCommand(ctx, a, s, auth, action)
-			if err != nil {
-				return fail(err)
-			}
-			emit(v)
-			return 0
-		}
-		if action == "show" {
-			emit(s.Snapshot())
-			return 0
-		}
-		if action != "apply" {
-			return fail(errors.New("use config show or config apply"))
-		}
-		var c domain.Config
-		if e = transport.ReadJSONBody(in, &c); e != nil {
-			return fail(e)
-		}
-		if c.Revision == "" {
-			return fail(errors.New("configuration revision required"))
-		}
-		if e = s.Save(c, c.Revision); e != nil {
-			return fail(e)
-		}
-		emit(s.Snapshot())
-		return 0
+		return configCommand(ctx, a, s, auth, action, in, emit, fail)
 	default:
 		if e = entityCommand(ctx, a, s, in, emit); e != nil {
 			return fail(e)
 		}
 		return 0
 	}
+}
+
+// uiCommand opens the management UI of a running local service.
+func uiCommand(a arguments, root string, port int, emit func(any), fail func(error) int) int {
+	if _, explicit := a.flags["port"]; !explicit {
+		if saved := readDesktopSettings(root); saved.AdminPort > 0 {
+			port = saved.AdminPort
+		}
+	}
+	if e := openManagement(root, port); e != nil {
+		return fail(e)
+	}
+	emit(map[string]any{"url": fmt.Sprintf("http://127.0.0.1:%d", port)})
+	return 0
+}
+
+// keyCommand stores a source or account API key read from stdin.
+func keyCommand(ctx context.Context, a arguments, auth *Auth, action string, in io.Reader, emit func(any), fail func(error) int) int {
+	var e error
+	if action != "set" {
+		return fail(errors.New("use key set --source ID"))
+	}
+	b, e := io.ReadAll(io.LimitReader(in, 16385))
+	if e != nil {
+		return fail(e)
+	}
+	if account := a.get("account", ""); account != "" {
+		e = auth.SaveAccountKey(ctx, account, strings.TrimSpace(string(b)))
+	} else {
+		e = auth.SaveKey(ctx, a.get("source", ""), strings.TrimSpace(string(b)))
+	}
+	if e != nil {
+		return fail(e)
+	}
+	emit(map[string]bool{"ok": true})
+	return 0
+}
+
+// metadataCommand replaces one configuration section from stdin JSON.
+func metadataCommand(a arguments, s *ConfigStore, in io.Reader, emit func(any), fail func(error) int) int {
+	var e error
+	c := cloneConfig(s.Snapshot())
+	var target any
+	kind := a.get("kind", "")
+	switch kind {
+	case "accounts":
+		target = &c.Accounts
+	case "sources":
+		target = &c.Sources
+	case "pools":
+		target = &c.Pools
+	case "proxies":
+		target = &c.Proxies
+	case "source-state":
+		target = &c.SourceState
+	default:
+		return fail(errors.New("unknown metadata kind"))
+	}
+	if e = transport.ReadJSONBody(in, target); e != nil {
+		return fail(e)
+	}
+	if kind == "sources" {
+		paused := []string{}
+		for _, id := range c.SourceState.Paused {
+			if _, ok := c.Source(id); ok {
+				paused = append(paused, id)
+			}
+		}
+		c.SourceState.Paused = paused
+		for id := range c.Proxies.Bindings {
+			if _, ok := c.Source(id); !ok {
+				delete(c.Proxies.Bindings, id)
+			}
+		}
+	}
+	if e = s.Save(c, c.Revision); e != nil {
+		return fail(e)
+	}
+	emit(map[string]any{"ok": true, "event": "result"})
+	return 0
+}
+
+// configCommand shows, applies, exports or imports the configuration.
+func configCommand(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, action string, in io.Reader, emit func(any), fail func(error) int) int {
+	var e error
+	if action == "export" || action == "import" {
+		v, err := configTransferCommand(ctx, a, s, auth, action)
+		if err != nil {
+			return fail(err)
+		}
+		emit(v)
+		return 0
+	}
+	if action == "show" {
+		emit(s.Snapshot())
+		return 0
+	}
+	if action != "apply" {
+		return fail(errors.New("use config show or config apply"))
+	}
+	var c domain.Config
+	if e = transport.ReadJSONBody(in, &c); e != nil {
+		return fail(e)
+	}
+	if c.Revision == "" {
+		return fail(errors.New("configuration revision required"))
+	}
+	if e = s.Save(c, c.Revision); e != nil {
+		return fail(e)
+	}
+	emit(s.Snapshot())
+	return 0
 }
