@@ -1,26 +1,9 @@
 package pacaroute
 
 import (
-	"net"
 	"net/http"
 )
 
-func loopbackRequest(r *http.Request) bool {
-	peer, _, e := net.SplitHostPort(r.RemoteAddr)
-	if e != nil {
-		return false
-	}
-	ip := net.ParseIP(peer)
-	if ip == nil || !ip.IsLoopback() {
-		return false
-	}
-	host := r.Host
-	if h, _, e := net.SplitHostPort(host); e == nil {
-		host = h
-	}
-	ip = net.ParseIP(host)
-	return host == "localhost" || (ip != nil && ip.IsLoopback())
-}
 func (s *Server) localAllowed(r *http.Request) bool {
 	return s.LocalManagement && s.PublicURL == "" && loopbackRequest(r)
 }

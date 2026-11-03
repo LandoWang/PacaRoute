@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,4 +95,33 @@ func (s *Server) Handler() http.Handler {
 		}
 		s.gateway(w, r)
 	})
+}
+
+func (s *Server) sameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if s.PublicURL != "" && !(s.Desktop != nil && strings.HasPrefix(r.URL.Path, "/api/")) {
+		return origin == s.PublicURL
+	}
+	if origin == "" {
+		return false
+	}
+	u, e := url.Parse(origin)
+	if e != nil {
+		return false
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return u.Host == r.Host && u.Scheme == scheme
+}
+func (s *Server) requestOrigin(r *http.Request) string {
+	if s.PublicURL != "" {
+		return s.PublicURL
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
 }

@@ -2,29 +2,10 @@ package pacaroute
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
 
-func (s *Server) sameOrigin(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if s.PublicURL != "" && !(s.Desktop != nil && strings.HasPrefix(r.URL.Path, "/api/")) {
-		return origin == s.PublicURL
-	}
-	if origin == "" {
-		return false
-	}
-	u, e := url.Parse(origin)
-	if e != nil {
-		return false
-	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	return u.Host == r.Host && u.Scheme == scheme
-}
 func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	path := strings.TrimPrefix(r.URL.Path, "/api/")
@@ -101,17 +82,6 @@ func (s *Server) management(w http.ResponseWriter, r *http.Request) {
 	default:
 		problem(w, 404, "management endpoint not found")
 	}
-}
-
-func (s *Server) requestOrigin(r *http.Request) string {
-	if s.PublicURL != "" {
-		return s.PublicURL
-	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	return scheme + "://" + r.Host
 }
 
 // statusAPI reports service, routing health and listener state.

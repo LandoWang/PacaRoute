@@ -41,3 +41,19 @@ func (c *Config) Resolve(client *Client, agent AgentProtocol, model, explicit st
 	}
 	return explicit, model, nil
 }
+
+// Project only peer grants onto the wire protocol requested by a downstream router.
+// Direct Agent grants remain independent, including their sticky-session scope.
+func (c *Config) peerClient(client *Client, agent AgentProtocol) *Client {
+	copy := *client
+	copy.LegacyDirect = false
+	copy.EnabledAgents = []GrantKind{agent.Grant()}
+	copy.Routes = nil
+	for _, route := range client.Routes {
+		if route.Agent == GrantPeer && c.validateTarget(route.SourceID, route.Model, agent.Grant()) == nil {
+			route.Agent = agent.Grant()
+			copy.Routes = append(copy.Routes, route)
+		}
+	}
+	return &copy
+}
