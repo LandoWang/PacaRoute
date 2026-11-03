@@ -117,7 +117,7 @@ func (s *Server) openExchange(w http.ResponseWriter, r *http.Request, peer bool)
 	agent, explicit, operation := parseGatewayPath(r.URL.Path)
 	grant := agent
 	if peer {
-		grant = "pacaroute"
+		grant = peerGrant
 	}
 	if !client.AgentEnabled(grant) {
 		problem(w, 404, "endpoint not found")

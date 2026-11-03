@@ -180,8 +180,15 @@ func (c *Config) Proxy(id string) (Proxy, bool) {
 	return Proxy{}, false
 }
 func (c *Config) SourceProxy(id string) Proxy { p, _ := c.Proxy(c.Proxies.Bindings[id]); return p }
-func agentValid(a string) bool                { return a == "codex" || a == "claude-code" }
-func clientAgentValid(a string) bool          { return agentValid(a) || a == "pacaroute" }
+
+// peerGrant shares Client grant and route fields with the Agent protocols
+// ("codex", "claude-code") but is an access grant for the /pacaroute
+// namespace, not a wire protocol. Source and account kinds that happen to use
+// the same "pacaroute" spelling are a separate concept.
+const peerGrant = "pacaroute"
+
+func agentValid(a string) bool       { return a == "codex" || a == "claude-code" }
+func clientAgentValid(a string) bool { return agentValid(a) || a == peerGrant }
 func (c *Config) Client(id string) (*Client, bool) {
 	for _, v := range c.Clients {
 		if v.ID == id {

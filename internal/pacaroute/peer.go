@@ -35,7 +35,7 @@ func (s *Server) peerCatalog(w http.ResponseWriter, r *http.Request) {
 		problem(w, 401, "valid Client API key required")
 		return
 	}
-	if !client.AgentEnabled("pacaroute") {
+	if !client.AgentEnabled(peerGrant) {
 		problem(w, 404, "endpoint not found")
 		return
 	}
@@ -77,7 +77,7 @@ func (c *Config) peerClient(client *Client, agent string) *Client {
 	copy.EnabledAgents = []string{agent}
 	copy.Routes = nil
 	for _, route := range client.Routes {
-		if route.Agent == "pacaroute" && c.validateTarget(route.SourceID, route.Model, agent) == nil {
+		if route.Agent == peerGrant && c.validateTarget(route.SourceID, route.Model, agent) == nil {
 			route.Agent = agent
 			copy.Routes = append(copy.Routes, route)
 		}

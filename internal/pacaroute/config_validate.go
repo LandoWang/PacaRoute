@@ -252,7 +252,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 func (c *Config) validateTarget(id, model, agent string) error {
-	if agent == "pacaroute" {
+	if agent == peerGrant {
 		for _, protocol := range []string{"codex", "claude-code"} {
 			if c.validateTarget(id, model, protocol) == nil {
 				return nil
