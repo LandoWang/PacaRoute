@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../../api/transport";
 import { type Client, type Agent } from "../../api/types";
-import { useApp } from "../../app/state";
+import { useApp, useDraftBase } from "../../app/state";
 import { Identity } from "../../components/identity";
 import { Editor, Field } from "../../components/ui";
 import { generatedID, suggestedName } from "../../domain/config";
@@ -16,7 +16,8 @@ export function ClientEditor({
   onClose: () => void;
   onKey: (key: string, id: string) => void;
 }) {
-  const { config, save } = useApp();
+  const { save } = useApp(),
+    config = useDraftBase();
   const [v, set] = useState<Client>(
     original
       ? structuredClone(original)

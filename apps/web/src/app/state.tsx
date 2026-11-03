@@ -20,6 +20,13 @@ export type AppState = {
 };
 export const StateContext = createContext<AppState>(null!);
 export const useApp = () => useContext(StateContext);
+// The configuration an open editor started from. A draft saved on top of it
+// keeps that revision, so after a conflict a retried save is rejected again
+// instead of overwriting the newer configuration.
+export function useDraftBase(): Config {
+  const { config } = useApp();
+  return useState(config)[0];
+}
 export function useLoad<T>(path: string, interval = 0) {
   const [data, setData] = useState<T>(),
     [error, setError] = useState(""),

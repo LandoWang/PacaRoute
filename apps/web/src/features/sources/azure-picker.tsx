@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { api } from "../../api/transport";
 import { type Account } from "../../api/types";
-import { useApp, useLoad } from "../../app/state";
+import { useApp, useLoad, useDraftBase } from "../../app/state";
 import { Loading } from "../../components/feedback";
 import { Button, Editor, Field, Input, Select } from "../../components/ui";
 import { generatedID, suggestedName } from "../../domain/config";
@@ -13,7 +13,8 @@ export function AzurePicker({
   account: Account;
   onClose: () => void;
 }) {
-  const { config, save, show, close } = useApp();
+  const { save, show, close } = useApp(),
+    config = useDraftBase();
   const subs = useLoad<{
     subscriptions: { id: string; name: string; is_default?: boolean }[];
   }>(`accounts/${account.id}/subscriptions`);
