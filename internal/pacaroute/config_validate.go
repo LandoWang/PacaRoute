@@ -8,7 +8,29 @@ import (
 	"strings"
 )
 
+// Validate normalizes empty collections and then checks the whole graph in a
+// fixed order. Entity validators also apply their per-record defaults.
 func (c *Config) Validate() error {
+	c.normalize()
+	for _, validate := range []func() error{c.validateAccounts, c.validateSources, c.validateProxies, c.validatePools, c.validateClients} {
+		if err := validate(); err != nil {
+			return err
+		}
+	}
+	for _, id := range c.SourceState.Paused {
+		if _, ok := c.Source(id); !ok {
+			return errors.New("paused source does not exist")
+		}
+	}
+	if len(c.Sources) > 512 || len(c.Accounts) > 512 || len(c.Pools) > 128 || len(c.Clients) > 4096 {
+		return errors.New("configuration limits exceeded")
+	}
+	return nil
+}
+
+// normalize replaces absent collections with empty ones so the stored and
+// published document always carries arrays and maps, never null.
+func (c *Config) normalize() {
 	if c.Accounts == nil {
 		c.Accounts = []Account{}
 	}
@@ -30,7 +52,10 @@ func (c *Config) Validate() error {
 	if c.SourceState.Paused == nil {
 		c.SourceState.Paused = []string{}
 	}
+}
 
+// validateAccounts checks accounts: unique valid IDs, supported kinds and login methods.
+func (c *Config) validateAccounts() error {
 	seen := map[string]bool{}
 	for _, a := range c.Accounts {
 		if !validID(a.ID) || seen[a.ID] || strings.TrimSpace(a.Name) == "" || (a.Kind != AccountGitHub && a.Kind != AccountAzure && !accountUsesAPIKey(a.Kind)) {
@@ -47,7 +72,12 @@ func (c *Config) Validate() error {
 		}
 		seen[a.ID] = true
 	}
-	seen = map[string]bool{}
+	return nil
+}
+
+// validateSources checks sources: account compatibility, endpoints, models and per-model prices.
+func (c *Config) validateSources() error {
+	seen := map[string]bool{}
 	for i := range c.Sources {
 		s := &c.Sources[i]
 		if len(s.Prices) > 512 {
@@ -134,7 +164,12 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
-	seen = map[string]bool{"system": true, "direct": true}
+	return nil
+}
+
+// validateProxies checks proxy profiles, source bindings and the account-login proxy.
+func (c *Config) validateProxies() error {
+	seen := map[string]bool{"system": true, "direct": true}
 	for _, p := range c.Proxies.Profiles {
 		if !validID(p.ID) || seen[p.ID] || p.Name == "" {
 			return errors.New("invalid proxy")
@@ -157,7 +192,12 @@ func (c *Config) Validate() error {
 	if _, ok := c.Proxy(c.Proxies.AccountProxyID); !ok {
 		return errors.New("unknown account proxy")
 	}
-	seen = map[string]bool{}
+	return nil
+}
+
+// validatePools checks pools: members, weights and exposed models.
+func (c *Config) validatePools() error {
+	seen := map[string]bool{}
 	for _, p := range c.Pools {
 		if !validID(p.ID) || seen[p.ID] || p.Name == "" || !agentValid(p.Agent) || !modelIdentifier.MatchString(p.Model) || len(p.Members) == 0 || len(p.Members) > 32 {
 			return errors.New("invalid source pool")
@@ -195,7 +235,12 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
-	seen = map[string]bool{}
+	return nil
+}
+
+// validateClients checks Clients: grants, keys, quota policy and route targets.
+func (c *Config) validateClients() error {
+	seen := map[string]bool{}
 	for i := range c.Clients {
 		v := &c.Clients[i]
 		if err := v.Quota.validate(); err != nil {
@@ -240,14 +285,6 @@ func (c *Config) Validate() error {
 				return e
 			}
 		}
-	}
-	for _, id := range c.SourceState.Paused {
-		if _, ok := c.Source(id); !ok {
-			return errors.New("paused source does not exist")
-		}
-	}
-	if len(c.Sources) > 512 || len(c.Accounts) > 512 || len(c.Pools) > 128 || len(c.Clients) > 4096 {
-		return errors.New("configuration limits exceeded")
 	}
 	return nil
 }

@@ -124,7 +124,7 @@ func planConfigImport(current *Config, b ConfigBundle, mode, namespace string) (
 	materializeLegacyIdentities(&in)
 	p := &ConfigImportPlan{Mode: mode, Revision: current.Revision, Namespace: namespace, Added: configCounts(&in), Changes: []ImportChange{}, Issues: []ImportIssue{}}
 	base := Config{}
-	_ = base.Validate()
+	base.normalize()
 	if mode == "add" {
 		base = cloneConfig(current)
 	} else {
