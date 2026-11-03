@@ -90,17 +90,9 @@ func defaultRoot() string {
 	}
 	return filepath.Join(home, ".local", "share", "pacaroute")
 }
-func Run(args []string, in io.Reader, out, stderr io.Writer) int {
-	if len(args) == 0 && desktopEnabled {
-		args = []string{"desktop"}
-	}
-	a, e := parseArgs(args)
-	if e != nil {
-		fmt.Fprintln(stderr, e)
-		return 2
-	}
-	if len(a.words) == 0 || a.words[0] == "help" {
-		fmt.Fprint(out, `PacaRoute — Go agent request gateway
+
+// usageText is printed for `help` or when no command is given.
+const usageText = `PacaRoute — Go agent request gateway
 
 pacaroute serve [--bind 127.0.0.1] [--port 8766] [--allow-local]
                 [--admin-port 8767] [--no-serve]  Separate local management listener
@@ -132,7 +124,19 @@ pacaroute usage|errors
 Global: --home PATH (metadata), --credential-root PATH (existing credential authority)
 Web management uses <home>/admin.key. Network clients always use their own keys.
 --allow-local permits unauthenticated loopback Agent requests only.
-`)
+`
+
+func Run(args []string, in io.Reader, out, stderr io.Writer) int {
+	if len(args) == 0 && desktopEnabled {
+		args = []string{"desktop"}
+	}
+	a, e := parseArgs(args)
+	if e != nil {
+		fmt.Fprintln(stderr, e)
+		return 2
+	}
+	if len(a.words) == 0 || a.words[0] == "help" {
+		fmt.Fprint(out, usageText)
 		return 0
 	}
 	if a.words[0] == "version" {

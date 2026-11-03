@@ -96,7 +96,7 @@ func serve(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, port in
 	if e != nil {
 		return fail(fmt.Errorf("listen failed: %w", e))
 	}
-	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 64 << 10}
+	httpServer := newHTTPServer(server.Handler())
 	done := make(chan error, 1)
 	go func() { done <- httpServer.Serve(listener) }()
 	emit(map[string]any{"ok": true, "event": "ready", "name": "PacaRoute", "version": Version, "address": listener.Addr().String()})
