@@ -24,7 +24,7 @@ func TestUnlimitedAdmissionDoesNotScanHistory(t *testing.T) {
 	}
 	now := time.Now().UTC()
 	const rows = 100000
-	if _, err = q.db.Exec(`WITH RECURSIVE seq(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM seq WHERE n<?)
+	if _, err = store.db.Exec(`WITH RECURSIVE seq(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM seq WHERE n<?)
 		INSERT INTO quota_requests(request_id,client_id,agent,started_ms,finished_ms,state,input_tokens,output_tokens,cost_microusd)
 		SELECT 'seed-'||n,'history','codex',? - 3600000 + n*3500000/?,?,'settled',1000,100,200 FROM seq`, rows, now.UnixMilli(), rows, now.UnixMilli()); err != nil {
 		t.Fatal(err)
