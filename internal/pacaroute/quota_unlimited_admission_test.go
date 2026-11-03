@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/quota"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -18,7 +20,7 @@ func TestUnlimitedAdmissionDoesNotScanHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { store.Close() })
-	q, err := newQuotaStore(store.db)
+	q, err := quota.NewQuotaStore(store.db)
 	if err != nil {
 		t.Fatal(err)
 	}

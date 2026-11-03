@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/quota"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
 )
 
@@ -21,7 +23,7 @@ type Server struct {
 	Catalog         *catalog
 	Router          *Router
 	Activity        *usage.ActivityStore
-	Quotas          *QuotaStore
+	Quotas          *quota.QuotaStore
 	AllowLocal      bool
 	LocalManagement bool
 	Port            int
@@ -56,7 +58,7 @@ func NewServer(store *ConfigStore, auth *Auth) (*Server, error) {
 	if len(key) < 32 {
 		return nil, errors.New("invalid management key")
 	}
-	quotas, e := newQuotaStore(store.db)
+	quotas, e := quota.NewQuotaStore(store.db)
 	if e != nil {
 		return nil, e
 	}

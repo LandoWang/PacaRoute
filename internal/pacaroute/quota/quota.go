@@ -1,4 +1,4 @@
-package pacaroute
+package quota
 
 import (
 	"database/sql"
@@ -25,7 +25,7 @@ type QuotaState struct {
 	Limits        *domain.ClientQuota `json:"limits"`
 }
 
-func newQuotaStore(db *sql.DB) (*QuotaStore, error) {
+func NewQuotaStore(db *sql.DB) (*QuotaStore, error) {
 	_, e := db.Exec(`CREATE TABLE IF NOT EXISTS quota_requests (
  request_id TEXT PRIMARY KEY, client_id TEXT NOT NULL, agent TEXT NOT NULL,
  started_ms INTEGER NOT NULL, finished_ms INTEGER, state TEXT NOT NULL,

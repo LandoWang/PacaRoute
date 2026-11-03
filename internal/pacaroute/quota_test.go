@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/quota"
+
 	"github.com/LandoWang/pacaroute/internal/pacaroute/usage"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -45,7 +47,7 @@ func TestPricingConfirmedUsageAndSnapshots(t *testing.T) {
 }
 func TestQuotaConcurrentAdmissionRestartAndIdempotentSettlement(t *testing.T) {
 	store := storeForTest(t)
-	q, e := newQuotaStore(store.db)
+	q, e := quota.NewQuotaStore(store.db)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -92,7 +94,7 @@ func TestQuotaConcurrentAdmissionRestartAndIdempotentSettlement(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer reopened.Close()
-	q, e = newQuotaStore(reopened.db)
+	q, e = quota.NewQuotaStore(reopened.db)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -130,7 +132,7 @@ func TestGatewayClientQuotaUsesActualTargetAndConfirmedTotals(t *testing.T) {
 	if count.Load() != 1 {
 		t.Fatal("quota reached upstream")
 	}
-	q, e := newQuotaStore(store.db)
+	q, e := quota.NewQuotaStore(store.db)
 	if e != nil {
 		t.Fatal(e)
 	}
