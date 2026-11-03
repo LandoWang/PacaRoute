@@ -91,11 +91,7 @@ func TestMultiModelPoolThrottleWeightsAndStickyScope(t *testing.T) {
 	if !r.Health(&c).Cooldowns[0].Until.Equal(until) {
 		t.Fatal("parallel throttle shortened recovery time")
 	}
-	r.mu.Lock()
-	entry := r.cooldown["a:gpt-6-astra"]
-	entry.Until = time.Now().Add(-time.Second)
-	r.cooldown["a:gpt-6-astra"] = entry
-	r.mu.Unlock()
+	r.ExpireCooldown("a", "gpt-6-astra")
 	restored := distribution(10000)
 	if restored["a"] != before["a"] || restored["b"] != before["b"] {
 		t.Fatal("expired throttle did not restore original allocation")

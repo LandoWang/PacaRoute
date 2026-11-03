@@ -106,7 +106,8 @@ func TestConfigurationCrashTransactionRollsForward(t *testing.T) {
 // its member across weight edits and process restarts. Client identity is part of stickiness.
 func TestWeightedSessionsStickyRestartAndClientIsolation(t *testing.T) {
 	c := fixtureConfig()
-	r, e := NewRouter(t.TempDir())
+	root := t.TempDir()
+	r, e := NewRouter(root)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -132,7 +133,7 @@ func TestWeightedSessionsStickyRestartAndClientIsolation(t *testing.T) {
 			c.Pools[0].Members[i].Weight = 100
 		}
 	}
-	r2, e := NewRouter(filepath.Dir(r.path))
+	r2, e := NewRouter(root)
 	if e != nil {
 		t.Fatal(e)
 	}

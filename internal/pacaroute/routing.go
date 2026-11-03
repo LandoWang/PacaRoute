@@ -145,7 +145,7 @@ func affinityHash(s string) string { h := sha256.Sum256([]byte(s)); return hex.E
 
 func (t Target) upstreamProtocol(agent ...domain.AgentProtocol) string {
 	if t.Source.Kind == domain.SourcePeer && len(agent) > 0 {
-		return incomingProtocol(agent[0])
+		return domain.IncomingProtocol(agent[0])
 	}
 	if t.Source.Kind == domain.SourceAnthropic || t.Source.Kind == domain.SourceCopilot && strings.HasPrefix(t.Model, "claude-") {
 		return "messages"

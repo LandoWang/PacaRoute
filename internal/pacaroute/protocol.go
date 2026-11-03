@@ -14,13 +14,6 @@ type object = map[string]json.RawMessage
 func obj(b json.RawMessage) object     { v := object{}; _ = json.Unmarshal(b, &v); return v }
 func array(b json.RawMessage) []object { var v []object; _ = json.Unmarshal(b, &v); return v }
 
-func incomingProtocol(agent domain.AgentProtocol) string {
-	if agent == domain.AgentClaudeCode {
-		return "messages"
-	}
-	return "responses"
-}
-
 // Native paths preserve opaque request and response fields. Only probed Copilot constraints are changed.
 // prepare builds the upstream body for a source kind, actual model and chosen
 // upstream protocol. Native paths keep unknown fields; a protocol mismatch
@@ -35,8 +28,8 @@ func prepare(body object, kind domain.SourceKind, model string, agent domain.Age
 	wire["model"] = jsonBytes(model)
 	var tr *translation
 	var e error
-	if incomingProtocol(agent) != upstream {
-		tr = &translation{from: incomingProtocol(agent), to: upstream, model: rawString(body["model"]), toolNames: map[string]toolIdentity{}}
+	if domain.IncomingProtocol(agent) != upstream {
+		tr = &translation{from: domain.IncomingProtocol(agent), to: upstream, model: rawString(body["model"]), toolNames: map[string]toolIdentity{}}
 		if tr.to == "responses" {
 			wire, e = messagesToResponses(wire, tr)
 		} else {

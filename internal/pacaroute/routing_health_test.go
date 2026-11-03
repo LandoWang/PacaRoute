@@ -38,11 +38,7 @@ func TestRoutingHealthMatchesAdmissionAndExpiry(t *testing.T) {
 	if s.Router.Health(&c).Cooldowns[0].Error == "changed by reader" {
 		t.Fatal("mutable snapshot leaked into Router")
 	}
-	s.Router.mu.Lock()
-	entry := s.Router.cooldown["test:deployed"]
-	entry.Until = time.Now().Add(-time.Second)
-	s.Router.cooldown["test:deployed"] = entry
-	s.Router.mu.Unlock()
+	s.Router.ExpireCooldown("test", "deployed")
 	if next := s.Router.Health(&c); len(next.Cooldowns) != 0 || next.Pools[0].Available != 1 {
 		t.Fatal("expired cooldown still blocks admission", next)
 	}

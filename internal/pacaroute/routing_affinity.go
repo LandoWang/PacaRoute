@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 )
 
 const (
@@ -156,7 +158,7 @@ func (r *Router) compact(now time.Time) error {
 			return e
 		}
 	}
-	if e := atomicWrite(r.path, b.Bytes(), 0600); e != nil {
+	if e := atomicfile.Write(r.path, b.Bytes(), 0600); e != nil {
 		return e
 	}
 	r.bindings = map[string]binding{}

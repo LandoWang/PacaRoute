@@ -168,3 +168,13 @@ func cooldownDetail(s string) string {
 	}
 	return s
 }
+
+// ExpireCooldown ends one source/model cooldown now, as if its retry deadline
+// had already passed. Tests use it to observe recovery without waiting.
+func (r *Router) ExpireCooldown(sourceID, model string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry := r.cooldown[sourceID+":"+model]
+	entry.Until = time.Now().Add(-time.Second)
+	r.cooldown[sourceID+":"+model] = entry
+}

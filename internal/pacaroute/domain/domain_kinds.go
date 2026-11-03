@@ -77,3 +77,11 @@ func (s Source) SupportsAgentModel(agent AgentProtocol, model string) bool {
 	}
 	return false
 }
+
+// IncomingProtocol is the wire protocol an Agent speaks downstream.
+func IncomingProtocol(agent AgentProtocol) string {
+	if agent == AgentClaudeCode {
+		return "messages"
+	}
+	return "responses"
+}
