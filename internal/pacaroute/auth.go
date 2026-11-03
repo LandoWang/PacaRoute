@@ -30,7 +30,7 @@ type Auth struct {
 	vault                    vault
 	http                     transports
 	mu                       sync.Mutex
-	leaseGates               [64]sync.Mutex
+	leaseGates               [64]chan struct{}
 	keyEpoch                 uint64
 	leases                   map[string]cachedLease
 	keys                     map[string]string
@@ -41,7 +41,11 @@ func NewAuth(s *ConfigStore, credentialRoot string) *Auth {
 	if credentialRoot == "" {
 		credentialRoot = s.Root
 	}
-	return &Auth{store: s, vault: vault{root: credentialRoot}, leases: map[string]cachedLease{}, keys: map[string]string{}, session: newID(), machine: newID(), device: newID()}
+	a := &Auth{store: s, vault: vault{root: credentialRoot}, leases: map[string]cachedLease{}, keys: map[string]string{}, session: newID(), machine: newID(), device: newID()}
+	for i := range a.leaseGates {
+		a.leaseGates[i] = make(chan struct{}, 1)
+	}
+	return a
 }
 func statStamp(path string) string {
 	f, e := os.Stat(path)
@@ -59,9 +63,15 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 	for _, ch := range key {
 		bucket = bucket*31 + uint32(ch)
 	}
-	gate := &a.leaseGates[bucket%uint32(len(a.leaseGates))]
-	gate.Lock()
-	defer gate.Unlock()
+	// A waiter whose request is cancelled must not stay queued behind another
+	// request's slow exchange or refresh.
+	gate := a.leaseGates[bucket%uint32(len(a.leaseGates))]
+	select {
+	case gate <- struct{}{}:
+	case <-ctx.Done():
+		return lease{}, ctx.Err()
+	}
+	defer func() { <-gate }()
 	stamp := ""
 	if s.Kind == SourceCopilot {
 		stamp = statStamp(a.vault.githubPath(s.AccountID))

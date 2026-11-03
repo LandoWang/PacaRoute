@@ -26,10 +26,21 @@ func (s *Server) authenticate(r *http.Request, c *Config) (*Client, bool) {
 	// AgentLink's auth provider-token emits a public discovery sentinel, not an
 	// account credential. Existing Codex sessions retain that helper after migration.
 	localKey := key == "" || key == "dummy" || key == "pacaroute-local" || key == "copilot-bridge-provider"
-	if s.AllowLocal && s.PublicURL == "" && loopbackRequest(r) && r.Header.Get("Forwarded") == "" && r.Header.Get("X-Forwarded-For") == "" && r.Header.Get("X-Forwarded-Host") == "" && localKey {
+	if s.AllowLocal && s.PublicURL == "" && loopbackRequest(r) && !forwardedRequest(r) && localKey {
 		if local, exists := c.Client("default"); exists && local.Local && !local.Disabled {
 			return local, true
 		}
 	}
 	return nil, false
+}
+
+// Any forwarding field marks a proxied request, even when empty or repeated:
+// a proxy may append its own field after an empty caller-supplied one.
+func forwardedRequest(r *http.Request) bool {
+	for _, name := range []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host"} {
+		if _, ok := r.Header[name]; ok {
+			return true
+		}
+	}
+	return false
 }

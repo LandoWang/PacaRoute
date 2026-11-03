@@ -131,6 +131,7 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 	blocks := map[int]object{}
 	buffers := map[int]*strings.Builder{}
 	itemIndices := map[int]int{}
+	truncated := false
 	started := false
 	reason := "end_turn"
 	send := func(typ string, v map[string]any) error {
@@ -245,7 +246,15 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 					args = string(blocks[n]["input"])
 				}
 				if !json.Valid([]byte(args)) {
-					return errors.New("invalid streamed tool arguments")
+					// A tool_use cut off by max_tokens carries partial input. Codex
+					// executes a call on output_item.done, so never complete it; the
+					// stop reason decides between response.incomplete and an error.
+					item["status"] = "incomplete"
+					if item["type"] != "custom_tool_call" {
+						item["arguments"] = args
+					}
+					truncated = true
+					continue
 				}
 				if item["type"] == "custom_tool_call" {
 					input := rawString(obj([]byte(args))["input"])
@@ -265,7 +274,13 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 			e = send("response.output_item.done", map[string]any{"output_index": i, "item": item})
 		case "message_delta":
 			reason = rawString(obj(m["delta"])["stop_reason"])
+			if truncated && reason != "max_tokens" {
+				return errors.New("invalid streamed tool arguments")
+			}
 		case "message_stop":
+			if truncated && reason != "max_tokens" {
+				return errors.New("invalid streamed tool arguments")
+			}
 			status := "completed"
 			if reason == "max_tokens" {
 				status = "incomplete"
