@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "../../api/transport";
 import { type Config, type Model, type ModelCatalog } from "../../api/types";
 import { Button, Input, Select } from "../../components/ui";
-import { sources } from "../../domain/config";
+import { sources, targetPool } from "../../domain/config";
 import { poolModels } from "../../domain/routing";
 export function ModelInput({
   config,
@@ -18,7 +18,7 @@ export function ModelInput({
   onChange: (v: string) => void;
   id: string;
 }) {
-  const pool = config.pools.find((p) => "pool:" + p.id === source);
+  const pool = targetPool(config, source);
   const [models, setModels] = useState<Model[]>([]),
     [loading, setLoading] = useState(false),
     [error, setError] = useState("");

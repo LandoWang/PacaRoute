@@ -8,7 +8,7 @@ import {
 } from "../../api/types";
 import { useLoad } from "../../app/state";
 import { Button, Input, Select, Field, ErrorNote } from "../../components/ui";
-import { sources } from "../../domain/config";
+import { sources, targetPool } from "../../domain/config";
 import { agentNames, poolModels } from "../../domain/routing";
 export function ModelMultiSelect({
   config,
@@ -33,7 +33,7 @@ export function ModelMultiSelect({
   const [query, setQuery] = useState(""),
     [manual, setManual] = useState("");
   const resource = sources(config).find((s) => s.id === source);
-  const pool = config.pools.find((p) => "pool:" + p.id === source);
+  const pool = targetPool(config, source);
   const all = new Map((catalog.data?.models || []).map((m) => [m.id, m]));
   for (const id of [
     ...(resource?.deployments || []),

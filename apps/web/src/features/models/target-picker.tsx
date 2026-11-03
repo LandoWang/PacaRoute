@@ -1,7 +1,7 @@
 import { type Config, type Grant } from "../../api/types";
 import { isProtocolAgent } from "../../domain/routing";
 import { Select } from "../../components/ui";
-import { sources } from "../../domain/config";
+import { sources, poolTarget } from "../../domain/config";
 export function TargetPicker({
   config,
   agent,
@@ -36,7 +36,7 @@ export function TargetPicker({
                 (p) => !agent || !isProtocolAgent(agent) || p.agent === agent,
               )
               .map((p) => (
-                <option key={p.id} value={"pool:" + p.id}>
+                <option key={p.id} value={poolTarget(p.id)}>
                   {p.name}
                 </option>
               ))}

@@ -1,9 +1,14 @@
 import { type Config } from "../api/types";
+// Routes and pool members address a pool as "pool:<id>" in source_id.
+export const poolTarget = (id: string) => "pool:" + id;
+export const isPoolTarget = (target: string) => target.startsWith("pool:");
+export const targetPool = (c: Config, target: string) =>
+  c.pools.find((p) => poolTarget(p.id) === target);
 export const accounts = (c: Config) => c.accounts;
 export const sources = (c: Config) => c.sources;
 export const sourceName = (c: Config, id: string) =>
-  id.startsWith("pool:")
-    ? c.pools.find((p) => "pool:" + p.id === id)?.name || id
+  isPoolTarget(id)
+    ? targetPool(c, id)?.name || id
     : sources(c).find((s) => s.id === id)?.name || id;
 export const generatedID = (prefix: string) =>
   `${prefix}-${crypto.randomUUID().slice(0, 8)}`;

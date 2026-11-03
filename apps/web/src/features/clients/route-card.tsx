@@ -4,7 +4,7 @@ import { type Client, type Grant } from "../../api/types";
 import { useEntityDraft } from "../../app/entity-draft";
 import { useApp } from "../../app/state";
 import { Button, Panel, Field, Select, ErrorNote } from "../../components/ui";
-import { sourceName, sources } from "../../domain/config";
+import { sourceName, sources, targetPool } from "../../domain/config";
 import { agentNames } from "../../domain/routing";
 import { ModelInput } from "../models/model-input";
 import { ModelMultiSelect } from "../models/model-multiselect";
@@ -40,7 +40,7 @@ export function RouteCard({ client, agent }: { client: Client; agent: Grant }) {
     setSelection = draft.set,
     conflict = draft.conflict;
   const complex = initial === null;
-  const pool = config.pools.find((p) => "pool:" + p.id === selection.source);
+  const pool = targetPool(config, selection.source);
   function selectModels(models: string[]) {
     setSelection((v) => ({
       ...v,
@@ -123,14 +123,12 @@ export function RouteCard({ client, agent }: { client: Client; agent: Grant }) {
                   agent={agent}
                   value={selection.source}
                   onChange={(source) => {
-                    const targetPool = config.pools.find(
-                      (p) => "pool:" + p.id === source,
-                    );
+                    const picked = targetPool(config, source);
                     setSelection({
                       source,
-                      models: targetPool ? [targetPool.model] : [],
-                      defaultModel: targetPool?.model || "",
-                      fixed: !!targetPool && !targetPool.multi_model,
+                      models: picked ? [picked.model] : [],
+                      defaultModel: picked?.model || "",
+                      fixed: !!picked && !picked.multi_model,
                     });
                   }}
                 />

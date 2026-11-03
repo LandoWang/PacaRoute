@@ -7,14 +7,14 @@ import {
   type Client,
   type Config,
 } from "../api/types";
-import { sources } from "./config";
+import { sources, targetPool } from "./config";
 export const memberModel = (p: Pool, m: Member) =>
   p.multi_model ? m.alias || m.model : p.model;
 export const poolModels = (p: Pool) => [
   ...new Set(p.members.map((m) => memberModel(p, m))),
 ];
 export function routeTarget(route: Route, target: string, c: Config): Route {
-  const pool = c.pools.find((p) => "pool:" + p.id === target);
+  const pool = targetPool(c, target);
   return {
     ...route,
     source_id: target,
@@ -25,7 +25,7 @@ export function routeTarget(route: Route, target: string, c: Config): Route {
   };
 }
 export function routeAgent(route: Route, agent: Grant, c: Config): Route {
-  const pool = c.pools.find((p) => "pool:" + p.id === route.source_id);
+  const pool = targetPool(c, route.source_id);
   return pool && isProtocolAgent(agent) && pool.agent !== agent
     ? { ...route, agent, source_id: sources(c)[0]?.id || "", model: "" }
     : { ...route, agent };
