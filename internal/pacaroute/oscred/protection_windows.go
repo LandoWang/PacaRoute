@@ -1,17 +1,18 @@
 //go:build windows
 
-package pacaroute
+package oscred
 
 import (
 	"bytes"
 	"errors"
-	"golang.org/x/sys/windows"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var dpapiPrefix = []byte("PacaRoute-DPAPI-v1\x00")
 
-func platformSeal(b []byte) ([]byte, bool, error) {
+func Seal(b []byte) ([]byte, bool, error) {
 	if len(b) == 0 {
 		return nil, true, errors.New("empty credential")
 	}
@@ -23,7 +24,7 @@ func platformSeal(b []byte) ([]byte, bool, error) {
 	defer windows.LocalFree(windows.Handle(unsafe.Pointer(out.Data)))
 	return append(bytes.Clone(dpapiPrefix), unsafe.Slice(out.Data, out.Size)...), true, nil
 }
-func platformOpen(b []byte) ([]byte, bool, error) {
+func Open(b []byte) ([]byte, bool, error) {
 	if !bytes.HasPrefix(b, dpapiPrefix) {
 		return nil, false, nil
 	}
