@@ -3,7 +3,7 @@ import { type Proxy } from "../../api/types";
 import { type Common } from "../../app/editor-props";
 import { Identity } from "../../components/identity";
 import { Input, Select, Field, Editor } from "../../components/ui";
-import { generatedID, suggestedName } from "../../domain/config";
+import { generatedID, suggestedName, upsertByID } from "../../domain/config";
 export function ProxyEditor({
   config,
   save,
@@ -29,10 +29,7 @@ export function ProxyEditor({
           ...config,
           proxies: {
             ...config.proxies,
-            profiles: [
-              ...config.proxies.profiles.filter((p) => p.id !== v.id),
-              v,
-            ],
+            profiles: upsertByID(config.proxies.profiles, v, original?.id),
           },
         });
         close();

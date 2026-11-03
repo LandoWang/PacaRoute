@@ -17,3 +17,17 @@ export function suggestedName(
   while (names.has(`${label} ${suffix}`)) suffix++;
   return `${label} ${suffix}`;
 }
+// Adds `value`, or replaces the item being edited (`originalID`). A new item
+// never replaces an existing one that happens to share its ID.
+export function upsertByID<T extends { id: string }>(
+  items: T[],
+  value: T,
+  originalID?: string,
+): T[] {
+  if (originalID === undefined && items.some((item) => item.id === value.id))
+    throw Error("内部 ID 已被使用，请在高级设置中修改");
+  return [
+    ...items.filter((item) => item.id !== (originalID ?? value.id)),
+    value,
+  ];
+}

@@ -25,6 +25,7 @@ import {
   suggestedName,
   accounts,
   sources,
+  upsertByID,
 } from "../../domain/config";
 export function SourceEditor({
   config,
@@ -131,10 +132,7 @@ export function SourceEditor({
         const value = { ...v, deployments: selected };
         await save({
           ...config,
-          sources: [
-            ...config.sources.filter((s) => s.id !== original?.id),
-            value,
-          ],
+          sources: upsertByID(config.sources, value, original?.id),
           proxies: {
             ...config.proxies,
             bindings: { ...config.proxies.bindings, [v.id]: proxy },

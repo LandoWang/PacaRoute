@@ -11,7 +11,12 @@ import {
   Editor,
   Badge,
 } from "../../components/ui";
-import { generatedID, suggestedName, sources } from "../../domain/config";
+import {
+  generatedID,
+  suggestedName,
+  sources,
+  upsertByID,
+} from "../../domain/config";
 import { share, poolModels, memberModel } from "../../domain/routing";
 import { ModelInput } from "../models/model-input";
 import { TargetPicker } from "../models/target-picker";
@@ -49,8 +54,8 @@ export function PoolEditor({
       onSave={async () => {
         await save({
           ...config,
-          pools: [
-            ...config.pools.filter((p) => p.id !== v.id),
+          pools: upsertByID(
+            config.pools,
             {
               ...v,
               model:
@@ -58,7 +63,8 @@ export function PoolEditor({
                   ? poolModels(v)[0] || ""
                   : v.model,
             },
-          ],
+            original?.id,
+          ),
         });
         close();
       }}
