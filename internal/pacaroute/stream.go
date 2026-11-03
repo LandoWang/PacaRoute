@@ -104,10 +104,10 @@ func (s *sseReader) next() ([]byte, []byte, error) {
 		if e == bufio.ErrBufferFull {
 			line = bytes.Clone(line) // Finish a long line without dropping its prefix.
 			for e == bufio.ErrBufferFull {
-				part, err := s.r.ReadSlice('\n')
-				line = append(bytes.Clone(line), part...)
+				var part []byte
+				part, e = s.r.ReadSlice('\n')
+				line = append(line, part...)
 				frame.Write(part)
-				e = err
 				if len(line) > 8<<20 {
 					return nil, nil, fmt.Errorf("SSE line too large")
 				}

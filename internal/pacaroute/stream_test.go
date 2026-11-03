@@ -1,12 +1,14 @@
 package pacaroute
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -246,5 +248,30 @@ func TestTranslatedStreamErrorsRetainDetails(t *testing.T) {
 				t.Fatal("wrong downstream protocol", text)
 			}
 		})
+	}
+}
+
+// Large terminal frames (for example response.completed carrying the whole
+// response) must be parsed in linear time and memory, not by recopying the
+// accumulated line for every buffered chunk.
+func TestSSEReaderLongLineIsLinear(t *testing.T) {
+	value := bytes.Repeat([]byte("a"), 4<<20)
+	payload := append(append([]byte(`data: {"type":"response.completed","x":"`), value...), []byte("\"}\n\n")...)
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	frame, data, err := newSSE(bytes.NewReader(payload)).next()
+	runtime.ReadMemStats(&after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(frame, payload) {
+		t.Fatal("native frame bytes were not preserved")
+	}
+	if want := payload[len("data: ") : len(payload)-2]; !bytes.Equal(data, want) {
+		t.Fatal("data payload was not reconstructed")
+	}
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 16*uint64(len(payload)) {
+		t.Fatalf("parsing a %d byte frame allocated %d bytes", len(payload), allocated)
 	}
 }
