@@ -1,0 +1,87 @@
+package pacaroute
+
+import "encoding/json"
+
+type Usage struct{ Input, Output, CacheRead, CacheWrite *int64 }
+
+func number(m map[string]json.RawMessage, k string) *int64 {
+	b, ok := m[k]
+	if !ok || string(b) == "null" {
+		return nil
+	}
+	var v int64
+	if json.Unmarshal(b, &v) != nil || v < 0 {
+		return nil
+	}
+	return &v
+}
+func (u *Usage) observe(b []byte) {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(b, &m) != nil {
+		return
+	}
+	for _, k := range []string{"response", "message"} {
+		if v, ok := m[k]; ok {
+			u.observe(v)
+		}
+	}
+	v, ok := m["usage"]
+	if !ok {
+		return
+	}
+	var values map[string]json.RawMessage
+	if json.Unmarshal(v, &values) != nil {
+		return
+	}
+	input := number(values, "input_tokens")
+	if input == nil {
+		input = number(values, "prompt_tokens")
+	}
+	output := number(values, "output_tokens")
+	if output == nil {
+		output = number(values, "completion_tokens")
+	}
+	if input != nil {
+		u.Input = input
+	}
+	if output != nil {
+		u.Output = output
+	}
+	if v := number(values, "cache_read_input_tokens"); v != nil {
+		u.CacheRead = v
+	}
+	if v := number(values, "cache_creation_input_tokens"); v != nil {
+		u.CacheWrite = v
+	}
+	for _, k := range []string{"input_tokens_details", "prompt_tokens_details"} {
+		var d map[string]json.RawMessage
+		_ = json.Unmarshal(values[k], &d)
+		if v := number(d, "cached_tokens"); v != nil {
+			u.CacheRead = v
+		}
+	}
+}
+func (u *Usage) totalInput(messages bool) *int64 {
+	if !messages || u.Input == nil {
+		return u.Input
+	}
+	total := *u.Input
+	if u.CacheRead != nil {
+		total += *u.CacheRead
+	}
+	if u.CacheWrite != nil {
+		total += *u.CacheWrite
+	}
+	return &total
+}
+func (u *Usage) responsesUsage() any {
+	input := u.totalInput(true)
+	if input == nil || u.Output == nil {
+		return nil
+	}
+	value := map[string]any{"input_tokens": *input, "output_tokens": *u.Output, "total_tokens": *input + *u.Output}
+	if u.CacheRead != nil {
+		value["input_tokens_details"] = map[string]any{"cached_tokens": *u.CacheRead}
+	}
+	return value
+}

@@ -2,10 +2,7 @@ package pacaroute
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -28,110 +25,6 @@ type Activity struct {
 	Duration   int64     `json:"duration_ms"`
 	Error      string    `json:"error,omitempty"`
 	Attempts   int       `json:"attempts"`
-}
-type Usage struct{ Input, Output, CacheRead, CacheWrite *int64 }
-
-func number(m map[string]json.RawMessage, k string) *int64 {
-	b, ok := m[k]
-	if !ok || string(b) == "null" {
-		return nil
-	}
-	var v int64
-	if json.Unmarshal(b, &v) != nil || v < 0 {
-		return nil
-	}
-	return &v
-}
-func (u *Usage) observe(b []byte) {
-	var m map[string]json.RawMessage
-	if json.Unmarshal(b, &m) != nil {
-		return
-	}
-	for _, k := range []string{"response", "message"} {
-		if v, ok := m[k]; ok {
-			u.observe(v)
-		}
-	}
-	v, ok := m["usage"]
-	if !ok {
-		return
-	}
-	var values map[string]json.RawMessage
-	if json.Unmarshal(v, &values) != nil {
-		return
-	}
-	input := number(values, "input_tokens")
-	if input == nil {
-		input = number(values, "prompt_tokens")
-	}
-	output := number(values, "output_tokens")
-	if output == nil {
-		output = number(values, "completion_tokens")
-	}
-	if input != nil {
-		u.Input = input
-	}
-	if output != nil {
-		u.Output = output
-	}
-	if v := number(values, "cache_read_input_tokens"); v != nil {
-		u.CacheRead = v
-	}
-	if v := number(values, "cache_creation_input_tokens"); v != nil {
-		u.CacheWrite = v
-	}
-	for _, k := range []string{"input_tokens_details", "prompt_tokens_details"} {
-		var d map[string]json.RawMessage
-		_ = json.Unmarshal(values[k], &d)
-		if v := number(d, "cached_tokens"); v != nil {
-			u.CacheRead = v
-		}
-	}
-}
-
-// Incremental, bounded SSE parser. Unknown frames remain byte-for-byte on the native path.
-type sseReader struct{ r *bufio.Reader }
-
-func newSSE(r io.Reader) *sseReader { return &sseReader{bufio.NewReaderSize(r, 32768)} }
-func (s *sseReader) next() ([]byte, []byte, error) {
-	var frame, data bytes.Buffer
-	for {
-		line, e := s.r.ReadSlice('\n')
-		if frame.Len()+len(line) > 8<<20 {
-			return nil, nil, fmt.Errorf("SSE event exceeds 8 MiB")
-		}
-		frame.Write(line)
-		if e == bufio.ErrBufferFull {
-			line = bytes.Clone(line) // Finish a long line without dropping its prefix.
-			for e == bufio.ErrBufferFull {
-				part, err := s.r.ReadSlice('\n')
-				line = append(bytes.Clone(line), part...)
-				frame.Write(part)
-				e = err
-				if len(line) > 8<<20 {
-					return nil, nil, fmt.Errorf("SSE line too large")
-				}
-			}
-		}
-		trim := bytes.TrimRight(line, "\r\n")
-		if bytes.HasPrefix(trim, []byte("data:")) {
-			v := bytes.TrimPrefix(trim, []byte("data:"))
-			v = bytes.TrimPrefix(v, []byte(" "))
-			if data.Len() > 0 {
-				data.WriteByte('\n')
-			}
-			data.Write(v)
-		}
-		if e != nil {
-			if frame.Len() > 0 {
-				return frame.Bytes(), data.Bytes(), nil
-			}
-			return nil, nil, e
-		}
-		if len(trim) == 0 {
-			return frame.Bytes(), data.Bytes(), nil
-		}
-	}
 }
 
 type Totals struct {
@@ -292,30 +185,4 @@ func (a *ActivityStore) Recent(errorsOnly bool) []Activity {
 		}
 	}
 	return out
-}
-
-func (u *Usage) totalInput(messages bool) *int64 {
-	if !messages || u.Input == nil {
-		return u.Input
-	}
-	total := *u.Input
-	if u.CacheRead != nil {
-		total += *u.CacheRead
-	}
-	if u.CacheWrite != nil {
-		total += *u.CacheWrite
-	}
-	return &total
-}
-
-func (u *Usage) responsesUsage() any {
-	input := u.totalInput(true)
-	if input == nil || u.Output == nil {
-		return nil
-	}
-	value := map[string]any{"input_tokens": *input, "output_tokens": *u.Output, "total_tokens": *input + *u.Output}
-	if u.CacheRead != nil {
-		value["input_tokens_details"] = map[string]any{"cached_tokens": *u.CacheRead}
-	}
-	return value
 }

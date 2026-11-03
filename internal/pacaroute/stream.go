@@ -1,6 +1,8 @@
 package pacaroute
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -84,4 +86,49 @@ func emitStreamError(w io.Writer, agent, message string) error {
 		return emitSSE(w, "response.failed", map[string]any{"type": "response.failed", "response": map[string]any{"status": "failed", "error": map[string]string{"code": "server_error", "message": message}}})
 	}
 	return emitSSE(w, "error", map[string]any{"type": "error", "error": map[string]string{"type": "api_error", "message": message}})
+}
+
+// Incremental, bounded SSE parser. Unknown frames remain byte-for-byte on the native path.
+type sseReader struct{ r *bufio.Reader }
+
+func newSSE(r io.Reader) *sseReader { return &sseReader{bufio.NewReaderSize(r, 32768)} }
+func (s *sseReader) next() ([]byte, []byte, error) {
+	var frame, data bytes.Buffer
+	for {
+		line, e := s.r.ReadSlice('\n')
+		if frame.Len()+len(line) > 8<<20 {
+			return nil, nil, fmt.Errorf("SSE event exceeds 8 MiB")
+		}
+		frame.Write(line)
+		if e == bufio.ErrBufferFull {
+			line = bytes.Clone(line) // Finish a long line without dropping its prefix.
+			for e == bufio.ErrBufferFull {
+				part, err := s.r.ReadSlice('\n')
+				line = append(bytes.Clone(line), part...)
+				frame.Write(part)
+				e = err
+				if len(line) > 8<<20 {
+					return nil, nil, fmt.Errorf("SSE line too large")
+				}
+			}
+		}
+		trim := bytes.TrimRight(line, "\r\n")
+		if bytes.HasPrefix(trim, []byte("data:")) {
+			v := bytes.TrimPrefix(trim, []byte("data:"))
+			v = bytes.TrimPrefix(v, []byte(" "))
+			if data.Len() > 0 {
+				data.WriteByte('\n')
+			}
+			data.Write(v)
+		}
+		if e != nil {
+			if frame.Len() > 0 {
+				return frame.Bytes(), data.Bytes(), nil
+			}
+			return nil, nil, e
+		}
+		if len(trim) == 0 {
+			return frame.Bytes(), data.Bytes(), nil
+		}
+	}
 }
