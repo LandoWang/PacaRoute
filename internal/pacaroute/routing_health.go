@@ -1,7 +1,12 @@
 package pacaroute
 
 import (
+	"fmt"
+	"math"
+	"net/http"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -76,4 +81,73 @@ func (r *Router) Health(c *Config) RoutingHealth {
 		h.Pools = append(h.Pools, p)
 	}
 	return h
+}
+
+func (r *Router) Fail(t Target, reason ...string) {
+	if t.Pool == nil {
+		return
+	}
+	message := "upstream request failed"
+	if len(reason) > 0 && reason[0] != "" {
+		message = streamDetail(reason[0])
+	}
+	kind := "error"
+	if strings.Contains(message, "rate_limit_") {
+		kind = "throttle"
+	}
+	r.failCooldown(t, message, 30*time.Second, kind)
+}
+
+// Retry hints apply to the concrete source/model, never the whole account or
+// public alias. Parallel failures must not shorten a previously announced wait.
+func (r *Router) FailResponse(t Target, status int, headers http.Header) {
+	message := fmt.Sprintf("upstream returned HTTP %d", status)
+	if status != http.StatusTooManyRequests {
+		r.Fail(t, message)
+		return
+	}
+	delay := 30 * time.Second
+	if value, err := strconv.ParseFloat(headers.Get("retry-after-ms"), 64); err == nil && value > 0 {
+		delay = time.Duration(math.Min(value, 86400000) * float64(time.Millisecond))
+	} else if value, err := strconv.ParseFloat(headers.Get("x-ms-retry-after-ms"), 64); err == nil && value > 0 {
+		delay = time.Duration(math.Min(value, 86400000) * float64(time.Millisecond))
+	} else if value, err := strconv.ParseFloat(headers.Get("Retry-After"), 64); err == nil && value > 0 {
+		delay = time.Duration(math.Min(value, 86400) * float64(time.Second))
+	} else if at, err := http.ParseTime(headers.Get("Retry-After")); err == nil && at.After(time.Now()) {
+		delay = time.Until(at)
+	}
+	if delay > 24*time.Hour {
+		delay = 24 * time.Hour
+	}
+	if delay < time.Second {
+		delay = time.Second
+	}
+	r.failCooldown(t, message, delay, "throttle")
+}
+func (r *Router) failCooldown(t Target, message string, delay time.Duration, kind string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now().UTC()
+	key := t.Source.ID + ":" + t.Model
+	until := now.Add(delay)
+	if prior := r.cooldown[key]; prior.Until.After(until) {
+		until = prior.Until
+	}
+	if len(r.cooldown) >= 20000 {
+		oldestKey := ""
+		var oldest time.Time
+		for k, entry := range r.cooldown {
+			if !entry.Until.After(now) {
+				delete(r.cooldown, k)
+				continue
+			}
+			if oldestKey == "" || entry.Until.Before(oldest) {
+				oldestKey, oldest = k, entry.Until
+			}
+		}
+		if len(r.cooldown) >= 20000 {
+			delete(r.cooldown, oldestKey)
+		}
+	}
+	r.cooldown[key] = Cooldown{SourceID: t.Source.ID, Model: t.Model, Error: streamDetail(message), FailedAt: now, Until: until, Kind: kind}
 }

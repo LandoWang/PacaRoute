@@ -759,3 +759,6 @@ func (tr *translation) streamMessages(w io.Writer, r io.Reader, u *Usage) error 
 		}
 	}
 }
+
+func rawString(b json.RawMessage) string { var s string; _ = json.Unmarshal(b, &s); return s }
+func jsonBytes(v any) json.RawMessage    { b, _ := json.Marshal(v); return b }
