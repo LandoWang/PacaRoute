@@ -19,7 +19,7 @@ func (a *Auth) Models(ctx context.Context, id string) ([]Model, error) {
 	if id == "" {
 		id = "copilot"
 	}
-	c := a.store.Snapshot()
+	c := a.config.Snapshot()
 	if strings.HasPrefix(id, "pool:") {
 		p, ok := c.Pool(id)
 		if !ok {

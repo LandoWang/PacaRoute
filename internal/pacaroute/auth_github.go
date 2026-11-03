@@ -213,7 +213,7 @@ type DeviceLogin struct {
 }
 
 func (a *Auth) BeginLogin(ctx context.Context, id string) (DeviceLogin, error) {
-	c := a.store.Snapshot()
+	c := a.config.Snapshot()
 	account, ok := c.Account(id)
 	if !ok || account.Kind != AccountGitHub {
 		return DeviceLogin{}, errors.New("GitHub account not found")
@@ -260,7 +260,7 @@ func (a *Auth) CompleteLogin(ctx context.Context, d DeviceLogin) error {
 			return errors.New("device login expired or cancelled")
 		case <-time.After(interval):
 		}
-		c := a.store.Snapshot()
+		c := a.config.Snapshot()
 		if _, ok := c.Account(d.AccountID); !ok {
 			return errors.New("account removed during login")
 		}
@@ -316,7 +316,7 @@ func (a *Auth) Logout(ctx context.Context, id string) error {
 	return nil
 }
 func (a *Auth) AccountInfo(ctx context.Context, id string) (map[string]any, error) {
-	c := a.store.Snapshot()
+	c := a.config.Snapshot()
 	p, _ := c.Proxy(c.Proxies.AccountProxyID)
 	unlock, e := fileLock(ctx, a.vault.githubPath(id)+".lock", 30*time.Second)
 	if e != nil {
