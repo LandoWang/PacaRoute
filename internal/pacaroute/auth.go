@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -154,27 +153,4 @@ func (a *Auth) Lease(ctx context.Context, c *Config, s Source, force bool) (leas
 	}
 	a.mu.Unlock()
 	return l, nil
-}
-func sharedAzure(c *Config, id string) bool {
-	account, _ := c.Account(id)
-	return id == "" || id == "azure-local" || account.LoginMode == "azure-cli"
-}
-func (a *Auth) azureDirectory(c *Config, id string) string {
-	if !sharedAzure(c, id) {
-		return filepath.Join(a.vault.root, "accounts", id)
-	}
-	if dir := os.Getenv("AZURE_CONFIG_DIR"); dir != "" {
-		return dir
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".azure")
-}
-func (a *Auth) azureEnv(c *Config, id string, p Proxy) []string {
-	env := proxyEnv(p)
-	for i := len(env) - 1; i >= 0; i-- {
-		if strings.HasPrefix(env[i], "AZURE_CONFIG_DIR=") {
-			env = append(env[:i], env[i+1:]...)
-		}
-	}
-	return append(env, "AZURE_CONFIG_DIR="+a.azureDirectory(c, id))
 }
