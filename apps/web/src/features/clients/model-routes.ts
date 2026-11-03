@@ -1,4 +1,4 @@
-import { type Agent, type Route } from "../../api/types";
+import { type Grant, type Route } from "../../api/types";
 import { generatedID } from "../../domain/config";
 // Exact aliases observed in real Claude Code requests. Do not infer aliases
 // or protocol compatibility from model-family names.
@@ -6,7 +6,7 @@ const copilotClaudeAliases: Record<string, string[]> = {
   "claude-opus-5.5": ["claude-opus-5-5"],
   "claude-sonnet-5.5": ["claude-sonnet-5-5"],
 };
-function aliases(agent: Agent, kind: string, model: string) {
+function aliases(agent: Grant, kind: string, model: string) {
   return agent === "claude-code" && kind === "copilot"
     ? copilotClaudeAliases[model] || []
     : [];
@@ -57,7 +57,7 @@ export function readModelSelection(
 }
 
 export function selectedModelRoutes(
-  agent: Agent,
+  agent: Grant,
   kind: string,
   selection: ModelSelection,
   existing: Route[],

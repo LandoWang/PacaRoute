@@ -10,7 +10,10 @@ export type ClientQuota = {
   input_tokens?: number;
   cost_usd?: string;
 };
-export type Agent = "codex" | "claude-code" | "pacaroute";
+// Native Agent protocol (pool members, source capabilities, local Agent configs).
+export type ProtocolAgent = "codex" | "claude-code";
+// What a Client may be granted: a native protocol or downstream PacaRoute.
+export type Grant = ProtocolAgent | "pacaroute";
 export type Account = {
   id: string;
   name: string;
@@ -30,7 +33,7 @@ export type Source = {
   subscription_id?: string;
   resource_id?: string;
   deployments: string[];
-  agent_models?: Partial<Record<Agent, string[]>>;
+  agent_models?: Partial<Record<ProtocolAgent, string[]>>;
 };
 export type Proxy = {
   id: string;
@@ -49,14 +52,14 @@ export type Pool = {
   multi_model?: boolean;
   id: string;
   name: string;
-  agent: Agent;
+  agent: ProtocolAgent;
   model: string;
   failover: boolean;
   members: Member[];
 };
 export type Route = {
   id: string;
-  agent: Agent;
+  agent: Grant;
   match_model: string;
   source_id: string;
   model: string;
@@ -65,7 +68,7 @@ export type Client = {
   quota?: ClientQuota;
   local?: boolean;
   legacy_direct?: boolean;
-  enabled_agents?: Agent[];
+  enabled_agents?: Grant[];
   id: string;
   name: string;
   disabled: boolean;

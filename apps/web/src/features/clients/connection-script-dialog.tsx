@@ -1,7 +1,7 @@
 import { Download, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/transport";
-import { type Client, type Agent } from "../../api/types";
+import { type Client, type ProtocolAgent } from "../../api/types";
 import { useApp } from "../../app/state";
 import {
   Button,
@@ -25,7 +25,7 @@ export function ConnectionScript({
   onClose,
 }: {
   client: Client;
-  agent: Agent;
+  agent: ProtocolAgent;
   onClose: () => void;
 }) {
   const { status, config } = useApp();

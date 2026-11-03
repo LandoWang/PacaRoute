@@ -1,6 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { type Agent, type Config, type Model } from "../../api/types";
+import { type Config, type Grant, type Model } from "../../api/types";
 import { useLoad } from "../../app/state";
 import { Button, Input, Select, Field, ErrorNote } from "../../components/ui";
 import { sources } from "../../domain/config";
@@ -16,7 +16,7 @@ export function ModelMultiSelect({
 }: {
   config: Config;
   source: string;
-  agent: Agent;
+  agent: Grant;
   selected: string[];
   defaultModel: string;
   onChange: (models: string[]) => void;

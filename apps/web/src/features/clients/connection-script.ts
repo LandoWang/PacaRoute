@@ -1,4 +1,4 @@
-import { type Agent, type Client } from "../../api/types";
+import { type Client, type Grant } from "../../api/types";
 import { enabledAgents } from "../../domain/routing";
 export type ScriptPlatform = "shell" | "powershell";
 const shellQuote = (v: string) => "'" + v.replaceAll("'", "'\"'\"'") + "'";
@@ -7,7 +7,7 @@ const psQuote = (v: string) =>
   "'" + v.replace(/['\u2018\u2019\u201a\u201b]/g, "$&$&") + "'";
 export function connectionScript(
   client: Client,
-  agent: Agent,
+  agent: Grant,
   address: string,
   model: string,
   platform: ScriptPlatform,
@@ -99,7 +99,7 @@ const hiddenKey = "PACAROUTE-KEY-HIDDEN";
 // passes the same checks as the real script, then shows a masked placeholder.
 export function connectionScriptPreview(
   client: Client,
-  agent: Agent,
+  agent: Grant,
   address: string,
   model: string,
   platform: ScriptPlatform,

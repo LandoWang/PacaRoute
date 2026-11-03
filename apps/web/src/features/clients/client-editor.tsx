@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../../api/transport";
-import { type Client, type Agent } from "../../api/types";
+import { type Client, type Grant } from "../../api/types";
 import { useApp, useDraftBase } from "../../app/state";
 import { Identity } from "../../components/identity";
 import { Editor, Field } from "../../components/ui";
@@ -55,7 +55,7 @@ export function ClientEditor({
         onName={(name) => set({ ...v, name })}
       />
       <Field label="启用的 Agent">
-        {(["codex", "claude-code", "pacaroute"] as Agent[]).map((agent) => (
+        {(["codex", "claude-code", "pacaroute"] as Grant[]).map((agent) => (
           <label className="switch-row" key={agent}>
             <span>{agentNames[agent]}</span>
             <input

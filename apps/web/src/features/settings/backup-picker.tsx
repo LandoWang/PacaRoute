@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../../api/transport";
-import { type Agent } from "../../api/types";
+import { type ProtocolAgent } from "../../api/types";
 import { useLoad } from "../../app/state";
 import { Loading } from "../../components/feedback";
 import { Editor, Field, Select } from "../../components/ui";
@@ -15,7 +15,7 @@ export function BackupPicker({
   onClose,
   onApplied,
 }: {
-  agent: Agent;
+  agent: ProtocolAgent;
   onClose: () => void;
   onApplied: () => void;
 }) {

@@ -1,6 +1,6 @@
 import { Terminal } from "lucide-react";
 import { useState } from "react";
-import { type Client, type Agent } from "../../api/types";
+import { type Client, type Grant } from "../../api/types";
 import { useEntityDraft } from "../../app/entity-draft";
 import { useApp } from "../../app/state";
 import { Button, Panel, Field, Select, ErrorNote } from "../../components/ui";
@@ -23,7 +23,7 @@ const emptySelection: ModelSelection = {
   defaultModel: "",
   fixed: false,
 };
-export function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
+export function RouteCard({ client, agent }: { client: Client; agent: Grant }) {
   const { config, status, save, show, close } = useApp();
   const existing = client.routes.filter((r) => r.agent === agent);
   const kind = (id: string) =>

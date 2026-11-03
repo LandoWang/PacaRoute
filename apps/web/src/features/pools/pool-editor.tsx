@@ -1,6 +1,6 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { type Pool, type Agent } from "../../api/types";
+import { type Pool, type ProtocolAgent } from "../../api/types";
 import { type Common } from "../../app/editor-props";
 import { Identity } from "../../components/identity";
 import {
@@ -80,7 +80,9 @@ export function PoolEditor({
         <Field label="Agent">
           <Select
             value={v.agent}
-            onChange={(e) => set({ ...v, agent: e.target.value as Agent })}
+            onChange={(e) =>
+              set({ ...v, agent: e.target.value as ProtocolAgent })
+            }
           >
             <option value="codex">Codex</option>
             <option value="claude-code">Claude Code</option>
