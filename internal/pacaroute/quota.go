@@ -98,6 +98,14 @@ func billingEvent(tx *sql.Tx, id, phase string, at time.Time, payload any) error
 	return e
 }
 
+func (q *ClientQuota) enforced() bool {
+	if q == nil {
+		return false
+	}
+	cost, _ := moneyMicros(q.Cost)
+	return q.Requests > 0 || q.InputTokens > 0 || cost > 0
+}
+
 // Requests reserve a slot atomically. Token/cost admission uses confirmed usage;
 // no monetary reservation is enforced in this first soft-quota version.
 func (q *QuotaStore) Admit(v Activity, limit *ClientQuota) (QuotaState, error) {
@@ -106,7 +114,16 @@ func (q *QuotaStore) Admit(v Activity, limit *ClientQuota) (QuotaState, error) {
 		return QuotaState{}, e
 	}
 	defer tx.Rollback()
-	state, e := quotaState(tx, v.ClientID, limit, v.Timestamp)
+	var state QuotaState
+	if limit.enforced() {
+		state, e = quotaState(tx, v.ClientID, limit, v.Timestamp)
+	} else {
+		// Without an enforced limit nothing can block; skip aggregating history.
+		state = QuotaState{WindowSeconds: 86400, Limits: limit}
+		if limit != nil {
+			state.WindowSeconds = limit.WindowSeconds
+		}
+	}
 	if e != nil || state.Blocked != "" {
 		return state, e
 	}

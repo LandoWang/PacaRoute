@@ -28,7 +28,12 @@ func incomingProtocol(agent string) string {
 
 // Native paths preserve opaque request and response fields. Only probed Copilot constraints are changed.
 func prepare(body object, t Target, agent string) ([]byte, *translation, error) {
-	wire := obj(jsonBytes(body))
+	// RawMessage values are never modified in place; copying the top-level map
+	// isolates edits from the body that later failover targets reuse.
+	wire := make(object, len(body))
+	for k, v := range body {
+		wire[k] = v
+	}
 	wire["model"] = jsonBytes(t.Model)
 	var tr *translation
 	var e error

@@ -34,7 +34,15 @@ func (tr *translation) responseJSON(body []byte) ([]byte, error) {
 		if rawString(m["status"]) == "incomplete" {
 			reason = "max_tokens"
 		}
-		return json.Marshal(map[string]any{"id": "msg_" + newID(), "type": "message", "role": "assistant", "model": tr.model, "content": blocks, "stop_reason": reason, "stop_sequence": nil, "usage": m["usage"]})
+		// Map usage exactly as the translated stream's message_delta does, so
+		// Messages observers do not add Responses cached tokens a second time.
+		var usage any
+		if m["usage"] != nil && string(m["usage"]) != "null" {
+			u := Usage{}
+			u.observe(jsonBytes(m))
+			usage = map[string]any{"input_tokens": u.Input, "output_tokens": u.Output}
+		}
+		return json.Marshal(map[string]any{"id": "msg_" + newID(), "type": "message", "role": "assistant", "model": tr.model, "content": blocks, "stop_reason": reason, "stop_sequence": nil, "usage": usage})
 	}
 	return tr.messagesJSON(m)
 }
