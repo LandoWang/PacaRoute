@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 )
 
@@ -31,7 +32,7 @@ func (a *Auth) SaveClientKey(ctx context.Context, c domain.Client, key string) e
 	if key == "" || !validSecret(key) || !constantEqual([]byte(keyHash(key)), []byte(c.KeyHash)) {
 		return errors.New("key does not match this Client")
 	}
-	unlock, err := fileLock(ctx, path+lockSuffix, credentialLockWait)
+	unlock, err := atomicfile.Lock(ctx, path+lockSuffix, credentialLockWait)
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/oscred"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -119,7 +120,7 @@ func (a *Auth) Lease(ctx context.Context, c *domain.Config, s domain.Source, for
 			}
 		}
 		if secret == "" && a.systemKeys {
-			secret, e = systemSourceKey(s.ID)
+			secret, e = oscred.SourceKey(s.ID)
 			if e != nil && !os.IsNotExist(e) {
 				return l, e
 			}

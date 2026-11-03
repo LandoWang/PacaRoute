@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
@@ -90,7 +91,7 @@ func TestConfigurationRejectsReferenceAndNestedPool(t *testing.T) {
 func TestConfigurationCrashTransactionRollsForward(t *testing.T) {
 	root := t.TempDir()
 	c := fixtureConfig()
-	if e := atomicWrite(filepath.Join(root, "config.transaction.json"), jsonBytes(c), 0600); e != nil {
+	if e := atomicfile.Write(filepath.Join(root, "config.transaction.json"), jsonBytes(c), 0600); e != nil {
 		t.Fatal(e)
 	}
 	reopened, e := NewConfigStore(root)

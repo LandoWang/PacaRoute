@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 
 	_ "modernc.org/sqlite"
@@ -35,7 +36,7 @@ func NewConfigStore(root string) (*ConfigStore, error) {
 	if e := os.MkdirAll(root, 0700); e != nil {
 		return nil, e
 	}
-	unlock, e := fileLock(context.Background(), filepath.Join(root, "config.lock"), 5*time.Second)
+	unlock, e := atomicfile.Lock(context.Background(), filepath.Join(root, "config.lock"), 5*time.Second)
 	if e != nil {
 		return nil, e
 	}

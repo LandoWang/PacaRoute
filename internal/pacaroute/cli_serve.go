@@ -14,10 +14,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 )
 
 func serve(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, port int, in io.Reader, emit func(any), fail func(error) int) int {
-	unlock, e := fileLock(ctx, filepath.Join(s.Root, "pacaroute-service.lock"), 200*time.Millisecond)
+	unlock, e := atomicfile.Lock(ctx, filepath.Join(s.Root, "pacaroute-service.lock"), 200*time.Millisecond)
 	if e != nil {
 		return fail(errors.New("PacaRoute already runs for this data directory"))
 	}

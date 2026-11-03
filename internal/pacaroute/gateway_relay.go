@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
@@ -93,6 +94,6 @@ func (s *Server) trace(id, name string, b []byte) {
 	}
 	dir := filepath.Join(s.TraceDir, id)
 	if os.MkdirAll(dir, 0700) == nil {
-		_ = atomicWrite(filepath.Join(dir, name), b, 0600)
+		_ = atomicfile.Write(filepath.Join(dir, name), b, 0600)
 	}
 }

@@ -6,7 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
+	"github.com/LandoWang/pacaroute/internal/pacaroute/oscred"
 )
 
 func (a *Auth) SetKeys(keys map[string]string) error {
@@ -33,19 +35,19 @@ func (a *Auth) SaveKey(ctx context.Context, id, key string) error {
 	if !domain.ValidID(id) || key == "" || !validSecret(key) {
 		return errors.New("invalid API key")
 	}
-	unlock, e := fileLock(ctx, a.vault.secretPath(id)+lockSuffix, credentialLockWait)
+	unlock, e := atomicfile.Lock(ctx, a.vault.secretPath(id)+lockSuffix, credentialLockWait)
 	if e != nil {
 		return e
 	}
 	defer unlock()
 	if a.systemKeys {
-		if e = saveSystemSourceKey(id, key); e != nil {
+		if e = oscred.SaveSourceKey(id, key); e != nil {
 			return e
 		}
 		if e = os.Remove(a.vault.secretPath(id)); e != nil && !os.IsNotExist(e) {
 			return e
 		}
-		if e = atomicWrite(a.vault.secretPath(id)+".revision", []byte(domain.NewID()), 0600); e != nil {
+		if e = atomicfile.Write(a.vault.secretPath(id)+".revision", []byte(domain.NewID()), 0600); e != nil {
 			return e
 		}
 	} else if e = a.vault.write(a.vault.secretPath(id), map[string]string{"key": key}); e != nil {
@@ -68,7 +70,7 @@ func (a *Auth) accountKey(id string) (string, error) {
 		return "", e
 	}
 	if a.systemKeys {
-		return systemSourceKey("account." + id)
+		return oscred.SourceKey("account." + id)
 	}
 	return "", e
 }
@@ -82,19 +84,19 @@ func (a *Auth) SaveAccountKey(ctx context.Context, id, key string) error {
 		return errors.New("select a key-based account and a valid API key")
 	}
 	path := a.vault.accountKeyPath(id)
-	unlock, e := fileLock(ctx, path+lockSuffix, credentialLockWait)
+	unlock, e := atomicfile.Lock(ctx, path+lockSuffix, credentialLockWait)
 	if e != nil {
 		return e
 	}
 	defer unlock()
 	if a.systemKeys {
-		if e = saveSystemSourceKey("account."+id, key); e != nil {
+		if e = oscred.SaveSourceKey("account."+id, key); e != nil {
 			return e
 		}
 		if e = os.Remove(path); e != nil && !os.IsNotExist(e) {
 			return e
 		}
-		if e = atomicWrite(path+".revision", []byte(domain.NewID()), 0600); e != nil {
+		if e = atomicfile.Write(path+".revision", []byte(domain.NewID()), 0600); e != nil {
 			return e
 		}
 	} else if e = a.vault.write(path, map[string]string{"key": key}); e != nil {

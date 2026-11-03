@@ -21,7 +21,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
+	"github.com/LandoWang/pacaroute/internal/pacaroute/oscred"
 )
 
 // Compatible with the existing Unix encrypted store. Never exports plaintext records.
@@ -59,7 +61,7 @@ func (v *vault) init() {
 		// Minimal containers may have no OS machine-id. Keep a stable per-install identity in the persistent data volume.
 		if machine == "" && runtime.GOOS != "darwin" && v.root != "" {
 			path := filepath.Join(v.root, "machine-id")
-			unlock, e := fileLock(context.Background(), path+lockSuffix, 5*time.Second)
+			unlock, e := atomicfile.Lock(context.Background(), path+lockSuffix, 5*time.Second)
 			if e != nil {
 				v.err = e
 				return
@@ -68,7 +70,7 @@ func (v *vault) init() {
 			b, e := os.ReadFile(path)
 			if os.IsNotExist(e) {
 				b = []byte(domain.NewID())
-				e = atomicWrite(path, b, 0600)
+				e = atomicfile.Write(path, b, 0600)
 			}
 			if e != nil {
 				v.err = e
@@ -91,7 +93,7 @@ func deriveKeys(ikm []byte) ([]byte, []byte) {
 	return e, m
 }
 func (v *vault) seal(b []byte) ([]byte, error) {
-	if out, handled, err := platformSeal(b); handled {
+	if out, handled, err := oscred.Seal(b); handled {
 		return out, err
 	}
 	v.init()
@@ -116,7 +118,7 @@ func (v *vault) seal(b []byte) ([]byte, error) {
 	return out, nil
 }
 func (v *vault) open(b []byte) ([]byte, error) {
-	if out, handled, err := platformOpen(b); handled {
+	if out, handled, err := oscred.Open(b); handled {
 		return out, err
 	}
 	v.init()
@@ -169,7 +171,7 @@ func (v *vault) write(path string, in any) error {
 	if e != nil {
 		return e
 	}
-	return atomicWrite(path, b, 0600)
+	return atomicfile.Write(path, b, 0600)
 }
 func (v *vault) githubPath(id string) string {
 	if id == "copilot" {

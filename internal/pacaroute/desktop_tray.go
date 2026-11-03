@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 	"github.com/getlantern/systray"
 )
 
@@ -24,13 +25,13 @@ const desktopEnabled = true
 
 func runDesktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, port int, emit func(any), fail func(error) int) int {
 	port = desktopPort(a, s.Root, port)
-	appUnlock, e := fileLock(ctx, filepath.Join(s.Root, "app.lock"), 200*time.Millisecond)
+	appUnlock, e := atomicfile.Lock(ctx, filepath.Join(s.Root, "app.lock"), 200*time.Millisecond)
 	if e != nil {
 		_ = openManagement(s.Root, readDesktopSettings(s.Root).AdminPort)
 		return fail(errors.New("a desktop application already owns this data directory"))
 	}
 	defer appUnlock()
-	serviceUnlock, e := fileLock(ctx, filepath.Join(s.Root, "pacaroute-service.lock"), 200*time.Millisecond)
+	serviceUnlock, e := atomicfile.Lock(ctx, filepath.Join(s.Root, "pacaroute-service.lock"), 200*time.Millisecond)
 	if e != nil {
 		return fail(errors.New("a service already owns this data directory; use pacaroute ui"))
 	}

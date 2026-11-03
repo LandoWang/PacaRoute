@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/transport"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
@@ -84,7 +85,7 @@ func (a *Auth) credentialLocked(ctx context.Context, id string, p domain.Proxy, 
 }
 func (a *Auth) copilotLocked(ctx context.Context, id string, p domain.Proxy, force bool) (lease, error) {
 	path := a.vault.githubPath(id)
-	unlock, e := fileLock(ctx, path+lockSuffix, 30*time.Second)
+	unlock, e := atomicfile.Lock(ctx, path+lockSuffix, 30*time.Second)
 	if e != nil {
 		return lease{}, e
 	}
@@ -284,7 +285,7 @@ func (a *Auth) CompleteLogin(ctx context.Context, d DeviceLogin) error {
 			return errors.New("GitHub device login was not authorized")
 		}
 		record := credential{Version: d.Version, AccessToken: v.AccessToken, AccessExpires: expiry(v.ExpiresIn), RefreshToken: v.RefreshToken, RefreshExpires: expiry(v.RefreshExpiresIn), TokenType: v.TokenType, Scope: v.Scope, OAuthClientID: d.ClientID, CredentialID: strings.ReplaceAll(domain.NewID(), "-", "")}
-		unlock, e := fileLock(ctx, a.vault.githubPath(d.AccountID)+lockSuffix, credentialLockWait)
+		unlock, e := atomicfile.Lock(ctx, a.vault.githubPath(d.AccountID)+lockSuffix, credentialLockWait)
 		if e != nil {
 			return e
 		}
@@ -302,7 +303,7 @@ func (a *Auth) Logout(ctx context.Context, id string) error {
 		return errors.New("invalid account")
 	}
 	path := a.vault.githubPath(id)
-	unlock, e := fileLock(ctx, path+lockSuffix, credentialLockWait)
+	unlock, e := atomicfile.Lock(ctx, path+lockSuffix, credentialLockWait)
 	if e != nil {
 		return e
 	}
@@ -322,7 +323,7 @@ func (a *Auth) Logout(ctx context.Context, id string) error {
 func (a *Auth) AccountInfo(ctx context.Context, id string) (map[string]any, error) {
 	c := a.config.Snapshot()
 	p, _ := c.Proxy(c.Proxies.AccountProxyID)
-	unlock, e := fileLock(ctx, a.vault.githubPath(id)+lockSuffix, 30*time.Second)
+	unlock, e := atomicfile.Lock(ctx, a.vault.githubPath(id)+lockSuffix, 30*time.Second)
 	if e != nil {
 		return nil, e
 	}

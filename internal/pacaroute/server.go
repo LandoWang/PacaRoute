@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/quota"
@@ -44,7 +45,7 @@ func NewServer(store *ConfigStore, auth *Auth) (*Server, error) {
 		return nil, e
 	}
 	adminPath := filepath.Join(store.Root, "admin.key")
-	unlock, e := fileLock(context.Background(), adminPath+".lock", 5*time.Second)
+	unlock, e := atomicfile.Lock(context.Background(), adminPath+".lock", 5*time.Second)
 	if e != nil {
 		return nil, e
 	}
@@ -52,7 +53,7 @@ func NewServer(store *ConfigStore, auth *Auth) (*Server, error) {
 	key, e := os.ReadFile(adminPath)
 	if os.IsNotExist(e) {
 		key = []byte(newKey())
-		e = atomicWrite(adminPath, key, 0600)
+		e = atomicfile.Write(adminPath, key, 0600)
 	}
 	if e != nil {
 		return nil, e

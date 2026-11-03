@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 )
 
 type desktopSettings struct {
@@ -19,7 +21,7 @@ func (d *desktopControl) persist(port int, serving bool) error {
 		return err
 	}
 	b, _ := json.Marshal(desktopSettings{Port: port, AdminPort: d.adminPort, Serving: &serving, CredentialRoot: authority})
-	return atomicWrite(filepath.Join(d.store.Root, "desktop-settings.json"), b, 0600)
+	return atomicfile.Write(filepath.Join(d.store.Root, "desktop-settings.json"), b, 0600)
 }
 func readDesktopSettings(root string) desktopSettings {
 	var v desktopSettings
@@ -41,5 +43,5 @@ func saveDesktopSettings(root string, port int) error {
 	v := readDesktopSettings(root)
 	v.Port = port
 	b, _ := json.Marshal(v)
-	return atomicWrite(filepath.Join(root, "desktop-settings.json"), b, 0600)
+	return atomicfile.Write(filepath.Join(root, "desktop-settings.json"), b, 0600)
 }

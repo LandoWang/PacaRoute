@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
 )
 
 func startupPath() string {
@@ -33,5 +35,5 @@ func setStartup(enabled bool, root string, port int, credentialRoot string) erro
 	}
 	escape := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "\"", "&quot;")
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>com.landowang.pacaroute.tray</string><key>ProgramArguments</key><array><string>%s</string><string>desktop</string><string>--home</string><string>%s</string><string>--credential-root</string><string>%s</string><string>--no-open</string></array><key>RunAtLoad</key><true/><key>ProcessType</key><string>Interactive</string></dict></plist>`, escape.Replace(exe), escape.Replace(root), escape.Replace(credentialRoot))
-	return atomicWrite(startupPath(), []byte(plist), 0600)
+	return atomicfile.Write(startupPath(), []byte(plist), 0600)
 }
