@@ -97,7 +97,7 @@ PACAROUTE_API=http://127.0.0.1:8766 npm run dev
 
 The Vite server binds `127.0.0.1` and proxies `/api` to the selected backend. It rewrites the development Origin to the backend origin; it does not enable broad backend CORS. Sign in with the development data directory's management key. `status.gateway_url` supplies Agent connection addresses, independently of the frontend development port.
 
-`npm run build` produces `apps/web/dist`, a standalone static frontend. `npm run embed` copies that output to the Go embed directory; packaging invokes both. Node is a build-time dependency only. The browser has no direct dependency on Go structs or desktop bindings: `apps/web/src/api.ts` is its typed HTTP contract. `status.api_version` is currently 1. Components use React, Radix/shadcn-style primitives, Tailwind and Lucide.
+`npm run build` produces `apps/web/dist`, a standalone static frontend. `npm run embed` copies that output to the Go embed directory; packaging invokes both. Node is a build-time dependency only. The browser has no direct dependency on Go structs or desktop bindings: `apps/web/src/api/` (`transport.ts` and `types.ts`) is its typed HTTP contract; features live under `apps/web/src/features/`. `status.api_version` is currently 1. Components use React, Radix/shadcn-style primitives, Tailwind and Lucide.
 
 For independently hosted static files, serve `dist` and proxy `/api` plus gateway paths (`/codex`, `/cc`, `/sources`, `/pools`, `/v1`) under the same public origin. Set `--public-url` to that exact origin. Cookie management intentionally requires same-origin requests. CLI and other management consumers can use the management bearer key. There is no requirement to run a frontend process in production.
 
