@@ -177,7 +177,7 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 		emit(v)
 		return 0
 	case "models":
-		v, e := auth.Models(ctx, a.get("source", "copilot"))
+		v, e := newCatalog(auth.config, auth, &auth.http).Models(ctx, a.get("source", "copilot"))
 		if e != nil {
 			return fail(e)
 		}

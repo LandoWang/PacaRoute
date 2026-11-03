@@ -276,7 +276,7 @@ func TestProviderModelDiscoveryUsesAccountAndPagination(t *testing.T) {
 	if e := a.SaveAccountKey(context.Background(), source.AccountID, "fixture-anthropic"); e != nil {
 		t.Fatal(e)
 	}
-	result, e := a.DiscoverModels(context.Background(), store.Snapshot(), source)
+	result, e := newCatalog(a.config, a, &a.http).DiscoverModels(context.Background(), store.Snapshot(), source)
 	if e != nil || len(result.Models) != 2 || calls != 2 {
 		t.Fatal("model discovery pagination failed", e, calls)
 	}

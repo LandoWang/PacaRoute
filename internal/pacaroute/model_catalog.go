@@ -7,15 +7,23 @@ import (
 	"strings"
 )
 
-type Model struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Vendor string `json:"vendor"`
-	Claude bool   `json:"claude"`
-	Codex  bool   `json:"codex"`
+type leaseProvider interface {
+	Lease(context.Context, *Config, Source, bool) (lease, error)
+	ApplyProviderHeaders(*http.Request, lease, bool)
+	AzureAction(context.Context, string, string, string, string) (map[string]any, error)
 }
 
-func (a *Auth) Models(ctx context.Context, id string) ([]Model, error) {
+type catalog struct {
+	config configReader
+	leases leaseProvider
+	http   *transports
+}
+
+func newCatalog(config configReader, leases leaseProvider, http *transports) *catalog {
+	return &catalog{config: config, leases: leases, http: http}
+}
+
+func (a *catalog) Models(ctx context.Context, id string) ([]Model, error) {
 	if id == "" {
 		id = "copilot"
 	}
@@ -42,12 +50,12 @@ func (a *Auth) Models(ctx context.Context, id string) ([]Model, error) {
 		}
 		return models, nil
 	}
-	l, e := a.Lease(ctx, c, s, false)
+	l, e := a.leases.Lease(ctx, c, s, false)
 	if e != nil {
 		return nil, e
 	}
 	r, _ := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(l.Endpoint, "/")+"/models", nil)
-	a.copilotHeaders(r, l, false)
+	a.leases.ApplyProviderHeaders(r, l, false)
 	res, e := a.http.client(c.SourceProxy(id)).Do(r)
 	if e != nil {
 		return nil, errors.New("model catalog connection failed")

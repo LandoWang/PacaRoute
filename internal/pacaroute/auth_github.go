@@ -351,3 +351,8 @@ func (a *Auth) AccountInfo(ctx context.Context, id string) (map[string]any, erro
 	}
 	return out, nil
 }
+
+// ApplyProviderHeaders applies the Copilot headers used by the model catalog.
+func (a *Auth) ApplyProviderHeaders(r *http.Request, l lease, vision bool) {
+	a.copilotHeaders(r, l, vision)
+}

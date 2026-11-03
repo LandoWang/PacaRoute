@@ -71,7 +71,7 @@ func TestPacaRouteAgentGrantAndDisabledPaths(t *testing.T) {
 		t.Fatal("peer revocation disabled the direct Agent")
 	}
 	local := peerTestServer(t, front.URL)
-	if _, err := local.Auth.DiscoverModels(context.Background(), local.Store.Snapshot(), local.Store.Snapshot().Sources[0]); err == nil {
+	if _, err := local.Catalog.DiscoverModels(context.Background(), local.Store.Snapshot(), local.Store.Snapshot().Sources[0]); err == nil {
 		t.Fatal("peer discovery fell back into a native grant after 404")
 	}
 }

@@ -33,7 +33,7 @@ func TestCopilotCatalogIncludesNativeMessagesModels(t *testing.T) {
   ]}`
 	})
 	auth.http.values = map[string]*http.Client{"system:": transport}
-	models, err := auth.Models(context.Background(), "copilot")
+	models, err := newCatalog(auth.config, auth, &auth.http).Models(context.Background(), "copilot")
 	if err != nil {
 		t.Fatal(err)
 	}

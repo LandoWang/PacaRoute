@@ -287,3 +287,11 @@ func sharedAzure(c *Config, id string) bool {
 	account, _ := c.Account(id)
 	return id == "" || id == "azure-local" || account.LoginMode == "azure-cli"
 }
+
+type Model struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Vendor string `json:"vendor"`
+	Claude bool   `json:"claude"`
+	Codex  bool   `json:"codex"`
+}
