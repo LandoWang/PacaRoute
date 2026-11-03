@@ -173,3 +173,18 @@ func (s *Server) startAccountLogin(w http.ResponseWriter, r *http.Request, accou
 		problem(w, 504, "Azure CLI did not produce a device code")
 	}
 }
+
+func (s *Server) loginStatus(w http.ResponseWriter, r *http.Request, path string) {
+	s.loginJobs.mu.Lock()
+	job := s.loginJobs.jobs[strings.TrimPrefix(path, "logins/")]
+	var status map[string]any
+	if job != nil {
+		status = map[string]any{"done": job.done, "error": job.err}
+	}
+	s.loginJobs.mu.Unlock()
+	if status == nil {
+		problem(w, 404, "login not found")
+		return
+	}
+	writeJSON(w, 200, status)
+}
