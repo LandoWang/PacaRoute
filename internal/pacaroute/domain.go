@@ -300,3 +300,11 @@ func poolID(target string) (id string, ok bool) { return strings.CutPrefix(targe
 
 // isPoolTarget reports whether a route target names a pool.
 func isPoolTarget(target string) bool { return strings.HasPrefix(target, poolTargetPrefix) }
+
+type Model struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Vendor string `json:"vendor"`
+	Claude bool   `json:"claude"`
+	Codex  bool   `json:"codex"`
+}

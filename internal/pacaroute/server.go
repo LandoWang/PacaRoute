@@ -16,6 +16,7 @@ const Version = "0.9.0"
 type Server struct {
 	Store           *ConfigStore
 	Auth            *Auth
+	Catalog         *catalog
 	Router          *Router
 	Activity        *ActivityStore
 	Quotas          *QuotaStore
@@ -57,7 +58,11 @@ func NewServer(store *ConfigStore, auth *Auth) (*Server, error) {
 	if e != nil {
 		return nil, e
 	}
-	return &Server{Quotas: quotas, Store: store, Auth: auth, Router: r, Activity: NewActivityStore(store.Root), AdminKey: string(key), started: time.Now(), loginJobs: newLoginJobs()}, nil
+	var models *catalog
+	if auth != nil {
+		models = newCatalog(auth.config, auth, &auth.http)
+	}
+	return &Server{Quotas: quotas, Store: store, Auth: auth, Catalog: models, Router: r, Activity: NewActivityStore(store.Root), AdminKey: string(key), started: time.Now(), loginJobs: newLoginJobs()}, nil
 }
 func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

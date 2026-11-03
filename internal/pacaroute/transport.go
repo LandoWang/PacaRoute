@@ -1,7 +1,6 @@
 package pacaroute
 
 import (
-	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -14,6 +13,8 @@ import (
 	"sync"
 	"time"
 )
+
+const maxJSONBody = 8 << 20
 
 type transports struct {
 	mu     sync.Mutex
@@ -70,35 +71,12 @@ func proxyEnv(p Proxy) []string {
 	return out
 }
 func readJSONBody(r io.Reader, out any) error {
-	b, e := io.ReadAll(io.LimitReader(r, 8<<20+1))
+	b, e := io.ReadAll(io.LimitReader(r, maxJSONBody+1))
 	if e != nil {
 		return e
 	}
-	if len(b) > 8<<20 {
+	if len(b) > maxJSONBody {
 		return errors.New("response too large")
 	}
 	return json.Unmarshal(b, out)
-}
-func commandJSON(ctx context.Context, env []string, args ...string) (json.RawMessage, error) {
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
-	cmd := azureCommand(ctx, args...)
-	cmd.Env = env
-	b, e := cmd.Output()
-	if e != nil {
-		return nil, errors.New("Azure CLI failed; sign in to this account and check the selected subscription")
-	}
-	if len(b) > 8<<20 || !json.Valid(b) {
-		return nil, errors.New("invalid Azure CLI response")
-	}
-	return b, nil
-}
-
-func azureCLI() string {
-	for _, p := range []string{"/opt/homebrew/bin/az", "/usr/local/bin/az"} {
-		if f, e := os.Stat(p); e == nil && f.Mode()&0111 != 0 {
-			return p
-		}
-	}
-	return "az"
 }

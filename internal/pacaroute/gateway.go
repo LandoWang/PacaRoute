@@ -131,7 +131,7 @@ func (s *Server) agentModels(x *gatewayExchange) {
 	if id == "" {
 		id = "copilot"
 	}
-	models, e := s.Auth.Models(r.Context(), id)
+	models, e := s.Catalog.Models(r.Context(), id)
 	if e != nil {
 		problem(w, 502, e.Error())
 		return

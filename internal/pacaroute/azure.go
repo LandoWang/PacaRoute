@@ -131,3 +131,26 @@ func (a *Auth) azureEnv(c *Config, id string, p Proxy) []string {
 	}
 	return append(env, "AZURE_CONFIG_DIR="+a.azureDirectory(c, id))
 }
+
+func commandJSON(ctx context.Context, env []string, args ...string) (json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	cmd := azureCommand(ctx, args...)
+	cmd.Env = env
+	b, e := cmd.Output()
+	if e != nil {
+		return nil, errors.New("Azure CLI failed; sign in to this account and check the selected subscription")
+	}
+	if len(b) > maxJSONBody || !json.Valid(b) {
+		return nil, errors.New("invalid Azure CLI response")
+	}
+	return b, nil
+}
+func azureCLI() string {
+	for _, p := range []string{"/opt/homebrew/bin/az", "/usr/local/bin/az"} {
+		if f, e := os.Stat(p); e == nil && f.Mode()&0111 != 0 {
+			return p
+		}
+	}
+	return "az"
+}

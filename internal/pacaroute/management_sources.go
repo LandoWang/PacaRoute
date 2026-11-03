@@ -59,7 +59,7 @@ func (s *Server) discoverSourceModels(w http.ResponseWriter, r *http.Request, pa
 		problem(w, 404, "source not found")
 		return
 	}
-	result, e := s.Auth.DiscoverModels(r.Context(), s.Store.Snapshot(), source)
+	result, e := s.Catalog.DiscoverModels(r.Context(), s.Store.Snapshot(), source)
 	if e != nil {
 		problem(w, 502, e.Error())
 		return
@@ -98,7 +98,7 @@ func (s *Server) discoverDraftModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	source = draft.Sources[len(draft.Sources)-1]
-	result, e := s.Auth.DiscoverModels(r.Context(), &draft, source)
+	result, e := s.Catalog.DiscoverModels(r.Context(), &draft, source)
 	if e != nil {
 		problem(w, 502, e.Error())
 		return
@@ -107,7 +107,7 @@ func (s *Server) discoverDraftModels(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) sourceModels(w http.ResponseWriter, r *http.Request) {
-	models, e := s.Auth.Models(r.Context(), r.URL.Query().Get("source"))
+	models, e := s.Catalog.Models(r.Context(), r.URL.Query().Get("source"))
 	if e != nil {
 		problem(w, 502, e.Error())
 		return

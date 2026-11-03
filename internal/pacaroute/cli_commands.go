@@ -45,7 +45,7 @@ func desktop(ctx context.Context, a arguments, s *ConfigStore, auth *Auth, actio
 		}
 		return v, nil
 	case "models":
-		models, e := auth.Models(ctx, source)
+		models, e := newCatalog(auth.config, auth, &auth.http).Models(ctx, source)
 		return map[string]any{"models": models}, e
 	}
 	account, ok := s.Snapshot().Account(accountID)

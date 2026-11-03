@@ -76,7 +76,7 @@ func TestDiscoveryAfterSourceKindChange(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := auth.DiscoverModels(context.Background(), &c, src); err != nil {
+	if _, err := newCatalog(auth.config, auth, &auth.http).DiscoverModels(context.Background(), &c, src); err != nil {
 		t.Fatalf("discovery after kind change failed: %v", err)
 	}
 }

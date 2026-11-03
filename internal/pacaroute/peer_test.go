@@ -67,7 +67,7 @@ func TestPeerCatalogClientScopeAndCapability(t *testing.T) {
 		}
 	}
 	local := peerTestServer(t, front.URL)
-	discovered, err := local.Auth.DiscoverModels(context.Background(), local.Store.Snapshot(), local.Store.Snapshot().Sources[0])
+	discovered, err := local.Catalog.DiscoverModels(context.Background(), local.Store.Snapshot(), local.Store.Snapshot().Sources[0])
 	if err != nil || discovered.Endpoint != front.URL+"/pacaroute" || len(discovered.Models) != 1 || discovered.Models[0].ID != "coding" || !discovered.Models[0].Codex || discovered.Models[0].Claude {
 		t.Fatal("peer discovery lost capabilities", discovered, err)
 	}
@@ -84,7 +84,7 @@ func TestPeerCatalogClientScopeAndCapability(t *testing.T) {
 	c = cloneConfig(store.Snapshot())
 	c.Clients[0].Disabled = true
 	saveTest(t, store, c)
-	if _, err = local.Auth.DiscoverModels(context.Background(), local.Store.Snapshot(), local.Store.Snapshot().Sources[0]); err == nil {
+	if _, err = local.Catalog.DiscoverModels(context.Background(), local.Store.Snapshot(), local.Store.Snapshot().Sources[0]); err == nil {
 		t.Fatal("disabled remote Client discovered models")
 	}
 }
@@ -109,7 +109,7 @@ func TestPeerLegacyDiscovery(t *testing.T) {
 	}))
 	defer up.Close()
 	s := peerTestServer(t, up.URL+"/prefix")
-	result, err := s.Auth.DiscoverModels(context.Background(), s.Store.Snapshot(), s.Store.Snapshot().Sources[0])
+	result, err := s.Catalog.DiscoverModels(context.Background(), s.Store.Snapshot(), s.Store.Snapshot().Sources[0])
 	if err != nil || len(result.Models) != 1 || !result.Models[0].Codex || result.Models[0].Claude {
 		t.Fatal(result, err)
 	}
