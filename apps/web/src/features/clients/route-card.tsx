@@ -1,5 +1,5 @@
 import { Terminal } from "lucide-react";
-import { useState } from "react";
+import { useState, type SetStateAction } from "react";
 import { type Client, type Agent } from "../../api/types";
 import { useApp } from "../../app/state";
 import { Button, Panel, Field, Select, ErrorNote } from "../../components/ui";
@@ -16,22 +16,29 @@ import {
   selectedModelRoutes,
   type ModelSelection,
 } from "./model-routes";
+import { reconcileRouteDraft, routeDraft } from "./route-draft";
 export function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
   const { config, status, save, show, close } = useApp();
   const existing = client.routes.filter((r) => r.agent === agent);
   const kind = (id: string) =>
     sources(config).find((s) => s.id === id)?.kind || "";
   const initial = readModelSelection(existing, kind(existing[0]?.source_id));
-  const [selection, setSelection] = useState<ModelSelection>(
-    initial || {
-      source: "",
-      models: [],
-      defaultModel: "",
-      fixed: false,
-    },
-  );
+  const [stored, setDraft] = useState(() => routeDraft(existing, initial));
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const { draft, conflict } = reconcileRouteDraft(
+    stored,
+    existing,
+    initial,
+    busy,
+  );
+  if (draft !== stored) setDraft(draft);
+  const selection = draft.selection;
+  const setSelection = (next: SetStateAction<ModelSelection>) =>
+    setDraft((d) => ({
+      ...d,
+      selection: typeof next === "function" ? next(d.selection) : next,
+    }));
   const complex = initial === null;
   const pool = config.pools.find((p) => "pool:" + p.id === selection.source);
   function selectModels(models: string[]) {
@@ -44,6 +51,12 @@ export function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
     }));
   }
   async function persist(remove = false) {
+    if (conflict) {
+      setError(
+        "此 Agent 的路由已在其他位置更改。请先载入最新路由，再重新选择。",
+      );
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -69,6 +82,7 @@ export function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
             : c,
         ),
       });
+      setDraft((d) => ({ ...d, base: undefined }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -196,6 +210,17 @@ export function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
                 清除路由
               </Button>
             )}
+            {conflict && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setDraft(routeDraft(existing, initial));
+                  setError("");
+                }}
+              >
+                放弃修改并载入最新路由
+              </Button>
+            )}
           </div>
         </>
       )}
@@ -263,6 +288,12 @@ export function RouteCard({ client, agent }: { client: Client; agent: Agent }) {
           </>
         )}
       </div>
+      {conflict && (
+        <p className="text-warning">
+          此 Agent
+          的路由已在其他位置更改；你未保存的选择仍保留，保存前请载入最新路由。
+        </p>
+      )}
       {error && <ErrorNote>{error}</ErrorNote>}
     </Panel>
   );

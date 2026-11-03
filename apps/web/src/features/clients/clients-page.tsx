@@ -107,7 +107,7 @@ export function Clients() {
             <div className="client-routes">
               {enabledAgents(c).map((agent) => (
                 <RouteCard
-                  key={c.id + agent + config.revision}
+                  key={c.id + agent}
                   client={c}
                   agent={agent}
                 />
