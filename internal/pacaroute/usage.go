@@ -15,14 +15,20 @@ func number(m map[string]json.RawMessage, k string) *int64 {
 	}
 	return &v
 }
-func (u *Usage) observe(b []byte) {
+func (u *Usage) observe(b []byte) { u.observeLevel(b, true) }
+
+// Events carry usage at the top level or in one response/message envelope.
+// Do not recurse further: each level would re-parse the remaining frame.
+func (u *Usage) observeLevel(b []byte, envelope bool) {
 	var m map[string]json.RawMessage
 	if json.Unmarshal(b, &m) != nil {
 		return
 	}
-	for _, k := range []string{"response", "message"} {
-		if v, ok := m[k]; ok {
-			u.observe(v)
+	if envelope {
+		for _, k := range []string{"response", "message"} {
+			if v, ok := m[k]; ok {
+				u.observeLevel(v, false)
+			}
 		}
 	}
 	v, ok := m["usage"]
