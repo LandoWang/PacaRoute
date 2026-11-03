@@ -138,3 +138,13 @@ func (r *Router) Targets(c *Config, scope string, agent AgentProtocol, id, model
 // affinityHash derives persisted session-binding and legacy import keys. Its
 // SHA-256 hex output is a storage contract shared with existing journals.
 func affinityHash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }
+
+func (t Target) upstreamProtocol(agent ...AgentProtocol) string {
+	if t.Source.Kind == SourcePeer && len(agent) > 0 {
+		return incomingProtocol(agent[0])
+	}
+	if t.Source.Kind == SourceAnthropic || t.Source.Kind == SourceCopilot && strings.HasPrefix(t.Model, "claude-") {
+		return "messages"
+	}
+	return "responses"
+}

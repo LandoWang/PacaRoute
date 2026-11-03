@@ -10,15 +10,6 @@ type object = map[string]json.RawMessage
 func obj(b json.RawMessage) object     { v := object{}; _ = json.Unmarshal(b, &v); return v }
 func array(b json.RawMessage) []object { var v []object; _ = json.Unmarshal(b, &v); return v }
 
-func (t Target) upstreamProtocol(agent ...AgentProtocol) string {
-	if t.Source.Kind == SourcePeer && len(agent) > 0 {
-		return incomingProtocol(agent[0])
-	}
-	if t.Source.Kind == SourceAnthropic || t.Source.Kind == SourceCopilot && strings.HasPrefix(t.Model, "claude-") {
-		return "messages"
-	}
-	return "responses"
-}
 func incomingProtocol(agent AgentProtocol) string {
 	if agent == AgentClaudeCode {
 		return "messages"
