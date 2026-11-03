@@ -13,7 +13,11 @@ import {
 } from "../../components/ui";
 import { sources } from "../../domain/config";
 import { agentNames } from "../../domain/routing";
-import { connectionScript, type ScriptPlatform } from "./connection-script";
+import {
+  connectionScript,
+  connectionScriptPreview,
+  type ScriptPlatform,
+} from "./connection-script";
 import { connectionModelRoutes } from "./model-routes";
 export function ConnectionScript({
   client,
@@ -73,13 +77,12 @@ export function ConnectionScript({
         platform,
         apiKey,
       );
-      preview = connectionScript(
+      preview = connectionScriptPreview(
         client,
         agent,
         address,
         model,
         platform,
-        "<客户端密钥 已隐藏>",
       );
     }
   } catch (e) {

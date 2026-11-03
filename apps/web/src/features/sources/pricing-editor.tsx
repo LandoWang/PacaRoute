@@ -1,7 +1,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { type ModelPrice, type Source } from "../../api/types";
-import { useApp } from "../../app/state";
+import { useApp, useDraftBase } from "../../app/state";
 import { Button, Editor, Field, Input } from "../../components/ui";
 const priceFields = [
   ["input_usd", "普通输入"],
@@ -16,7 +16,8 @@ export function PricingEditor({
   source: Source;
   onClose: () => void;
 }) {
-  const { config, save } = useApp();
+  const { save } = useApp(),
+    config = useDraftBase();
   const [rows, setRows] = useState(() =>
     Object.entries(source.prices || {}).map(([model, price]) => ({
       model,

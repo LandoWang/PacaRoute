@@ -106,11 +106,7 @@ export function Clients() {
             <QuotaMeter key={c.id + config.revision} client={c} />
             <div className="client-routes">
               {enabledAgents(c).map((agent) => (
-                <RouteCard
-                  key={c.id + agent}
-                  client={c}
-                  agent={agent}
-                />
+                <RouteCard key={c.id + agent} client={c} agent={agent} />
               ))}
             </div>
             {enabledAgents(c).length === 0 && (

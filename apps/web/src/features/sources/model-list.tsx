@@ -2,7 +2,7 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../api/transport";
 import { type ModelDiscovery, type Source } from "../../api/types";
-import { useApp } from "../../app/state";
+import { useApp, useDraftBase } from "../../app/state";
 import { Loading } from "../../components/feedback";
 import { Button, Badge, Modal, Editor } from "../../components/ui";
 import { peerCapabilities } from "../../domain/accounts";
@@ -13,7 +13,8 @@ export function ModelList({
   source: Source;
   onClose: () => void;
 }) {
-  const { config, save } = useApp();
+  const { save } = useApp(),
+    config = useDraftBase();
   const [result, setResult] = useState<ModelDiscovery>(),
     [selected, setSelected] = useState(source.deployments || []),
     [loading, setLoading] = useState(false),

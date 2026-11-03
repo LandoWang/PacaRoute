@@ -1,7 +1,7 @@
 import { Plus, KeyRound, Trash2 } from "lucide-react";
 import { api } from "../../api/transport";
 import { type Account } from "../../api/types";
-import { useApp } from "../../app/state";
+import { useApp, useDraftBase } from "../../app/state";
 import { BrandIcon } from "../../components/brand-icon";
 import { Confirm } from "../../components/feedback";
 import { Button, Badge, Panel, Empty } from "../../components/ui";
@@ -18,7 +18,8 @@ import { AccountEditor } from "./account-editor";
 import { AccountKey } from "./account-key";
 import { DeviceLogin } from "./device-login";
 function NewAccountSource({ account }: { account: Account }) {
-  const { config, save, close } = useApp();
+  const { save, close } = useApp(),
+    config = useDraftBase();
   return (
     <SourceEditor
       config={config}
