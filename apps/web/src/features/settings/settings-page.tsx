@@ -3,6 +3,7 @@ import { api } from "../../api/transport";
 import { useApp } from "../../app/state";
 import { Button, Panel, Field, Input, ErrorNote } from "../../components/ui";
 import { ConfigTransfer } from "./config-transfer";
+import { errorMessage } from "../../domain/errors";
 export function Settings() {
   const { status, reload, notice } = useApp();
   const [port, setPort] = useState(String(status.port || 8766)),
@@ -68,7 +69,7 @@ export function Settings() {
                   });
                   await reload();
                 } catch (e) {
-                  setError((e as Error).message);
+                  setError(errorMessage(e));
                 } finally {
                   setBusy(false);
                 }
@@ -97,7 +98,7 @@ export function Settings() {
                   await reload();
                   notice("服务端口已更新；请重新生成客户端接入信息。");
                 } catch (e) {
-                  setError((e as Error).message);
+                  setError(errorMessage(e));
                 } finally {
                   setBusy(false);
                 }
@@ -124,7 +125,7 @@ export function Settings() {
                       });
                       await reload();
                     } catch (e) {
-                      setError((e as Error).message);
+                      setError(errorMessage(e));
                     } finally {
                       setBusy(false);
                     }

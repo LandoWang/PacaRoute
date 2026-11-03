@@ -6,6 +6,7 @@ import { useApp, useDraftBase } from "../../app/state";
 import { Loading } from "../../components/feedback";
 import { Button, Badge, Modal, Editor } from "../../components/ui";
 import { peerCapabilities } from "../../domain/accounts";
+import { errorMessage } from "../../domain/errors";
 export function ModelList({
   source,
   onClose,
@@ -27,7 +28,7 @@ export function ModelList({
         await api<ModelDiscovery>(`sources/${source.id}/discover-models`),
       );
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }

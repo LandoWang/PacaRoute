@@ -13,6 +13,7 @@ import {
 } from "../../components/ui";
 import { sourceName } from "../../domain/config";
 import { ProxyEditor } from "./proxy-editor";
+import { errorMessage } from "../../domain/errors";
 export function Proxies() {
   const { config, save, show, close } = useApp();
   const common = { config, save, close };
@@ -142,7 +143,7 @@ function AccountProxy({
               proxies: { ...config.proxies, account_proxy_id: e.target.value },
             });
           } catch (e) {
-            setError((e as Error).message);
+            setError(errorMessage(e));
           } finally {
             setBusy(false);
           }

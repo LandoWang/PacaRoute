@@ -17,6 +17,7 @@ import {
   selectedModelRoutes,
   type ModelSelection,
 } from "./model-routes";
+import { errorMessage } from "../../domain/errors";
 const emptySelection: ModelSelection = {
   source: "",
   models: [],
@@ -84,7 +85,7 @@ export function RouteCard({ client, agent }: { client: Client; agent: Grant }) {
       });
       draft.markSaved();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

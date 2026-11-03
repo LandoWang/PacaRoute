@@ -33,6 +33,7 @@ import { saveConfig } from "./config-save";
 import { startPolling } from "./polling";
 import { Login } from "./login";
 import { StateContext } from "./state";
+import { errorMessage } from "../domain/errors";
 const pages = [
   ["overview", "导览", LayoutDashboard, "你的模型网络，一目了然。"],
   ["accounts", "账号", Users, "连接身份，管理授权。"],
@@ -250,7 +251,7 @@ export function App() {
                   setAuth(false);
                   setDialog(undefined);
                 } catch (e) {
-                  setError((e as Error).message);
+                  setError(errorMessage(e));
                 }
               }}
             >
@@ -300,7 +301,7 @@ export function App() {
                     await reload();
                     setMessage("状态已刷新");
                   } catch (e) {
-                    setError((e as Error).message);
+                    setError(errorMessage(e));
                   } finally {
                     setRefreshing(false);
                   }

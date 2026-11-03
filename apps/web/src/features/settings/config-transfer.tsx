@@ -12,6 +12,7 @@ import {
   Panel,
   Select,
 } from "../../components/ui";
+import { errorMessage } from "../../domain/errors";
 const labels: Record<ImportKind, string> = {
   accounts: "账号",
   sources: "来源",
@@ -119,7 +120,7 @@ export function ConfigTransfer() {
                   "已导出配置，不含账号凭据、客户端密钥、用量或错误记录。",
                 );
               } catch (e) {
-                setError((e as Error).message);
+                setError(errorMessage(e));
               } finally {
                 setBusy(false);
               }

@@ -8,6 +8,7 @@ import {
 } from "../../api/types";
 import { useApp } from "../../app/state";
 import { Button, Modal, ErrorNote } from "../../components/ui";
+import { errorMessage } from "../../domain/errors";
 export function DeviceLogin({
   account,
   onClose,
@@ -52,7 +53,7 @@ export function DeviceLogin({
             if (Date.now() > until) throw Error("验证码已过期，请重新登录");
             timer = setTimeout(poll, 3000);
           } catch (e) {
-            if (active) setError((e as Error).message);
+            if (active) setError(errorMessage(e));
           }
         };
         void poll();

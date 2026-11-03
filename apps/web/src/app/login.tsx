@@ -2,6 +2,7 @@ import { ArrowLeftRight, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import pacaRouteMark from "../assets/pacaroute-mark.png";
 import { Button, Input, Field, ErrorNote } from "../components/ui";
+import { errorMessage } from "../domain/errors";
 export function Login({
   loading,
   error,
@@ -40,7 +41,7 @@ export function Login({
                 await onLogin(key);
                 setKey("");
               } catch (e) {
-                setFailure((e as Error).message);
+                setFailure(errorMessage(e));
               } finally {
                 setBusy(false);
               }

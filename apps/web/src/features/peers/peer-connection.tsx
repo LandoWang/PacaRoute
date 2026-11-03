@@ -16,6 +16,7 @@ import {
   parsePeerConnection,
   type PeerConnection,
 } from "./peer-connection-data";
+import { errorMessage } from "../../domain/errors";
 export function ClientQR({
   client,
   onClose,
@@ -67,7 +68,7 @@ export function ClientQR({
         name: client.name,
       });
   } catch (e) {
-    validation = (e as Error).message;
+    validation = errorMessage(e);
   }
   useEffect(() => {
     let active = true;
@@ -243,7 +244,7 @@ export function PeerScan({
         bitmap.close();
       }
     } catch (e) {
-      if (generation.current === token) setError((e as Error).message);
+      if (generation.current === token) setError(errorMessage(e));
     } finally {
       if (generation.current === token) setBusy(false);
     }
@@ -294,7 +295,7 @@ export function PeerScan({
               read(result.data);
               return;
             } catch (e) {
-              setError((e as Error).message);
+              setError(errorMessage(e));
             }
           }
         }
@@ -308,7 +309,7 @@ export function PeerScan({
         setError(
           e instanceof DOMException
             ? "无法打开摄像头，请检查浏览器权限或上传二维码图片。"
-            : (e as Error).message,
+            : errorMessage(e),
         );
       }
     }

@@ -31,6 +31,7 @@ import {
   sources,
   upsertByID,
 } from "../../domain/config";
+import { errorMessage } from "../../domain/errors";
 export function SourceEditor({
   config,
   save,
@@ -119,7 +120,7 @@ export function SourceEditor({
         subscription_id: result.subscription_id || current.subscription_id,
       }));
     } catch (e) {
-      if (!controller.signal.aborted) setDiscoveryError((e as Error).message);
+      if (!controller.signal.aborted) setDiscoveryError(errorMessage(e));
     } finally {
       if (discoveryRequest.current === controller) {
         discoveryRequest.current = undefined;

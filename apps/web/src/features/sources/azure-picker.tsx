@@ -12,6 +12,7 @@ import { identifier } from "../../components/identity";
 import { Button, Editor, Field, Input, Select } from "../../components/ui";
 import { generatedID, suggestedName } from "../../domain/config";
 import { SourceEditor } from "./source-editor";
+import { errorMessage } from "../../domain/errors";
 export function AzurePicker({
   account,
   onClose,
@@ -61,7 +62,7 @@ export function AzurePicker({
       );
       setResources(v.resources);
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -82,7 +83,7 @@ export function AzurePicker({
       setModels(v.models.map((m) => m.id));
       setSelected(v.models.map((m) => m.id));
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }

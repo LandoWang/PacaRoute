@@ -23,6 +23,7 @@ import {
   type ScriptPlatform,
 } from "./connection-script";
 import { connectionModelRoutes } from "./model-routes";
+import { errorMessage } from "../../domain/errors";
 export function ConnectionScript({
   client,
   agent,
@@ -90,7 +91,7 @@ export function ConnectionScript({
       );
     }
   } catch (e) {
-    error = (e as Error).message;
+    error = errorMessage(e);
   }
   const filename = `pacaroute-${client.id}-${agent}.${platform === "shell" ? "sh" : "ps1"}`;
   return (
@@ -177,7 +178,7 @@ export function ConnectionScript({
                     setImportKey("");
                   }
                 } catch (e) {
-                  if (active.current) setKeyError((e as Error).message);
+                  if (active.current) setKeyError(errorMessage(e));
                 }
               }}
             >

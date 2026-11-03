@@ -8,6 +8,7 @@ import {
 import { api } from "../api/transport";
 import { type Config, type Status } from "../api/types";
 import { startPolling } from "./polling";
+import { errorMessage } from "../domain/errors";
 export type AppState = {
   config: Config;
   status: Status;
@@ -41,7 +42,7 @@ export function useLoad<T>(path: string, interval = 0) {
         setData(v);
         setError("");
       } catch (e) {
-        if (!signal.aborted) setError((e as Error).message);
+        if (!signal.aborted) setError(errorMessage(e));
       } finally {
         if (!signal.aborted) setLoading(false);
       }
