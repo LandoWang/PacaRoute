@@ -274,6 +274,13 @@ func (s *Server) gatewayFor(w http.ResponseWriter, r *http.Request, peer bool) {
 			break
 		}
 		if e != nil || res == nil {
+			if r.Context().Err() != nil {
+				// The Client left before any upstream response. This is not a
+				// source failure: do not cool the member or try another target.
+				activity.Status = 499
+				activity.Error = "client disconnected before upstream response"
+				return
+			}
 			activity.Status = 502
 			activity.Error = "upstream connection or authentication failed"
 			if e != nil && !strings.Contains(e.Error(), "https://") {
