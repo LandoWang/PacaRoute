@@ -10,16 +10,7 @@ import { api, APIError } from "../api/transport";
 import { type Config, type Status } from "../api/types";
 import pacaRouteMark from "../assets/pacaroute-mark.png";
 import { Button, ErrorNote } from "../components/ui";
-import { Accounts } from "../features/accounts/accounts-page";
-import { Clients } from "../features/clients/clients-page";
-import { Errors } from "../features/errors/errors-page";
-import { Overview } from "../features/overview/overview-page";
-import { Pools } from "../features/pools/pools-page";
 import { RoutingAlert } from "../features/pools/routing-health";
-import { Proxies } from "../features/proxies/proxies-page";
-import { Settings } from "../features/settings/settings-page";
-import { Sources } from "../features/sources/sources-page";
-import { UsagePage } from "../features/usage/usage-page";
 import { saveConfig } from "./config-save";
 import { startPolling } from "./polling";
 import { Login } from "./login";
@@ -130,18 +121,7 @@ export function App() {
         }}
       />
     );
-  const current = pages.find((p) => p[0] === page) || pages[0];
-  const views: Record<string, ReactNode> = {
-    overview: <Overview />,
-    accounts: <Accounts />,
-    sources: <Sources />,
-    pools: <Pools />,
-    clients: <Clients />,
-    usage: <UsagePage />,
-    proxies: <Proxies />,
-    settings: <Settings />,
-    errors: <Errors />,
-  };
+  const current = pages.find((p) => p.id === page) || pages[0];
   return (
     <StateContext.Provider
       value={{
@@ -173,7 +153,7 @@ export function App() {
           </a>
           <span className="nav-caption">工作空间</span>
           <nav>
-            {pages.map(([id, label, Icon]) => (
+            {pages.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 aria-current={page === id ? "page" : undefined}
@@ -242,8 +222,8 @@ export function App() {
                 <Menu size={20} />
               </Button>
               <div>
-                <h1>{current[1]}</h1>
-                <p>{current[3]}</p>
+                <h1>{current.label}</h1>
+                <p>{current.description}</p>
               </div>
             </div>
             <div className="actions">
@@ -299,7 +279,7 @@ export function App() {
             </div>
           )}
           <div className="page-content" key={page}>
-            {views[page] || views.overview}
+            <current.view />
           </div>
           <footer className="page-footer">
             PacaRoute · 你的模型，你的路由。
