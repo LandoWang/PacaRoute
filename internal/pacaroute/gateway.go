@@ -1,51 +1,16 @@
 package pacaroute
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func parseGatewayPath(path string) (agent AgentProtocol, explicit, operation string) {
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(parts) >= 2 && (parts[0] == "sources" || parts[0] == "pools") {
-		explicit = parts[1]
-		if parts[0] == "pools" {
-			explicit = "pool:" + explicit
-		}
-		parts = parts[2:]
-	}
-	if len(parts) > 0 && parts[0] == "codex" {
-		agent = AgentCodex
-		parts = parts[1:]
-	} else if len(parts) > 0 && parts[0] == "cc" {
-		agent = AgentClaudeCode
-		parts = parts[1:]
-	}
-	if len(parts) > 0 && parts[0] == "v1" {
-		parts = parts[1:]
-	}
-	operation = strings.Join(parts, "/")
-	if agent == "" {
-		if operation == "messages" || operation == "messages/count_tokens" {
-			agent = AgentClaudeCode
-		} else {
-			agent = AgentCodex
-		}
-	}
-	return
-}
 func (s *Server) gateway(w http.ResponseWriter, r *http.Request) { s.gatewayFor(w, r, false) }
 
 // gatewayExchange is the execution state of one Agent request. It owns the
@@ -353,170 +318,8 @@ func (s *Server) attempt(x *gatewayExchange, i int, t Target) bool {
 	return false
 }
 
-// upstreamPath maps the Agent operation to the target's native endpoint path.
-func upstreamPath(t Target, agent AgentProtocol, protocol, operation string) string {
-	upstreamPath := "/responses"
-	if protocol == "messages" {
-		upstreamPath = "/v1/messages"
-	}
-	if operation == "messages/count_tokens" {
-		upstreamPath += "/count_tokens"
-	}
-	if t.Source.Kind == SourcePeer {
-		prefix := "/codex"
-		if agent == AgentClaudeCode {
-			prefix = "/cc"
-		}
-		upstreamPath = prefix + "/" + operation
-	}
-	return upstreamPath
-}
-
-// send performs one upstream request with an immutable Auth lease. A rejected
-// Copilot lease is refreshed and retried once; no other retry happens here.
-func (s *Server) send(x *gatewayExchange, t Target, wire []byte, protocol, upstreamPath string) (*http.Response, error) {
-	r, c := x.r, x.config
-	var res *http.Response
-	var e error
-	for authAttempt := 0; authAttempt < 2; authAttempt++ {
-		l, err := s.Auth.Lease(r.Context(), c, t.Source, authAttempt > 0)
-		if err != nil {
-			e = err
-			break
-		}
-		base := t.Source.Endpoint
-		if t.Source.Kind == SourceCopilot {
-			base = l.Endpoint
-		}
-		if strings.HasSuffix(strings.TrimRight(base, "/"), "/v1") && strings.HasPrefix(upstreamPath, "/v1/") {
-			upstreamPath = strings.TrimPrefix(upstreamPath, "/v1")
-		}
-		url := strings.TrimRight(base, "/") + upstreamPath
-		req, err := http.NewRequestWithContext(r.Context(), "POST", url, bytes.NewReader(wire))
-		if err != nil {
-			e = err
-			break
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", r.Header.Get("Accept"))
-		for _, k := range []string{"anthropic-version", "anthropic-beta", "thread-id", "session-id", "session_id", "X-Claude-Code-Session-Id"} {
-			if v := r.Header.Get(k); v != "" {
-				req.Header.Set(k, v)
-			}
-		}
-		if protocol == "messages" && req.Header.Get("anthropic-version") == "" {
-			req.Header.Set("anthropic-version", "2023-06-01")
-		}
-		req.Header.Set(l.Header, l.Value)
-		if t.Source.Kind == SourcePeer {
-			req.Header.Set(peerHopHeader, strconv.Itoa(x.hops+1))
-			if x.session != "" {
-				req.Header.Set("X-PacaRoute-Session", peerSessionHash(s.AdminKey, x.affinityScope, x.agent, t.Source.ID, x.session))
-			}
-		}
-		if t.Source.Kind == SourceCopilot {
-			s.Auth.copilotHeaders(req, l, bytes.Contains(wire, []byte("input_image")) || bytes.Contains(wire, []byte(`"image"`)))
-			req.Header.Set("X-Initiator", "agent")
-			req.Header.Set("X-Request-Id", newID())
-			req.Header.Set("Openai-Intent", "conversation-panel")
-		}
-		res, e = s.Auth.http.client(c.SourceProxy(t.Source.ID)).Do(req)
-		if e != nil {
-			break
-		}
-		if authAttempt == 0 && (res.StatusCode == 401 || res.StatusCode == 403) && t.Source.Kind == SourceCopilot {
-			io.Copy(io.Discard, io.LimitReader(res.Body, 65536))
-			res.Body.Close()
-			res = nil
-			continue
-		}
-		break
-	}
-	return res, e
-}
-
-// relayStream relays or translates this one committed upstream stream. After
-// the downstream status is written no other source may take over the response.
-func (s *Server) relayStream(x *gatewayExchange, t Target, tr *translation, protocol string, res *http.Response) {
-	w, r, agent, activity := x.w, x.r, x.agent, &x.activity
-	var e error
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(res.StatusCode)
-	reader := io.Reader(res.Body)
-	var trace bytes.Buffer
-	if s.TraceDir != "" {
-		reader = io.TeeReader(reader, &trace)
-	}
-	if tr != nil {
-		if tr.to == "responses" {
-			e = tr.streamResponses(w, reader, &x.usage)
-		} else {
-			e = tr.streamMessages(w, reader, &x.usage)
-		}
-	} else {
-		e = relaySSE(w, struct {
-			io.Reader
-			io.Closer
-		}{reader, res.Body}, &x.usage, protocol)
-	}
-	s.trace(activity.ID, "upstream-res.sse", trace.Bytes())
-	if e != nil {
-		var downstream *downstreamStreamError
-		var upstream *upstreamStreamError
-		upstreamFailure := errors.As(e, &upstream)
-		if errors.As(e, &downstream) || (r.Context().Err() != nil && !upstreamFailure) {
-			activity.Status = 499
-			activity.Error = "client disconnected before stream completion"
-		} else {
-			activity.Status = 502
-			activity.Error = "stream interrupted before completion: " + streamDetail(e.Error())
-			// Never replay a started response. Cool down this source/model so
-			// the next client retry can recover under the existing pool rules.
-			s.Router.Fail(t, activity.Error)
-			if !upstreamFailure || !upstream.forwarded {
-				_ = emitStreamError(w, agent, activity.Error)
-			}
-		}
-	}
-}
-
-// relayJSON relays a bounded non-stream response, translating it when needed.
-func (s *Server) relayJSON(x *gatewayExchange, tr *translation, res *http.Response) {
-	w, activity := x.w, &x.activity
-	var e error
-	data, err := io.ReadAll(io.LimitReader(res.Body, 32<<20+1))
-	if err != nil || len(data) > 32<<20 {
-		e = errors.New("upstream response incomplete or too large")
-	} else {
-		x.usage.observe(data)
-		s.trace(activity.ID, "upstream-res.json", data)
-		if tr != nil && x.operation != "messages/count_tokens" {
-			data, e = tr.responseJSON(data)
-		}
-		if e == nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(res.StatusCode)
-			_, e = w.Write(data)
-		}
-	}
-	if e != nil {
-		activity.Status = 502
-		activity.Error = e.Error()
-		problem(w, 502, "invalid upstream response")
-	}
-}
 func retryable(status int) bool {
 	return status == 401 || status == 403 || status == 408 || status == 429 || status >= 500
-}
-func (s *Server) trace(id, name string, b []byte) {
-	if s.TraceDir == "" || len(b) == 0 {
-		return
-	}
-	dir := filepath.Join(s.TraceDir, id)
-	if os.MkdirAll(dir, 0700) == nil {
-		_ = atomicWrite(filepath.Join(dir, name), b, 0600)
-	}
 }
 
 // Keep imported local affinity stable without merging any network Client scope.
@@ -528,12 +331,4 @@ func affinityClient(client *Client) string {
 		return "client:local"
 	}
 	return client.ID
-}
-
-// peerSessionHash derives the session identity sent to a peer PacaRoute. It is
-// keyed by this installation's admin key so the peer cannot correlate the
-// downstream session, and is stable so peer affinity survives restarts.
-func peerSessionHash(adminKey, scope string, agent AgentProtocol, sourceID, session string) string {
-	h := sha256.Sum256([]byte(adminKey + "\x00" + scope + "\x00" + string(agent) + "\x00" + sourceID + "\x00" + session))
-	return hex.EncodeToString(h[:])
 }

@@ -1,0 +1,91 @@
+package pacaroute
+
+import (
+	"bytes"
+	"errors"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+)
+
+// relayStream relays or translates this one committed upstream stream. After
+// the downstream status is written no other source may take over the response.
+func (s *Server) relayStream(x *gatewayExchange, t Target, tr *translation, protocol string, res *http.Response) {
+	w, r, agent, activity := x.w, x.r, x.agent, &x.activity
+	var e error
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(res.StatusCode)
+	reader := io.Reader(res.Body)
+	var trace bytes.Buffer
+	if s.TraceDir != "" {
+		reader = io.TeeReader(reader, &trace)
+	}
+	if tr != nil {
+		if tr.to == "responses" {
+			e = tr.streamResponses(w, reader, &x.usage)
+		} else {
+			e = tr.streamMessages(w, reader, &x.usage)
+		}
+	} else {
+		e = relaySSE(w, struct {
+			io.Reader
+			io.Closer
+		}{reader, res.Body}, &x.usage, protocol)
+	}
+	s.trace(activity.ID, "upstream-res.sse", trace.Bytes())
+	if e != nil {
+		var downstream *downstreamStreamError
+		var upstream *upstreamStreamError
+		upstreamFailure := errors.As(e, &upstream)
+		if errors.As(e, &downstream) || (r.Context().Err() != nil && !upstreamFailure) {
+			activity.Status = 499
+			activity.Error = "client disconnected before stream completion"
+		} else {
+			activity.Status = 502
+			activity.Error = "stream interrupted before completion: " + streamDetail(e.Error())
+			// Never replay a started response. Cool down this source/model so
+			// the next client retry can recover under the existing pool rules.
+			s.Router.Fail(t, activity.Error)
+			if !upstreamFailure || !upstream.forwarded {
+				_ = emitStreamError(w, agent, activity.Error)
+			}
+		}
+	}
+}
+
+// relayJSON relays a bounded non-stream response, translating it when needed.
+func (s *Server) relayJSON(x *gatewayExchange, tr *translation, res *http.Response) {
+	w, activity := x.w, &x.activity
+	var e error
+	data, err := io.ReadAll(io.LimitReader(res.Body, 32<<20+1))
+	if err != nil || len(data) > 32<<20 {
+		e = errors.New("upstream response incomplete or too large")
+	} else {
+		x.usage.observe(data)
+		s.trace(activity.ID, "upstream-res.json", data)
+		if tr != nil && x.operation != "messages/count_tokens" {
+			data, e = tr.responseJSON(data)
+		}
+		if e == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(res.StatusCode)
+			_, e = w.Write(data)
+		}
+	}
+	if e != nil {
+		activity.Status = 502
+		activity.Error = e.Error()
+		problem(w, 502, "invalid upstream response")
+	}
+}
+func (s *Server) trace(id, name string, b []byte) {
+	if s.TraceDir == "" || len(b) == 0 {
+		return
+	}
+	dir := filepath.Join(s.TraceDir, id)
+	if os.MkdirAll(dir, 0700) == nil {
+		_ = atomicWrite(filepath.Join(dir, name), b, 0600)
+	}
+}
