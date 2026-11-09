@@ -1,0 +1,8 @@
+- [x] Reproduce rotating IDs and unmatched real Codex message start/completion events.
+- [x] Restore per-message identity on the native Copilot Responses relay.
+- [x] Add capture-based regression and provider-boundary tests.
+- [x] Run regression, race and static checks; mutation-check gateway wiring.
+- [x] Verify real Codex multi-tool execution, continuation and message identity.
+- [x] Verify unaffected Claude paths with real client evidence.
+- [x] Build, sign, verify and install the repaired desktop application with rollback copies.
+- [x] Restart the user's live instance after explicit permission, then probe its message lifecycle.

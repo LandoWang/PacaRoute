@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/atomicfile"
+	"github.com/LandoWang/pacaroute/internal/pacaroute/domain"
 	"github.com/LandoWang/pacaroute/internal/pacaroute/protocol"
 
 	"github.com/LandoWang/pacaroute/internal/pacaroute/routing"
@@ -37,10 +38,15 @@ func (s *Server) relayStream(x *gatewayExchange, t routing.Target, tr *protocol.
 			e = tr.StreamMessages(w, reader, &x.usage)
 		}
 	} else {
-		e = protocol.RelaySSE(w, struct {
+		stream := struct {
 			io.Reader
 			io.Closer
-		}{reader, res.Body}, &x.usage, upstreamProto)
+		}{reader, res.Body}
+		if agent == domain.AgentCodex && t.Source.Kind == domain.SourceCopilot && upstreamProto == "responses" {
+			e = protocol.RelayCopilotResponsesSSE(w, stream, &x.usage)
+		} else {
+			e = protocol.RelaySSE(w, stream, &x.usage, upstreamProto)
+		}
 	}
 	s.trace(activity.ID, "upstream-res.sse", trace.Bytes())
 	if e != nil {

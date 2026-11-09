@@ -142,6 +142,10 @@ func (s *sseReader) Next() ([]byte, []byte, error) {
 }
 
 func RelaySSE(w io.Writer, r io.Reader, u *usage.Usage, protocol string) error {
+	return relaySSE(w, r, u, protocol, nil)
+}
+
+func relaySSE(w io.Writer, r io.Reader, u *usage.Usage, protocol string, rewrite func([]byte, []byte, object) []byte) error {
 	rd := NewSSE(r)
 	last := "none"
 	var pending error
@@ -164,6 +168,9 @@ func RelaySSE(w io.Writer, r io.Reader, u *usage.Usage, protocol string) error {
 		typ := rawString(m["type"])
 		if typ != "" {
 			last = typ
+		}
+		if rewrite != nil {
+			frame = rewrite(frame, data, m)
 		}
 		if e = writeStreamFrame(w, frame); e != nil {
 			return e
