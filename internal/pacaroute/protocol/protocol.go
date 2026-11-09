@@ -53,6 +53,7 @@ func Prepare(body object, kind domain.SourceKind, model string, agent domain.Age
 				}
 			}
 			clampEffort(wire, model)
+			normalizeReasoningContext(wire, model)
 		} else {
 			sanitizeMessages(wire, model)
 		}

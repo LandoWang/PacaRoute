@@ -8,6 +8,20 @@ var CopilotResponseEfforts = map[string]string{
 	"gpt-5.6-luna": "none low medium high xhigh max", "gpt-5.6-sol": "none low medium high xhigh max", "gpt-5.6-sol-fast": "none low medium high xhigh max", "gpt-5.6-terra": "none low medium high xhigh max", "gpt-6-luna": "none low medium high xhigh max", "gpt-6-sol": "none low medium high xhigh max", "gpt-6.1-terra": "none low medium high xhigh max",
 	"gpt-6-astra": "low medium high xhigh max", "gpt-6.1-sol": "low medium high xhigh max", "gpt-5-mini": "minimal low medium high", "mai-code-1.1-flash": "minimal low medium high", "mai-code-2-flash": "minimal none low medium high xhigh max"}
 
+// Paired Copilot probes on 2026-11-04 rejected all_turns for this exact model
+// and accepted auto/current_turn. Auto delegates the supported context policy;
+// it does not promise the all-turn reasoning behavior of newer models.
+func normalizeReasoningContext(wire object, model string) {
+	if model != "gpt-5.3-codex" {
+		return
+	}
+	r := obj(wire["reasoning"])
+	if rawString(r["context"]) == "all_turns" {
+		r["context"] = jsonBytes("auto")
+		wire["reasoning"] = jsonBytes(r)
+	}
+}
+
 func clampEffort(wire object, model string) {
 	accepted, ok := CopilotResponseEfforts[model]
 	if !ok {

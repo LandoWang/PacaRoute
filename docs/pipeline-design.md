@@ -1219,7 +1219,9 @@ The one live-proven protocol correction is a non-Responses message id such as
 only that id and records the mutation while preserving every unrelated item value.
 Top-level `reasoning.context` and future reasoning siblings ride the request bag;
 dropping `all_turns` is forbidden because Codex documents omission as the
-`current_turn` default.
+`current_turn` default. The probe-backed Go Copilot `gpt-5.3-codex` profile
+changes only its rejected `all_turns` to the accepted `auto` value; see
+`openspec/changes/translate-codex-desktop-tools/verification.md`.
 
 The Claude Code→Responses request side has one content-driven exception. An
 exact target profile whose direct two-turn probe proves structured multimodal

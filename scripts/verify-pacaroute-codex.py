@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Real Codex actuator. Verdict requires client dispatch logs and matching wire tool results."""
 import pathlib,subprocess,os,json,socket,time,signal,threading,queue,sys,argparse,shutil
-parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--codex",default=shutil.which("codex"));parser.add_argument("--upstream-model",default="gpt-6-astra");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");parser.add_argument("--connection-script",action="store_true");parser.add_argument("--stream-failure",choices=["eof","error"]);parser.add_argument("--import-pool",action="store_true");parser.add_argument("--peer",action="store_true");parser.add_argument("--legacy-local",action="store_true");parser.add_argument("--billing",action="store_true");options=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument("--binary",required=True);parser.add_argument("--credential-root",required=True);parser.add_argument("--codex",default=shutil.which("codex"));parser.add_argument("--upstream-model",default="gpt-6-astra");parser.add_argument("--source-id",default="copilot");parser.add_argument("--source-config-root");parser.add_argument("--azure-cli",action="store_true");parser.add_argument("--connection-script",action="store_true");parser.add_argument("--stream-failure",choices=["eof","error"]);parser.add_argument("--import-pool",action="store_true");parser.add_argument("--peer",action="store_true");parser.add_argument("--legacy-local",action="store_true");parser.add_argument("--billing",action="store_true");parser.add_argument("--client-model",default="gpt-6-astra");options=parser.parse_args()
 assert not options.legacy_local or not (options.peer or options.import_pool or options.connection_script), "legacy-local requires a direct local Client"
 assert options.codex,"Set --codex or install Codex CLI"
 R=pathlib.Path.cwd();Q=R/('artifacts/pacaroute-verification/live-appserver-'+time.strftime('%Y%m%d-%H%M%S')+'-'+__import__('uuid').uuid4().hex[:6]);Q.mkdir(parents=True,exist_ok=True)
 exe=pathlib.Path(options.binary).resolve()
 credential_root=pathlib.Path(options.credential_root).resolve()
 accounts=[{'id':'qa-api','name':'QA API','kind':'api-key'}]
-sources=[{'id':'qa-unavailable','name':'Unavailable QA source','kind':'openai','endpoint':'https://127.0.0.1:1','account_id':'qa-api','auth_mode':'api-key','deployments':['gpt-6-astra']}]
-pools=[{'id':'qa-codex','name':'QA Codex','agent':'codex','model':'gpt-6-astra','failover':True,'members':[{'id':'bad','source_id':'qa-unavailable','model':'gpt-6-astra','weight':1000000},{'id':'good','source_id':'copilot','model':options.upstream_model,'weight':1}]}]
-clients=[{'id':'qa-codex','name':'QA Codex','enabled_agents':['codex'],'key_hash':__import__('hashlib').sha256(b'qa-client-synthetic-key').hexdigest(),'routes':[{'id':'coding','agent':'codex','match_model':'gpt-6-astra','source_id':'pool:qa-codex','model':'gpt-6-astra'}]}]
+sources=[{'id':'qa-unavailable','name':'Unavailable QA source','kind':'openai','endpoint':'https://127.0.0.1:1','account_id':'qa-api','auth_mode':'api-key','deployments':[options.client_model]}]
+pools=[{'id':'qa-codex','name':'QA Codex','agent':'codex','model':options.client_model,'failover':True,'members':[{'id':'bad','source_id':'qa-unavailable','model':options.client_model,'weight':1000000},{'id':'good','source_id':'copilot','model':options.upstream_model,'weight':1}]}]
+clients=[{'id':'qa-codex','name':'QA Codex','enabled_agents':['codex'],'key_hash':__import__('hashlib').sha256(b'qa-client-synthetic-key').hexdigest(),'routes':[{'id':'coding','agent':'codex','match_model':options.client_model,'source_id':'pool:qa-codex','model':options.client_model}]}]
 if options.legacy_local:
  clients[0].update(id='default',local=True);clients[0].pop('key_hash')
 if options.source_id!='copilot':
@@ -72,7 +72,7 @@ try:
  client_port=port
  if options.peer:
   from verify_peer_hop import PeerHop
-  peer=PeerHop(exe,Q,port,client_key,'codex','gpt-6-astra',env)
+  peer=PeerHop(exe,Q,port,client_key,'codex',options.client_model,env)
   client_port,client_key=peer.port,peer.key
  import queue
  home=Q/'codex-home';home.mkdir(exist_ok=True);db=Q/'codex-sqlite';db.mkdir(exist_ok=True)
@@ -80,9 +80,9 @@ try:
  (home/'config.toml').write_text('web_search = "disabled"\n[features]\nmulti_agent = false\nplugins = false\nremote_plugin = false\n')
  if options.connection_script:
   from verify_connection_setup import configure
-  setup=configure(exe,Q,port,clients[0],'codex','gpt-6-astra',dict(env,CODEX_HOME=str(home)))
+  setup=configure(exe,Q,port,clients[0],'codex',options.client_model,dict(env,CODEX_HOME=str(home)))
  else:
-  setup=subprocess.run([str(exe),'connect','--agent','codex','--url',f'http://127.0.0.1:{client_port}','--model','gpt-6-astra','--apply'],input=client_key.encode(),env=dict(env,CODEX_HOME=str(home)),capture_output=True,check=True)
+  setup=subprocess.run([str(exe),'connect','--agent','codex','--url',f'http://127.0.0.1:{client_port}','--model',options.client_model,'--apply'],input=client_key.encode(),env=dict(env,CODEX_HOME=str(home)),capture_output=True,check=True)
  (Q/'connect-result.json').write_bytes(setup.stdout)
  if options.legacy_local:
   config=home/'config.toml';lines=[line for line in config.read_text().splitlines() if not line.startswith('http_headers =')]
@@ -113,7 +113,7 @@ try:
   raise TimeoutError('app-server response')
  try:
   send('initialize',{'clientInfo':{'name':'codex_app_server_daemon','title':'PacaRoute Go Verification','version':'1.0.0'}},1);until(lambda m:m.get('id')==1);send('initialized')
-  send('thread/start',{'model':'gpt-6-astra','modelProvider':'pacaroute','cwd':str(work),'approvalPolicy':'never','sandbox':'danger-full-access','config':{'model_reasoning_effort':'low'}},2)
+  send('thread/start',{'model':options.client_model,'modelProvider':'pacaroute','cwd':str(work),'approvalPolicy':'never','sandbox':'danger-full-access','config':{'model_reasoning_effort':'low'}},2)
   thread=until(lambda m:m.get('id')==2)['result']['thread']['id']
   def turn(id,prompt):
    send('turn/start',{'threadId':thread,'input':[{'type':'text','text':prompt}]},id);until(lambda m:m.get('id')==id)

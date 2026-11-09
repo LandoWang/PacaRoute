@@ -62,7 +62,10 @@ the exact ID; Claude can keep its configured client model alias while the route
 selects Argon. Save through the existing revisioned configuration UI/API.
 
 This is exact-ID inference support. It does not add a fabricated Codex desktop
-model metadata resource. Top-level Codex tool declarations retain namespace and custom-tool dispatch identities. Desktop input registrations are handled by a separate compatibility change. Native MCP execution and non-text
+model metadata resource. Codex `additional_tools` input registrations are translated
+to upstream tools, retaining namespace and custom-tool dispatch identities. Modern
+Codex app-server emits this desktop shape, including `functions.exec`; the desktop
+registration capture also has contract coverage. Native MCP execution and non-text
 tool-result compatibility are not claimed by this verification. Chat has no supported `messages/count_tokens` mapping;
 that endpoint returns 422 rather than a fabricated estimate. Existing Responses
 `previous_response_id` and `item_reference` cannot cross to Chat; clients must

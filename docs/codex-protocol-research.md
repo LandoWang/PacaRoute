@@ -535,6 +535,15 @@ What Codex sends (Track B) × what Copilot `/responses` accepts (Track A) → br
 | SSE response | parser tolerant, needs terminal `response.completed`, no `[DONE]` handling (§3.3) | ends at `response.completed`, **no `[DONE]`** (§2.5) | **passthrough — no DONE-filter needed** |
 | headers `x-codex-*` | sent (§3.2) | not probed for rejection; Copilot generally ignores unknowns | passthrough; bridge adds its own official Copilot headers (replace, like `/cc`) |
 
+Exact-model exception confirmed on 2026-11-04 UTC: Copilot `gpt-5.3-codex`
+rejects `reasoning.context: "all_turns"` with HTTP 400 and explicitly lists
+`auto` and `current_turn` as supported. Paired identical requests with each of
+those values return HTTP 200/completed. The Go Copilot Responses profile maps
+only this exact model's `all_turns` to `auto`; it does not omit the parameter or
+claim equivalent all-turn reasoning. Other models/providers and supported,
+unknown, null or absent values remain unchanged. Evidence is recorded under
+`openspec/changes/translate-codex-desktop-tools/verification.md`.
+
 ### 4.2 Implementation-shape recommendation
 **Codex support is a near-passthrough — structurally identical to the Claude Code
 `/cc` path** (parse → coerce → inject official Copilot headers → forward to native

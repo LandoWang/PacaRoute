@@ -184,7 +184,11 @@ func ResponsesToMessages(m object, tr *Translation) (object, error) {
 		for _, t := range ts {
 			typ := rawString(t["type"])
 			if typ == "namespace" {
-				if e := addTools(array(t["tools"]), rawString(t["name"])); e != nil {
+				children, e := registrationTools(t["tools"])
+				if e != nil {
+					return e
+				}
+				if e := addTools(children, rawString(t["name"])); e != nil {
 					return e
 				}
 				continue
@@ -215,9 +219,6 @@ func ResponsesToMessages(m object, tr *Translation) (object, error) {
 	if e := addTools(array(m["tools"]), ""); e != nil {
 		return nil, e
 	}
-	if len(tools) > 0 {
-		out["tools"] = jsonBytes(tools)
-	}
 	messages := []object{}
 	appendMessage := func(role string, content []object) {
 		if len(messages) > 0 && rawString(messages[len(messages)-1]["role"]) == role {
@@ -233,6 +234,15 @@ func ResponsesToMessages(m object, tr *Translation) (object, error) {
 	}
 	for _, item := range array(m["input"]) {
 		switch rawString(item["type"]) {
+		case "additional_tools":
+			// Desktop tool registrations are declarations, not developer prose.
+			registered, err := registrationTools(item["tools"])
+			if err != nil {
+				return nil, err
+			}
+			if err := addTools(registered, ""); err != nil {
+				return nil, err
+			}
 		case "", "message":
 			role := rawString(item["role"])
 			if role == "system" || role == "developer" {
@@ -292,6 +302,9 @@ func ResponsesToMessages(m object, tr *Translation) (object, error) {
 			return nil, fmt.Errorf("input item %q cannot cross protocols", rawString(item["type"]))
 		}
 	}
+	if len(tools) > 0 {
+		out["tools"] = jsonBytes(tools)
+	}
 	if system != "" {
 		out["system"] = jsonBytes(system)
 	}
@@ -308,4 +321,17 @@ func ResponsesToMessages(m object, tr *Translation) (object, error) {
 		out["tool_choice"] = jsonBytes(map[string]string{"type": choice})
 	}
 	return out, nil
+}
+
+func registrationTools(raw json.RawMessage) ([]object, error) {
+	var tools []object
+	if err := json.Unmarshal(raw, &tools); err != nil || tools == nil {
+		return nil, errors.New("tool registration requires a tools array")
+	}
+	for _, tool := range tools {
+		if tool == nil {
+			return nil, errors.New("tool registration requires tool objects")
+		}
+	}
+	return tools, nil
 }
