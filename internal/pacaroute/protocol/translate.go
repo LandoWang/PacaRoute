@@ -82,6 +82,9 @@ type ToolIdentity struct {
 type Translation struct {
 	From, To, Model string
 	ToolNames       map[string]ToolIdentity
+	// Chat replay is an authenticated opaque provider state, scoped by the gateway.
+	SealReplay func([]byte) (string, error)
+	OpenReplay func(string) ([]byte, error)
 }
 
 func MessagesToResponses(m object, tr *Translation) (object, error) {
@@ -281,7 +284,10 @@ func ResponsesToMessages(m object, tr *Translation) (object, error) {
 				return nil, err
 			}
 			appendMessage("user", []object{{"type": jsonBytes("tool_result"), "tool_use_id": item["call_id"], "content": content}})
-		case "reasoning": // Provider-encrypted reasoning is opaque and cannot cross protocols.
+		case "reasoning": // Provider-encrypted reasoning is never interpreted as text.
+			if tr.To == "chat" && item["encrypted_content"] != nil {
+				appendMessage("assistant", []object{{"type": jsonBytes("redacted_thinking"), "data": item["encrypted_content"]}})
+			}
 		default:
 			return nil, fmt.Errorf("input item %q cannot cross protocols", rawString(item["type"]))
 		}

@@ -1,0 +1,6 @@
+- [x] Probe live Copilot catalog and multi-turn Argon wire contract.
+- [x] Implement scoped opaque replay and request/response/stream adapters.
+- [x] Integrate exact-model routing and management catalog capability.
+- [x] Add contract, isolation and stream-failure tests; mutation-check critical assertions.
+- [x] Run Go checks and real Codex / Claude multi-tool continuations; inspect client evidence.
+- [x] Document verified behavior and limitations.

@@ -256,7 +256,14 @@ func (s *Server) attempt(x *gatewayExchange, i int, t routing.Target) bool {
 	activity.Model = t.Model
 	activity.Attempts = i + 1
 	upstreamProto := t.UpstreamProtocol(agent)
-	wire, tr, e := protocol.Prepare(x.body, t.Source.Kind, t.Model, agent, upstreamProto)
+	var wire []byte
+	var tr *protocol.Translation
+	var e error
+	if upstreamProto == "chat" {
+		wire, tr, e = protocol.PrepareChat(x.body, t.Model, agent, s.chatReplay(x, t))
+	} else {
+		wire, tr, e = protocol.Prepare(x.body, t.Source.Kind, t.Model, agent, upstreamProto)
+	}
 	if e != nil {
 		activity.Status = 400
 		activity.Error = e.Error()
@@ -321,7 +328,7 @@ func (s *Server) attempt(x *gatewayExchange, i int, t routing.Target) bool {
 			return false
 		}
 	}
-	if agent == domain.AgentCodex && upstreamProto == "responses" && (t.Source.Kind == domain.SourceCopilot || t.Source.Kind == domain.SourcePeer && res.Header.Get("X-Reasoning-Included") == "true") {
+	if agent == domain.AgentCodex && (upstreamProto == "chat" || upstreamProto == "responses" && (t.Source.Kind == domain.SourceCopilot || t.Source.Kind == domain.SourcePeer && res.Header.Get("X-Reasoning-Included") == "true")) {
 		w.Header().Set("X-Reasoning-Included", "true")
 	}
 	w.Header().Set("X-PacaRoute-Request", activity.ID)

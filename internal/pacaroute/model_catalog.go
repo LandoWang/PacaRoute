@@ -98,7 +98,12 @@ func (a *catalog) Models(ctx context.Context, id string) ([]domain.Model, error)
 			messages = strings.HasPrefix(m.ID, "claude-")
 		}
 		_, known := protocol.CopilotResponseEfforts[m.ID]
-		codex := responses && known
+		chat := false
+		for _, endpoint := range m.Endpoints {
+			chat = chat || endpoint == "/chat/completions"
+		}
+		// Exact-model adapter backed by docs/copilot-argon.md, not a family guess.
+		codex := responses && known || chat && m.ID == "gemini-4-argon"
 		// Native Messages models are advertised by the upstream catalog.
 		claude := codex || messages
 		// Catalog visibility is separate from Agent compatibility. Keep every

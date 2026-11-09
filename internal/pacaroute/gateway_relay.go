@@ -32,7 +32,9 @@ func (s *Server) relayStream(x *gatewayExchange, t routing.Target, tr *protocol.
 		reader = io.TeeReader(reader, &trace)
 	}
 	if tr != nil {
-		if tr.To == "responses" {
+		if tr.To == "chat" {
+			e = tr.StreamChat(w, reader, &x.usage)
+		} else if tr.To == "responses" {
 			e = tr.StreamResponses(w, reader, &x.usage)
 		} else {
 			e = tr.StreamMessages(w, reader, &x.usage)
@@ -80,7 +82,11 @@ func (s *Server) relayJSON(x *gatewayExchange, tr *protocol.Translation, res *ht
 		x.usage.Observe(data)
 		s.trace(activity.ID, "upstream-res.json", data)
 		if tr != nil && x.operation != "messages/count_tokens" {
-			data, e = tr.ResponseJSON(data)
+			if tr.To == "chat" {
+				data, e = tr.ChatJSON(data)
+			} else {
+				data, e = tr.ResponseJSON(data)
+			}
 		}
 		if e == nil {
 			w.Header().Set("Content-Type", "application/json")

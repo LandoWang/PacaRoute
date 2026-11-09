@@ -120,6 +120,10 @@ they do not tear down an active stream.
 
 ### Protocol and failure rules
 
+The exact Copilot `gemini-4-argon` model uses the native Go Chat Completions adapter
+for Responses and Messages clients. See [Copilot Argon](copilot-argon.md) for the
+probed contract, opaque replay and verification limits.
+
 - Native Responses-to-Responses and Messages-to-Messages paths preserve unknown
   extension/tool fields and upstream errors. Do not funnel native traffic through
   a lossy universal intermediate representation.

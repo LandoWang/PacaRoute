@@ -144,6 +144,10 @@ func (r *Router) Targets(c *domain.Config, scope string, agent domain.AgentProto
 func affinityHash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }
 
 func (t Target) UpstreamProtocol(agent ...domain.AgentProtocol) string {
+	// Live catalog + function continuation: docs/copilot-argon.md.
+	if t.Source.Kind == domain.SourceCopilot && t.Model == "gemini-4-argon" {
+		return "chat"
+	}
 	if t.Source.Kind == domain.SourcePeer && len(agent) > 0 {
 		return domain.IncomingProtocol(agent[0])
 	}

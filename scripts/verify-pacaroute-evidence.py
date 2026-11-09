@@ -41,6 +41,9 @@ for argument in args.manifests:
                     calls.add(item["call_id"])
                 if item.get("type") == "tool_use":
                     calls.add(item["id"])
+                # Copilot Chat deltas identify calls under function, not Responses type.
+                if item.get("id") and isinstance(item.get("function"), dict):
+                    calls.add(item["id"])
     for trace in (path.parent / "traces").rglob("client-req.json"):
         for item in objects(json.loads(trace.read_text())):
             if item.get("type") in ("function_call_output", "custom_tool_call_output"):

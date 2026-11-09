@@ -23,6 +23,9 @@ var forwardedRequestHeaders = append(append([]string{"anthropic-version", "anthr
 // Copilot lease is refreshed and retried once; no other retry happens here.
 func (s *Server) send(x *gatewayExchange, t routing.Target, wire []byte, upstreamProto, upstreamPath string) (*http.Response, error) {
 	r, c := x.r, x.config
+	if upstreamProto == "chat" {
+		upstreamPath = "/chat/completions"
+	}
 	var res *http.Response
 	var e error
 	for authAttempt := 0; authAttempt < 2; authAttempt++ {
